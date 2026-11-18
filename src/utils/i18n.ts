@@ -64,6 +64,44 @@ export interface UiText {
   toastUnmuted: (name: string) => string;
   toastProfile: (name: string) => string;
   toastDownloading: (filename: string, sizeLabel: string) => string;
+  dataSectionTitle: string;
+  exportDataBtn: string;
+  importDataBtn: string;
+  clearCacheBtn: string;
+  clearModalTitle: string;
+  clearStep1Badge: string;
+  clearStep2Badge: string;
+  clearStep1Heading: string;
+  clearStep1Desc: string;
+  clearStep1Next: string;
+  clearStep2Heading: string;
+  clearStep2Desc: string;
+  clearStep2Confirm: string;
+  toastExportSuccess: string;
+  toastImportSuccess: (count: number) => string;
+  toastImportInvalid: string;
+  toastCacheCleared: string;
+  timeBtnLabel: string;
+  timeCustomToggle: string;
+  timeMinHint: (minTs: string) => string;
+  timeAnyHint: string;
+  timeEarlierError: (minTs: string) => string;
+  timeResetNow: string;
+  playbackModalTitle: string;
+  playbackModalSub: string;
+  playbackPacingLabel: string;
+  playbackTimelineTitle: string;
+  playbackTimelineSub: string;
+  playbackEvenTitle: string;
+  playbackEvenSub: string;
+  playbackIntervalLabel: (sec: number) => string;
+  playbackStartLabel: string;
+  playbackStartEmpty: string;
+  playbackStartFromMsg: (index: number, username: string, timestamp: string, preview: string) => string;
+  playbackNoMessages: string;
+  playbackStartBtn: string;
+  playbackCapNote: string;
+  toastPlaybackDone: string;
 }
 
 const JA_TEXT: UiText = {
@@ -135,6 +173,47 @@ const JA_TEXT: UiText = {
   toastUnmuted: (name) => `${name} のミュートを解除しました`,
   toastProfile: (name) => `${name} のプロフィール`,
   toastDownloading: (filename, sizeLabel) => `${filename} (${sizeLabel}) をダウンロード中...`,
+  dataSectionTitle: 'ローカルデータ管理',
+  exportDataBtn: 'ファイルに書き出し',
+  importDataBtn: 'ファイルから読み込み',
+  clearCacheBtn: 'ローカルキャッシュを全消去',
+  clearModalTitle: 'ローカルキャッシュの消去',
+  clearStep1Badge: '確認 1 / 2',
+  clearStep2Badge: '最終確認 2 / 2',
+  clearStep1Heading: 'ローカル保存データを初期化しますか？',
+  clearStep1Desc:
+    '作成した会話・送信したメッセージ・カスタムキャラ・ローカル保存の画像や音声がすべて削除され、初期テンプレートに戻ります。',
+  clearStep1Next: '次へ進む',
+  clearStep2Heading: '本当にすべて削除しますか？',
+  clearStep2Desc:
+    'この操作は取り消せません。必要なデータがある場合は、先に「ファイルに書き出し」でバックアップしてください。',
+  clearStep2Confirm: '完全に消去する',
+  toastExportSuccess: 'ローカルデータをファイルに書き出しました',
+  toastImportSuccess: (count) => `ローカルデータを読み込みました（${count}件の会話）`,
+  toastImportInvalid: 'ファイルの形式が正しくありません',
+  toastCacheCleared: 'ローカルキャッシュを消去しました',
+  timeBtnLabel: '時刻',
+  timeCustomToggle: '送信時刻を指定',
+  timeMinHint: (minTs) => `${minTs} 以降のみ指定できます`,
+  timeAnyHint: '任意の時刻を指定できます',
+  timeEarlierError: (minTs) => `前のメッセージ（${minTs}）より前の時刻は指定できません`,
+  timeResetNow: '現在時刻に合わせる',
+  playbackModalTitle: 'メッセージ自動再生',
+  playbackModalSub: '没入モードでメッセージを1件ずつ順番に表示します。',
+  playbackPacingLabel: '送信ペース',
+  playbackTimelineTitle: '送信時刻の流速に合わせる',
+  playbackTimelineSub: 'メッセージ間の時刻差に応じて間隔を調整（最大40秒）',
+  playbackEvenTitle: '等間隔で順番に送信',
+  playbackEvenSub: 'すべてのメッセージを一定の間隔で再生（最大40秒）',
+  playbackIntervalLabel: (sec) => `送信間隔：${sec}秒`,
+  playbackStartLabel: '開始位置',
+  playbackStartEmpty: 'メッセージなし（最初から順番に表示）',
+  playbackStartFromMsg: (index, username, timestamp, preview) =>
+    `${index}件目から開始（${username}・${timestamp}）${preview}`,
+  playbackNoMessages: '再生できるメッセージがありません。先にロール切替モードで作成してください。',
+  playbackStartBtn: '開始',
+  playbackCapNote: '※ すべての送信間隔は最大40秒以内に制限されます。再生中に赤い点をもう一度押すと設定を開き直せます。',
+  toastPlaybackDone: 'メッセージの自動再生が完了しました',
 };
 
 const ZH_TEXT: UiText = {
@@ -205,6 +284,47 @@ const ZH_TEXT: UiText = {
   toastUnmuted: (name) => `已取消 ${name} 静音`,
   toastProfile: (name) => `${name} 的资料`,
   toastDownloading: (filename, sizeLabel) => `正在下载 ${filename} (${sizeLabel})...`,
+  dataSectionTitle: '本地数据管理',
+  exportDataBtn: '导出本地文件',
+  importDataBtn: '导入本地文件',
+  clearCacheBtn: '一键清空本地缓存',
+  clearModalTitle: '清空本地缓存',
+  clearStep1Badge: '确认 1 / 2',
+  clearStep2Badge: '最终确认 2 / 2',
+  clearStep1Heading: '确定要清空本地缓存的消息吗？',
+  clearStep1Desc:
+    '这将删除你创建的全部对话、发送的消息、自定义角色以及本地缓存的图片和语音，并恢复为默认模板。',
+  clearStep1Next: '下一步',
+  clearStep2Heading: '再次确认：彻底清空全部缓存？',
+  clearStep2Desc:
+    '此操作无法撤销。如需保留记录，请先在菜单中使用「导出本地文件」进行备份。',
+  clearStep2Confirm: '确认清空',
+  toastExportSuccess: '已将本地对话与消息导出为文件',
+  toastImportSuccess: (count) => `已导入本地文件（共 ${count} 个对话）`,
+  toastImportInvalid: '导入失败：文件格式无效',
+  toastCacheCleared: '已清空本地缓存并恢复默认模板',
+  timeBtnLabel: '时间',
+  timeCustomToggle: '自定义发送时间',
+  timeMinHint: (minTs) => `不能早于上一条消息（${minTs}）`,
+  timeAnyHint: '可自由设置发送时间',
+  timeEarlierError: (minTs) => `时间不能早于上一条消息（${minTs}）`,
+  timeResetNow: '同步当前时间',
+  playbackModalTitle: '消息自动播放设置',
+  playbackModalSub: '当前已自动切换为沉浸模式，将按设定节奏逐条展示消息。',
+  playbackPacingLabel: '发送节奏',
+  playbackTimelineTitle: '按发送时间流速发送',
+  playbackTimelineSub: '根据消息时间差自动映射间隔（单条间隔不超过 40 秒）',
+  playbackEvenTitle: '每条消息等比例时间发送',
+  playbackEvenSub: '所有消息按固定时间间隔依次发送（不超过 40 秒）',
+  playbackIntervalLabel: (sec) => `单条发送间隔：${sec} 秒`,
+  playbackStartLabel: '起始消息位置',
+  playbackStartEmpty: '从没有消息开始（从头逐条发送）',
+  playbackStartFromMsg: (index, username, timestamp, preview) =>
+    `从第 ${index} 条开始（${username}・${timestamp}）${preview}`,
+  playbackNoMessages: '当前对话暂无可播放的消息，请先在角色切换模式下添加消息。',
+  playbackStartBtn: '开始',
+  playbackCapNote: '※ 每次发送间隔均严格不超过 40 秒。播放中再次点击红点可重新设置或取消。',
+  toastPlaybackDone: '消息逐条播放已完成',
 };
 
 export function getUiText(lang: UiLanguage): UiText {

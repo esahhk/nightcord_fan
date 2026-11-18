@@ -25,6 +25,9 @@ interface SidebarProps {
   onVoiceToggle: () => void;
   onOfflineToggle: () => void;
   onMicToggle: (member: VoiceMember) => void;
+  onExportData: () => void;
+  onTriggerImportData: () => void;
+  onRequestClearCache: () => void;
 }
 
 export function Sidebar({
@@ -48,6 +51,9 @@ export function Sidebar({
   onVoiceToggle,
   onOfflineToggle,
   onMicToggle,
+  onExportData,
+  onTriggerImportData,
+  onRequestClearCache,
 }: SidebarProps) {
   const t = getUiText(lang);
   const [newTitle, setNewTitle] = useState('');
@@ -210,6 +216,38 @@ export function Sidebar({
                   {t.createConvBtn}
                 </button>
               </form>
+
+              <div className="mt-2.5 flex flex-col gap-1.5 border-t border-[#332844] pt-2.5">
+                <div className="px-1 text-[11px] font-bold text-[#9A90A8]">
+                  {t.dataSectionTitle}
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    data-action="data-export"
+                    onClick={onExportData}
+                    className="cursor-pointer rounded-[6px] border border-[#4D3F66] bg-[#332844] px-2 py-1.5 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
+                  >
+                    {t.exportDataBtn}
+                  </button>
+                  <button
+                    type="button"
+                    data-action="data-import"
+                    onClick={onTriggerImportData}
+                    className="cursor-pointer rounded-[6px] border border-[#4D3F66] bg-[#332844] px-2 py-1.5 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
+                  >
+                    {t.importDataBtn}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  data-action="open-clear-cache"
+                  onClick={onRequestClearCache}
+                  className="w-full cursor-pointer rounded-[6px] border border-[#EB7F97]/40 bg-[#3B2335] px-2 py-1.5 text-[11.5px] font-medium text-[#FFB6C7] transition-colors hover:bg-[#4E2C45] hover:text-white"
+                >
+                  {t.clearCacheBtn}
+                </button>
+              </div>
 
               <div className="mt-2.5 flex items-center justify-between border-t border-[#332844] pt-2">
                 <span className="px-1 text-[11px] text-[#9A90A8]">{t.langLabel}</span>

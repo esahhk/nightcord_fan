@@ -196,3 +196,50 @@ export function saveLanguage(lang: UiLanguage): void {
   } catch {
   }
 }
+
+export async function clearLocalCacheData(): Promise<void> {
+  memoryBlobFallback.clear();
+  try {
+    localStorage.removeItem(STORAGE_KEYS.conversations);
+    localStorage.removeItem(STORAGE_KEYS.activeConversationId);
+    localStorage.removeItem(STORAGE_KEYS.characters);
+    localStorage.removeItem(STORAGE_KEYS.activeCharacterId);
+  } catch {
+  }
+  const db = await openMediaDb();
+  if (!db) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+export async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const commaIndex = result.indexOf(',');
+      resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+    };
+    reader.onerror = () => reject(new Error('blob-read-failed'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+export function base64ToBlob(dataBase64: string, mimeType: string): Blob {
+  const binary = atob(dataBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mimeType || 'application/octet-stream' });
+}

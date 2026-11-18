@@ -1,9 +1,18 @@
 import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import type { AvatarType, CharacterProfile, UiLanguage } from '../types/nightcord';
+import type {
+  AvatarType,
+  CharacterProfile,
+  CustomMessageTime,
+  UiLanguage,
+} from '../types/nightcord';
 import { getUiText } from '../utils/i18n';
 import { saveLocalMediaBlob } from '../utils/localStorageStore';
-import { formatDuration } from '../utils/nightcordState';
+import {
+  formatCustomJapaneseTime,
+  formatDuration,
+  parseJapaneseTimestampToMinutes,
+} from '../utils/nightcordState';
 import { CharacterAvatar } from './LocalMedia';
 import { NightcordAvatar } from './NightcordArt';
 
@@ -33,6 +42,10 @@ interface RoleComposerBarProps {
   onStopRecording: () => void;
   onCancelRecording: () => void;
   onTriggerAudioFileUpload: () => void;
+  customTime: CustomMessageTime;
+  lastMessageTimestamp: string | null;
+  onChangeCustomTime: (next: CustomMessageTime) => void;
+  onSyncCustomTimeNow: () => void;
 }
 
 export function RoleComposerBar({
@@ -48,13 +61,27 @@ export function RoleComposerBar({
   onStopRecording,
   onCancelRecording,
   onTriggerAudioFileUpload,
+  customTime,
+  lastMessageTimestamp,
+  onChangeCustomTime,
+  onSyncCustomTimeNow,
 }: RoleComposerBarProps) {
   const t = getUiText(lang);
   const [editorMode, setEditorMode] = useState<'closed' | 'edit' | 'create'>('closed');
+  const [timePanelOpen, setTimePanelOpen] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [draftAvatarType, setDraftAvatarType] = useState<AvatarType>('k');
   const [draftCustomMediaId, setDraftCustomMediaId] = useState<string | undefined>(undefined);
   const avatarFileRef = useRef<HTMLInputElement | null>(null);
+
+  const formattedCustomTs = formatCustomJapaneseTime(customTime.day, customTime.time);
+  const customMin = formattedCustomTs ? parseJapaneseTimestampToMinutes(formattedCustomTs) : null;
+  const lastMin = lastMessageTimestamp
+    ? parseJapaneseTimestampToMinutes(lastMessageTimestamp)
+    : null;
+  const isEarlierThanPrevious =
+    customTime.enabled &&
+    (customMin === null || (lastMin !== null && customMin < lastMin));
 
   const openEdit = () => {
     setDraftName(activeCharacter.name);
@@ -170,6 +197,21 @@ export function RoleComposerBar({
               >
                 {t.audioFile}
               </button>
+              <button
+                type="button"
+                data-action="toggle-custom-time"
+                aria-expanded={timePanelOpen}
+                onClick={() => setTimePanelOpen((prev) => !prev)}
+                className={`cursor-pointer rounded-[6px] border px-2 py-1 text-[11.5px] font-medium transition-colors ${
+                  isEarlierThanPrevious
+                    ? 'border-[#EB7F97] bg-[#4B2538] text-[#FFD5DF]'
+                    : customTime.enabled
+                      ? 'border-[#64D2E6]/70 bg-[#473A5C] text-white'
+                      : 'border-[#524468] bg-[#362B47] text-[#DCD7E5] hover:bg-[#473A5C] hover:text-white'
+                }`}
+              >
+                {customTime.enabled && formattedCustomTs ? formattedCustomTs : t.timeBtnLabel}
+              </button>
             </>
           ) : (
             <div className="flex items-center gap-1.5 rounded-[6px] border border-[#EB7F97]/60 bg-[#3B2335] px-2 py-1 text-[11.5px] text-[#FFE4EA]">
@@ -197,6 +239,100 @@ export function RoleComposerBar({
           )}
         </div>
       </div>
+
+      {timePanelOpen && (
+        <div className="flex flex-col gap-2 rounded-[6px] border border-[#453859] bg-[#261D33] px-2.5 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="flex cursor-pointer items-center gap-1.5 text-[12px] font-medium text-[#EFEBF5]">
+              <input
+                type="checkbox"
+                data-action="custom-time-enable"
+                checked={customTime.enabled}
+                onChange={(e) =>
+                  onChangeCustomTime({ ...customTime, enabled: e.target.checked })
+                }
+                className="accent-[#64D2E6]"
+              />
+              <span>{t.timeCustomToggle}</span>
+            </label>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex overflow-hidden rounded-[6px] border border-[#4D3F66] bg-[#332844]">
+                <button
+                  type="button"
+                  data-action="custom-time-day-yesterday"
+                  aria-pressed={customTime.day === 'yesterday'}
+                  onClick={() =>
+                    onChangeCustomTime({ ...customTime, enabled: true, day: 'yesterday' })
+                  }
+                  className={`cursor-pointer px-2 py-1 text-[11.5px] font-medium transition-colors ${
+                    customTime.day === 'yesterday'
+                      ? 'bg-[#473A5C] text-white'
+                      : 'text-[#9A90A8] hover:text-white'
+                  }`}
+                >
+                  昨日
+                </button>
+                <button
+                  type="button"
+                  data-action="custom-time-day-today"
+                  aria-pressed={customTime.day === 'today'}
+                  onClick={() =>
+                    onChangeCustomTime({ ...customTime, enabled: true, day: 'today' })
+                  }
+                  className={`cursor-pointer px-2 py-1 text-[11.5px] font-medium transition-colors ${
+                    customTime.day === 'today'
+                      ? 'bg-[#473A5C] text-white'
+                      : 'text-[#9A90A8] hover:text-white'
+                  }`}
+                >
+                  今日
+                </button>
+              </div>
+
+              <input
+                type="time"
+                data-action="custom-time-input"
+                aria-label={t.timeCustomToggle}
+                value={customTime.time}
+                onChange={(e) =>
+                  onChangeCustomTime({
+                    ...customTime,
+                    enabled: true,
+                    time: e.target.value,
+                  })
+                }
+                className={`rounded-[6px] border bg-[#332844] px-2 py-1 text-[12px] text-[#EFEBF5] outline-none ${
+                  isEarlierThanPrevious
+                    ? 'border-[#EB7F97] focus:border-[#EB7F97]'
+                    : 'border-[#4D3F66] focus:border-[#64D2E6]'
+                }`}
+              />
+
+              <button
+                type="button"
+                data-action="custom-time-sync"
+                onClick={onSyncCustomTimeNow}
+                className="cursor-pointer rounded-[6px] border border-[#4D3F66] bg-[#332844] px-2 py-1 text-[11px] text-[#C2B8D3] hover:bg-[#473A5C] hover:text-white"
+              >
+                {t.timeResetNow}
+              </button>
+            </div>
+          </div>
+
+          <div
+            className={`text-[11px] ${
+              isEarlierThanPrevious ? 'font-medium text-[#FF9EB3]' : 'text-[#9A90A8]'
+            }`}
+          >
+            {isEarlierThanPrevious && lastMessageTimestamp
+              ? t.timeEarlierError(lastMessageTimestamp)
+              : lastMessageTimestamp
+                ? t.timeMinHint(lastMessageTimestamp)
+                : t.timeAnyHint}
+          </div>
+        </div>
+      )}
 
       {editorMode !== 'closed' && (
         <div className="flex flex-col gap-2.5 rounded-[6px] border border-[#453859] bg-[#261D33] p-2.5">

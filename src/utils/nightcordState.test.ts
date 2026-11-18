@@ -5,17 +5,24 @@ import {
   INITIAL_CHARACTERS,
   INITIAL_MESSAGES,
   INITIAL_VOICE_MEMBERS,
+  MAX_PLAYBACK_INTERVAL_MS,
   TEMPLATE_CONVERSATION_ID,
   appendInputToken,
+  collectReferencedMediaIds,
+  computePlaybackDelayMs,
   createImageMessage,
   createInitialConversations,
   createNewConversation,
   createOutgoingMessage,
   createVoiceMessage,
   extractFileType,
+  formatCustomJapaneseTime,
   formatDuration,
   formatJapaneseTime,
   invokeAction,
+  parseJapaneseTimestampToMinutes,
+  parseNightcordBackup,
+  resolveOutgoingTimestamp,
   toggleMemberMute,
   upsertCharacter,
 } from './nightcordState';
@@ -130,4 +137,101 @@ test('toggleMemberMute, appendInputToken, and invokeAction work as expected', ()
   );
   assert.equal(fired, true);
   assert.equal(received, 'work');
+});
+
+test('custom timestamp validation prevents earlier timestamps and inserts day divider', () => {
+  assert.equal(formatCustomJapaneseTime('today', '01:36'), '今日 1:36');
+  assert.equal(parseJapaneseTimestampToMinutes('昨日 23:46'), 23 * 60 + 46);
+  assert.equal(parseJapaneseTimestampToMinutes('今日 1:36'), 1440 + 96);
+
+  const earlier = resolveOutgoingTimestamp(INITIAL_MESSAGES, {
+    enabled: true,
+    day: 'today',
+    time: '01:35',
+  });
+  assert.equal(earlier.ok, false);
+
+  const earlierYesterday = resolveOutgoingTimestamp(INITIAL_MESSAGES, {
+    enabled: true,
+    day: 'yesterday',
+    time: '23:59',
+  });
+  assert.equal(earlierYesterday.ok, false);
+
+  const sameTime = resolveOutgoingTimestamp(INITIAL_MESSAGES, {
+    enabled: true,
+    day: 'today',
+    time: '01:36',
+  });
+  assert.equal(sameTime.ok, true);
+  if (sameTime.ok) {
+    assert.equal(sameTime.timestamp, '今日 1:36');
+  }
+
+  const yesterdayOnly = INITIAL_MESSAGES.slice(0, 7);
+  const crossing = resolveOutgoingTimestamp(yesterdayOnly, {
+    enabled: true,
+    day: 'today',
+    time: '00:10',
+  });
+  assert.equal(crossing.ok, true);
+  if (crossing.ok) {
+    assert.equal(crossing.timestamp, '今日 0:10');
+    assert.equal(crossing.dividerBefore, '今日');
+  }
+});
+
+test('collectReferencedMediaIds and parseNightcordBackup handle valid and invalid payloads', () => {
+  const convs = createInitialConversations();
+  const extraConv = createNewConversation('雑談', false);
+  assert.ok(extraConv);
+  extraConv.messages.push(
+    createImageMessage(
+      {
+        mediaId: 'img-99',
+        filename: 'a.jpg',
+        sizeLabel: '1MB JPG',
+        fileType: 'JPG',
+        displayMode: 'card',
+      },
+      { id: 'c-custom', name: 'ミク', avatarType: 'k', customAvatarMediaId: 'av-99' }
+    )
+  );
+  const allConvs = [...convs, extraConv];
+  const ids = collectReferencedMediaIds(allConvs, [
+    ...INITIAL_CHARACTERS,
+    { id: 'c-custom', name: 'ミク', avatarType: 'k', customAvatarMediaId: 'av-99' },
+  ]);
+  assert.ok(ids.includes('img-99'));
+  assert.ok(ids.includes('av-99'));
+
+  const payload = JSON.stringify({
+    version: 1,
+    exportedAt: '2026-11-18T00:00:00.000Z',
+    conversations: [extraConv],
+    characters: INITIAL_CHARACTERS,
+    activeConversationId: extraConv.id,
+    activeCharacterId: 'yuki',
+    media: { 'img-99': { mimeType: 'image/png', dataBase64: 'AAAA' } },
+  });
+  const parsed = parseNightcordBackup(payload);
+  assert.ok(parsed);
+  assert.equal(parsed.conversations.length, 2);
+  assert.equal(parsed.activeConversationId, extraConv.id);
+  assert.equal(parsed.activeCharacterId, 'yuki');
+  assert.equal(parsed.media['img-99'].mimeType, 'image/png');
+
+  assert.equal(parseNightcordBackup('not json'), null);
+  assert.equal(parseNightcordBackup('{"conversations":[]}'), null);
+});
+
+test('computePlaybackDelayMs respects timeline flow, even spacing, and 40s max cap', () => {
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 0, 'timeline'), 1200);
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 1, 'timeline'), 2000);
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 2, 'timeline'), MAX_PLAYBACK_INTERVAL_MS);
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 4, 'timeline'), 1000);
+
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 2, 'even', 3), 3000);
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 2, 'even', 99), MAX_PLAYBACK_INTERVAL_MS);
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 2, 'even', 0.1), 500);
 });

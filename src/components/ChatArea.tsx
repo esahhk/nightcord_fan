@@ -6,6 +6,7 @@ import type {
   CharacterProfile,
   ChatAttachment,
   ChatMessage,
+  CustomMessageTime,
   UiLanguage,
 } from '../types/nightcord';
 import { getUiText } from '../utils/i18n';
@@ -47,6 +48,12 @@ interface ChatAreaProps {
   onStopRecording: () => void;
   onCancelRecording: () => void;
   onTriggerAudioFileUpload: () => void;
+  customTime: CustomMessageTime;
+  lastMessageTimestamp: string | null;
+  onChangeCustomTime: (next: CustomMessageTime) => void;
+  onSyncCustomTimeNow: () => void;
+  isPlaying?: boolean;
+  animatedFromIndex?: number | null;
 }
 
 export function ChatArea({
@@ -78,6 +85,12 @@ export function ChatArea({
   onStopRecording,
   onCancelRecording,
   onTriggerAudioFileUpload,
+  customTime,
+  lastMessageTimestamp,
+  onChangeCustomTime,
+  onSyncCustomTimeNow,
+  isPlaying = false,
+  animatedFromIndex = null,
 }: ChatAreaProps) {
   const t = getUiText(lang);
   const streamRef = useRef<HTMLDivElement | null>(null);
@@ -87,10 +100,17 @@ export function ChatArea({
 
   useEffect(() => {
     if (messages.length > prevCountRef.current && streamRef.current) {
-      streamRef.current.scrollTop = streamRef.current.scrollHeight;
+      if (isPlaying) {
+        streamRef.current.scrollTo({
+          top: streamRef.current.scrollHeight,
+          behavior: 'smooth',
+        });
+      } else {
+        streamRef.current.scrollTop = streamRef.current.scrollHeight;
+      }
     }
     prevCountRef.current = messages.length;
-  }, [messages.length]);
+  }, [messages.length, isPlaying]);
 
   const handleMention = () => {
     onMentionClick();
@@ -139,37 +159,45 @@ export function ChatArea({
         className="nc-scroll flex flex-1 flex-col gap-3.5 px-3.5 pb-4 sm:gap-[15px] sm:px-6"
       >
         {messages.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center text-[#9A90A8]">
-            <WorkChannelIcon size={34} />
-            <div className="text-[13.5px] font-semibold text-[#DCD7E5]">
-              {mode === 'studio'
-                ? t.emptyConvTitle(channelTitle)
-                : `${channelTitle} の会話をはじめましょう`}
+          isPlaying ? null : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center text-[#9A90A8]">
+              <WorkChannelIcon size={34} />
+              <div className="text-[13.5px] font-semibold text-[#DCD7E5]">
+                {mode === 'studio'
+                  ? t.emptyConvTitle(channelTitle)
+                  : `${channelTitle} の会話をはじめましょう`}
+              </div>
+              <div className="text-[12px]">
+                {mode === 'studio'
+                  ? t.emptyConvSub
+                  : 'メッセージを送信するとローカルに保存されます'}
+              </div>
             </div>
-            <div className="text-[12px]">
-              {mode === 'studio'
-                ? t.emptyConvSub
-                : 'メッセージを送信するとローカルに保存されます'}
-            </div>
-          </div>
+          )
         ) : (
-          messages.map((msg) => (
-            <Fragment key={msg.id}>
-              {msg.dividerBefore && (
-                <div className="my-[3px] flex items-center gap-3.5">
-                  <div className="h-px flex-1 bg-[#504266]" />
-                  <span className="text-[11px] font-medium text-[#9A90A8]">
-                    {msg.dividerBefore}
-                  </span>
-                  <div className="h-px flex-1 bg-[#504266]" />
-                </div>
-              )}
+          messages.map((msg, idx) => {
+            const shouldAnimate = animatedFromIndex !== null && idx >= animatedFromIndex;
+            return (
+              <Fragment key={msg.id}>
+                {msg.dividerBefore && (
+                  <div
+                    className={`my-[3px] flex items-center gap-3.5 ${
+                      shouldAnimate ? 'nc-msg-enter' : ''
+                    }`}
+                  >
+                    <div className="h-px flex-1 bg-[#504266]" />
+                    <span className="text-[11px] font-medium text-[#9A90A8]">
+                      {msg.dividerBefore}
+                    </span>
+                    <div className="h-px flex-1 bg-[#504266]" />
+                  </div>
+                )}
 
-              <div
-                className={`flex items-start gap-[13px] rounded-[6px] transition-colors hover:bg-[#2E243D]/30 ${
-                  msg.topClipped ? '-mt-[11px]' : ''
-                }`}
-              >
+                <div
+                  className={`flex items-start gap-[13px] rounded-[6px] transition-colors hover:bg-[#2E243D]/30 ${
+                    msg.topClipped ? '-mt-[11px]' : ''
+                  } ${shouldAnimate ? 'nc-msg-enter' : ''}`}
+                >
                 <button
                   type="button"
                   data-action={`avatar-${msg.memberId}`}
@@ -283,10 +311,11 @@ export function ChatArea({
                       ))}
                     </div>
                   )}
+                  </div>
                 </div>
-              </div>
-            </Fragment>
-          ))
+              </Fragment>
+            );
+          })
         )}
       </div>
 
@@ -308,6 +337,10 @@ export function ChatArea({
             onStopRecording={onStopRecording}
             onCancelRecording={onCancelRecording}
             onTriggerAudioFileUpload={onTriggerAudioFileUpload}
+            customTime={customTime}
+            lastMessageTimestamp={lastMessageTimestamp}
+            onChangeCustomTime={onChangeCustomTime}
+            onSyncCustomTimeNow={onSyncCustomTimeNow}
           />
         )}
 

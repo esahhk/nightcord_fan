@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { ChatArea } from './components/ChatArea';
+import { ClearCacheModal } from './components/ClearCacheModal';
 import { ImageSendModal } from './components/ImageSendModal';
 import { WorkChannelIcon } from './components/NightcordArt';
 import { OnboardingModal } from './components/OnboardingModal';
+import { PlaybackSetupModal } from './components/PlaybackSetupModal';
 import { Sidebar } from './components/Sidebar';
 import type {
   AppMode,
@@ -12,15 +14,22 @@ import type {
   ChatAttachment,
   ChatMessage,
   Conversation,
+  CustomMessageTime,
   NightcordActions,
+  NightcordBackupPayload,
+  PlaybackConfig,
   UiLanguage,
   VoiceMember,
 } from './types/nightcord';
 import { getUiText } from './utils/i18n';
 import {
+  base64ToBlob,
+  blobToBase64,
+  clearLocalCacheData,
   isOnboardingCompleted,
   loadActiveCharacterId,
   loadActiveConversationId,
+  loadLocalMediaBlob,
   loadSavedCharacters,
   loadSavedConversations,
   loadSavedLanguage,
@@ -38,6 +47,8 @@ import {
   INITIAL_VOICE_MEMBERS,
   TEMPLATE_CONVERSATION_ID,
   appendInputToken,
+  collectReferencedMediaIds,
+  computePlaybackDelayMs,
   createImageMessage,
   createInitialConversations,
   createNewConversation,
@@ -45,7 +56,11 @@ import {
   createVoiceMessage,
   extractFileType,
   formatFileSize,
+  getLastMessageTimestamp,
+  getSuggestedCustomTime,
   invokeAction,
+  parseNightcordBackup,
+  resolveOutgoingTimestamp,
   toggleMemberMute,
   upsertCharacter,
 } from './utils/nightcordState';
@@ -98,6 +113,10 @@ export default function App({ actions }: AppProps) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
+  const [clearCacheOpen, setClearCacheOpen] = useState(false);
+  const [playbackModalOpen, setPlaybackModalOpen] = useState(false);
+  const [playbackConfig, setPlaybackConfig] = useState<PlaybackConfig | null>(null);
+  const [playbackVisibleCount, setPlaybackVisibleCount] = useState<number | null>(null);
   const [toastText, setToastText] = useState<string | null>(null);
 
   const [isRecording, setIsRecording] = useState(false);
@@ -105,8 +124,10 @@ export default function App({ actions }: AppProps) {
 
   const actionsRef = useRef<Partial<NightcordActions>>(actions ?? {});
   const toastTimerRef = useRef<number | null>(null);
+  const playbackTimerRef = useRef<number | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingIntervalRef = useRef<number | null>(null);
@@ -122,6 +143,33 @@ export default function App({ actions }: AppProps) {
     () => characters.find((c) => c.id === activeCharacterId) ?? characters[0],
     [characters, activeCharacterId]
   );
+
+  const lastMessageTimestamp = useMemo(
+    () => getLastMessageTimestamp(activeConversation.messages),
+    [activeConversation.messages]
+  );
+
+  const [customTime, setCustomTime] = useState<CustomMessageTime>(() => ({
+    enabled: false,
+    ...getSuggestedCustomTime(activeConversation.messages),
+  }));
+
+  const stopPlayback = useCallback(() => {
+    if (playbackTimerRef.current !== null) {
+      window.clearTimeout(playbackTimerRef.current);
+      playbackTimerRef.current = null;
+    }
+    setPlaybackConfig(null);
+    setPlaybackVisibleCount(null);
+  }, []);
+
+  useEffect(() => {
+    stopPlayback();
+    setCustomTime({
+      enabled: false,
+      ...getSuggestedCustomTime(activeConversation.messages),
+    });
+  }, [activeConversation.id, stopPlayback]);
 
   useEffect(() => {
     saveConversations(conversations);
@@ -177,15 +225,24 @@ export default function App({ actions }: AppProps) {
   );
 
   const pushMessage = useCallback(
-    (rawText: string) => {
-      const nextMsg = createOutgoingMessage(rawText, activeCharacter);
+    (rawText: string): boolean => {
+      const resolved = resolveOutgoingTimestamp(activeConversation.messages, customTime);
+      if (!resolved.ok) {
+        showToast(t.timeEarlierError(resolved.minTimestamp));
+        return false;
+      }
+      const nextMsg = createOutgoingMessage(rawText, activeCharacter, new Date(), {
+        timestamp: resolved.timestamp,
+        dividerBefore: resolved.dividerBefore,
+      });
       if (!nextMsg) {
-        return;
+        return false;
       }
       appendMessageToActive(nextMsg);
       invokeAction(actionsRef.current, 'onSendMessage', nextMsg.text ?? '', nextMsg);
+      return true;
     },
-    [activeCharacter, appendMessageToActive]
+    [activeCharacter, activeConversation.messages, appendMessageToActive, customTime, showToast, t]
   );
 
   useEffect(() => {
@@ -200,9 +257,42 @@ export default function App({ actions }: AppProps) {
   }, [pushMessage, showToast]);
 
   useEffect(() => {
+    if (!playbackConfig || playbackVisibleCount === null) {
+      return;
+    }
+    const total = activeConversation.messages.length;
+    if (playbackVisibleCount >= total) {
+      setPlaybackConfig(null);
+      setPlaybackVisibleCount(null);
+      return;
+    }
+
+    const delayMs = computePlaybackDelayMs(
+      activeConversation.messages,
+      playbackVisibleCount,
+      playbackConfig.pacingMode,
+      playbackConfig.evenIntervalSec
+    );
+
+    playbackTimerRef.current = window.setTimeout(() => {
+      setPlaybackVisibleCount((prev) => (prev === null ? null : prev + 1));
+    }, delayMs);
+
+    return () => {
+      if (playbackTimerRef.current !== null) {
+        window.clearTimeout(playbackTimerRef.current);
+        playbackTimerRef.current = null;
+      }
+    };
+  }, [playbackConfig, playbackVisibleCount, activeConversation.messages]);
+
+  useEffect(() => {
     return () => {
       if (toastTimerRef.current !== null) {
         window.clearTimeout(toastTimerRef.current);
+      }
+      if (playbackTimerRef.current !== null) {
+        window.clearTimeout(playbackTimerRef.current);
       }
       if (recordingIntervalRef.current !== null) {
         window.clearInterval(recordingIntervalRef.current);
@@ -219,6 +309,7 @@ export default function App({ actions }: AppProps) {
       if (event.key === 'Escape') {
         setServerMenuOpen(false);
         setMobileSidebarOpen(false);
+        setPlaybackModalOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -231,6 +322,8 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleSwitchStudioMode = () => {
+    stopPlayback();
+    setPlaybackModalOpen(false);
     setMode('studio');
     invokeAction(actionsRef.current, 'onWindowMinimize');
     invokeAction(actionsRef.current, 'onModeChange', 'studio');
@@ -238,14 +331,29 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleSwitchImmersiveMode = () => {
+    stopPlayback();
+    setPlaybackModalOpen(false);
     setMode('immersive');
     setServerMenuOpen(false);
     invokeAction(actionsRef.current, 'onWindowMaximize');
     invokeAction(actionsRef.current, 'onModeChange', 'immersive');
   };
 
-  const handleReservedRedDot = () => {
+  const handlePlaybackTrigger = () => {
+    stopPlayback();
+    setMode('immersive');
+    setServerMenuOpen(false);
+    setMobileSidebarOpen(false);
+    setPlaybackModalOpen(true);
     invokeAction(actionsRef.current, 'onWindowClose');
+    invokeAction(actionsRef.current, 'onModeChange', 'immersive');
+  };
+
+  const handleStartPlayback = (config: PlaybackConfig) => {
+    setMode('immersive');
+    setPlaybackModalOpen(false);
+    setPlaybackConfig(config);
+    setPlaybackVisibleCount(config.startIndex);
   };
 
   const handleToggleServerMenu = () => {
@@ -285,6 +393,108 @@ export default function App({ actions }: AppProps) {
       return next;
     });
     showToast(t.toastConvDeleted);
+  };
+
+  const handleExportData = async () => {
+    try {
+      const mediaIds = collectReferencedMediaIds(conversations, characters);
+      const media: NightcordBackupPayload['media'] = {};
+      for (const mediaId of mediaIds) {
+        const blob = await loadLocalMediaBlob(mediaId);
+        if (!blob) {
+          continue;
+        }
+        const dataBase64 = await blobToBase64(blob);
+        media[mediaId] = {
+          mimeType: blob.type || 'application/octet-stream',
+          dataBase64,
+        };
+      }
+      const payload: NightcordBackupPayload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        conversations,
+        characters,
+        activeConversationId: activeConversation.id,
+        activeCharacterId: activeCharacter.id,
+        media,
+      };
+      const jsonBlob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(jsonBlob);
+      const now = new Date();
+      const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+        now.getDate()
+      ).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(
+        now.getMinutes()
+      ).padStart(2, '0')}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `nightcord-backup-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setServerMenuOpen(false);
+      showToast(t.toastExportSuccess);
+    } catch {
+      showToast(t.toastImportInvalid);
+    }
+  };
+
+  const handleImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+    try {
+      const text = await file.text();
+      const parsed = parseNightcordBackup(text);
+      if (!parsed) {
+        showToast(t.toastImportInvalid);
+        return;
+      }
+      for (const [mediaId, entry] of Object.entries(parsed.media)) {
+        const blob = base64ToBlob(entry.dataBase64, entry.mimeType);
+        await saveLocalMediaBlob(mediaId, blob);
+      }
+      setConversations(parsed.conversations);
+      setCharacters(parsed.characters);
+      setActiveConversationId(parsed.activeConversationId);
+      setActiveCharacterId(parsed.activeCharacterId);
+      setServerMenuOpen(false);
+      setMobileSidebarOpen(false);
+      showToast(t.toastImportSuccess(parsed.conversations.length));
+    } catch {
+      showToast(t.toastImportInvalid);
+    }
+  };
+
+  const handleConfirmClearCache = async () => {
+    await clearLocalCacheData();
+    const initialConvs = createInitialConversations();
+    setConversations(initialConvs);
+    setActiveConversationId(TEMPLATE_CONVERSATION_ID);
+    setCharacters(INITIAL_CHARACTERS);
+    setActiveCharacterId(INITIAL_CHARACTERS[0].id);
+    setInputValue('');
+    setClearCacheOpen(false);
+    setServerMenuOpen(false);
+    setMobileSidebarOpen(false);
+    setCustomTime({
+      enabled: false,
+      ...getSuggestedCustomTime(initialConvs[0].messages),
+    });
+    showToast(t.toastCacheCleared);
+  };
+
+  const handleSyncCustomTimeNow = () => {
+    setCustomTime({
+      enabled: true,
+      ...getSuggestedCustomTime(activeConversation.messages),
+    });
   };
 
   const handleChannelSelect = (channelId: string) => {
@@ -364,8 +574,9 @@ export default function App({ actions }: AppProps) {
     if (!inputValue.trim()) {
       return;
     }
-    pushMessage(inputValue);
-    setInputValue('');
+    if (pushMessage(inputValue)) {
+      setInputValue('');
+    }
   };
 
   const handleSelectCharacter = (character: CharacterProfile) => {
@@ -403,6 +614,11 @@ export default function App({ actions }: AppProps) {
     filename: string;
     displayMode: 'card' | 'image';
   }) => {
+    const resolved = resolveOutgoingTimestamp(activeConversation.messages, customTime);
+    if (!resolved.ok) {
+      showToast(t.timeEarlierError(resolved.minTimestamp));
+      return;
+    }
     const mediaId = `img-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     await saveLocalMediaBlob(mediaId, options.file);
     const fileType = extractFileType(options.filename);
@@ -415,7 +631,12 @@ export default function App({ actions }: AppProps) {
         displayMode: options.displayMode,
       },
       activeCharacter,
-      inputValue
+      inputValue,
+      new Date(),
+      {
+        timestamp: resolved.timestamp,
+        dividerBefore: resolved.dividerBefore,
+      }
     );
     appendMessageToActive(msg);
     setInputValue('');
@@ -430,6 +651,11 @@ export default function App({ actions }: AppProps) {
     if (!file) {
       return;
     }
+    const resolved = resolveOutgoingTimestamp(activeConversation.messages, customTime);
+    if (!resolved.ok) {
+      showToast(t.timeEarlierError(resolved.minTimestamp));
+      return;
+    }
     const mediaId = `aud-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     await saveLocalMediaBlob(mediaId, file);
     const msg = createVoiceMessage(
@@ -438,7 +664,12 @@ export default function App({ actions }: AppProps) {
         durationSec: 0,
         filename: file.name || 'voice.webm',
       },
-      activeCharacter
+      activeCharacter,
+      new Date(),
+      {
+        timestamp: resolved.timestamp,
+        dividerBefore: resolved.dividerBefore,
+      }
     );
     appendMessageToActive(msg);
     invokeAction(actionsRef.current, 'onSendMessage', '', msg);
@@ -484,6 +715,11 @@ export default function App({ actions }: AppProps) {
         if (recordingCancelRef.current || recordingChunksRef.current.length === 0) {
           return;
         }
+        const resolved = resolveOutgoingTimestamp(activeConversation.messages, customTime);
+        if (!resolved.ok) {
+          showToast(t.timeEarlierError(resolved.minTimestamp));
+          return;
+        }
         const blob = new Blob(recordingChunksRef.current, {
           type: recorder.mimeType || 'audio/webm',
         });
@@ -499,7 +735,12 @@ export default function App({ actions }: AppProps) {
             durationSec,
             filename: 'voice.webm',
           },
-          activeCharacter
+          activeCharacter,
+          new Date(),
+          {
+            timestamp: resolved.timestamp,
+            dividerBefore: resolved.dividerBefore,
+          }
         );
         appendMessageToActive(msg);
         invokeAction(actionsRef.current, 'onSendMessage', '', msg);
@@ -587,6 +828,13 @@ export default function App({ actions }: AppProps) {
         onChange={handleAudioFileChange}
         className="hidden"
       />
+      <input
+        ref={importInputRef}
+        type="file"
+        accept="application/json,.json"
+        onChange={handleImportFileChange}
+        className="hidden"
+      />
 
       <div className="flex h-[28px] min-h-[28px] w-full shrink-0 select-none items-center justify-end border-b border-[#191322] bg-[#211A2C] px-3.5">
         <div className="flex items-center gap-2">
@@ -611,9 +859,13 @@ export default function App({ actions }: AppProps) {
           <button
             type="button"
             data-action="window-close"
-            aria-label="予約ボタン"
-            onClick={handleReservedRedDot}
-            className="h-[11px] w-[11px] cursor-pointer rounded-full bg-[#EB7F97] transition-transform hover:scale-110 hover:brightness-110"
+            aria-label={t.playbackModalTitle}
+            aria-pressed={playbackConfig !== null}
+            title={t.playbackModalTitle}
+            onClick={handlePlaybackTrigger}
+            className={`h-[11px] w-[11px] cursor-pointer rounded-full bg-[#EB7F97] transition-transform hover:scale-110 hover:brightness-110 ${
+              playbackConfig !== null ? 'animate-pulse ring-2 ring-[#EB7F97]/50' : ''
+            }`}
           />
         </div>
       </div>
@@ -640,12 +892,24 @@ export default function App({ actions }: AppProps) {
           onVoiceToggle={handleVoiceToggle}
           onOfflineToggle={handleOfflineToggle}
           onMicToggle={handleMicToggle}
+          onExportData={handleExportData}
+          onTriggerImportData={() => importInputRef.current?.click()}
+          onRequestClearCache={() => {
+            setServerMenuOpen(false);
+            setClearCacheOpen(true);
+          }}
         />
         <ChatArea
           lang={lang}
           channelTitle={activeConversation.title}
           mode={mode}
-          messages={activeConversation.messages}
+          messages={
+            playbackVisibleCount !== null
+              ? activeConversation.messages.slice(0, playbackVisibleCount)
+              : activeConversation.messages
+          }
+          isPlaying={playbackConfig !== null}
+          animatedFromIndex={playbackConfig ? playbackConfig.startIndex : null}
           characters={characters}
           activeCharacter={activeCharacter}
           inputValue={inputValue}
@@ -670,14 +934,33 @@ export default function App({ actions }: AppProps) {
           onStopRecording={handleStopRecording}
           onCancelRecording={handleCancelRecording}
           onTriggerAudioFileUpload={() => audioInputRef.current?.click()}
+          customTime={customTime}
+          lastMessageTimestamp={lastMessageTimestamp}
+          onChangeCustomTime={setCustomTime}
+          onSyncCustomTimeNow={handleSyncCustomTimeNow}
         />
       </div>
+
+      <PlaybackSetupModal
+        open={playbackModalOpen}
+        lang={lang}
+        messages={activeConversation.messages}
+        onCancel={() => setPlaybackModalOpen(false)}
+        onStart={handleStartPlayback}
+      />
 
       <ImageSendModal
         file={pendingImageFile}
         lang={lang}
         onCancel={() => setPendingImageFile(null)}
         onConfirm={handleConfirmImageSend}
+      />
+
+      <ClearCacheModal
+        open={clearCacheOpen}
+        lang={lang}
+        onCancel={() => setClearCacheOpen(false)}
+        onConfirmClear={handleConfirmClearCache}
       />
 
       <OnboardingModal

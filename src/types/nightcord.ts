@@ -55,6 +55,37 @@ export interface ChatMessage {
   dividerBefore?: string;
 }
 
+export type MessageDayKey = 'yesterday' | 'today';
+
+export type PlaybackPacingMode = 'timeline' | 'even';
+
+export interface PlaybackConfig {
+  pacingMode: PlaybackPacingMode;
+  evenIntervalSec: number;
+  startIndex: number;
+}
+
+export interface CustomMessageTime {
+  enabled: boolean;
+  day: MessageDayKey;
+  time: string;
+}
+
+export interface NightcordBackupMediaEntry {
+  mimeType: string;
+  dataBase64: string;
+}
+
+export interface NightcordBackupPayload {
+  version: 1;
+  exportedAt: string;
+  conversations: Conversation[];
+  characters: CharacterProfile[];
+  activeConversationId?: string;
+  activeCharacterId?: string;
+  media: Record<string, NightcordBackupMediaEntry>;
+}
+
 export interface Conversation {
   id: string;
   title: string;
