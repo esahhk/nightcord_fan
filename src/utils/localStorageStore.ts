@@ -1,0 +1,198 @@
+import type { AppMode, CharacterProfile, Conversation, UiLanguage } from '../types/nightcord';
+
+const STORAGE_KEYS = {
+  conversations: 'nightcord_conversations_v1',
+  activeConversationId: 'nightcord_active_conv_v1',
+  characters: 'nightcord_characters_v1',
+  activeCharacterId: 'nightcord_active_char_v1',
+  mode: 'nightcord_mode_v1',
+  language: 'nightcord_lang_v1',
+  onboardingDone: 'nightcord_onboarding_done_v1',
+} as const;
+
+const DB_NAME = 'nightcord_local_media_v1';
+const STORE_NAME = 'blobs';
+
+function openMediaDb(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === 'undefined') {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    try {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+const memoryBlobFallback = new Map<string, Blob>();
+
+export async function saveLocalMediaBlob(mediaId: string, blob: Blob): Promise<void> {
+  memoryBlobFallback.set(mediaId, blob);
+  const db = await openMediaDb();
+  if (!db) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(blob, mediaId);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+export async function loadLocalMediaBlob(mediaId: string): Promise<Blob | null> {
+  const cached = memoryBlobFallback.get(mediaId);
+  if (cached) {
+    return cached;
+  }
+  const db = await openMediaDb();
+  if (!db) {
+    return null;
+  }
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(mediaId);
+      req.onsuccess = () => {
+        const result = req.result;
+        if (result instanceof Blob) {
+          memoryBlobFallback.set(mediaId, result);
+          resolve(result);
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+function readJson<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      return null;
+    }
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function writeJson(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+  }
+}
+
+export function loadSavedConversations(): Conversation[] | null {
+  const data = readJson<Conversation[]>(STORAGE_KEYS.conversations);
+  return Array.isArray(data) && data.length > 0 ? data : null;
+}
+
+export function saveConversations(conversations: Conversation[]): void {
+  writeJson(STORAGE_KEYS.conversations, conversations);
+}
+
+export function loadActiveConversationId(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.activeConversationId);
+  } catch {
+    return null;
+  }
+}
+
+export function saveActiveConversationId(id: string): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.activeConversationId, id);
+  } catch {
+  }
+}
+
+export function loadSavedCharacters(): CharacterProfile[] | null {
+  const data = readJson<CharacterProfile[]>(STORAGE_KEYS.characters);
+  return Array.isArray(data) && data.length > 0 ? data : null;
+}
+
+export function saveCharacters(characters: CharacterProfile[]): void {
+  writeJson(STORAGE_KEYS.characters, characters);
+}
+
+export function loadActiveCharacterId(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.activeCharacterId);
+  } catch {
+    return null;
+  }
+}
+
+export function saveActiveCharacterId(id: string): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.activeCharacterId, id);
+  } catch {
+  }
+}
+
+export function loadSavedMode(): AppMode {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.mode);
+    return raw === 'studio' ? 'studio' : 'immersive';
+  } catch {
+    return 'immersive';
+  }
+}
+
+export function saveMode(mode: AppMode): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.mode, mode);
+  } catch {
+  }
+}
+
+export function isOnboardingCompleted(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.onboardingDone) === '1';
+  } catch {
+    return true;
+  }
+}
+
+export function markOnboardingCompleted(): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.onboardingDone, '1');
+  } catch {
+  }
+}
+
+export function loadSavedLanguage(): UiLanguage {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.language);
+    return raw === 'zh' ? 'zh' : 'ja';
+  } catch {
+    return 'ja';
+  }
+}
+
+export function saveLanguage(lang: UiLanguage): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.language, lang);
+  } catch {
+  }
+}

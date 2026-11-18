@@ -1,10 +1,26 @@
-import type { ChatMessage, NightcordActions, VoiceMember } from '../types/nightcord';
+import type {
+  AvatarType,
+  CharacterProfile,
+  ChatImageMedia,
+  ChatMessage,
+  ChatVoiceMedia,
+  Conversation,
+  NightcordActions,
+  VoiceMember,
+} from '../types/nightcord';
 
 export const INITIAL_VOICE_MEMBERS: VoiceMember[] = [
   { id: 'k', name: 'K', avatar: 'k-pink', muted: false, online: true },
   { id: 'yuki', name: '雪', avatar: 'yuki', muted: false, online: true },
   { id: 'enanan', name: 'えななん', avatar: 'enanan', muted: false, online: true },
   { id: 'amia', name: 'Amia', avatar: 'amia', muted: false, online: true },
+];
+
+export const INITIAL_CHARACTERS: CharacterProfile[] = [
+  { id: 'k', name: 'K', avatarType: 'k' },
+  { id: 'yuki', name: '雪', avatarType: 'yuki' },
+  { id: 'enanan', name: 'えななん', avatarType: 'enanan' },
+  { id: 'amia', name: 'Amia', avatarType: 'amia' },
 ];
 
 export const INITIAL_MESSAGES: ChatMessage[] = [
@@ -79,25 +95,153 @@ export const INITIAL_MESSAGES: ChatMessage[] = [
   },
 ];
 
+export const TEMPLATE_CONVERSATION_ID = 'template-work';
+
+export function createInitialConversations(): Conversation[] {
+  return [
+    {
+      id: TEMPLATE_CONVERSATION_ID,
+      title: '作業',
+      isTemplate: true,
+      messages: INITIAL_MESSAGES,
+    },
+  ];
+}
+
+export function createNewConversation(
+  rawTitle: string,
+  fromTemplate: boolean = false,
+  now: Date = new Date()
+): Conversation | null {
+  const title = rawTitle.trim();
+  if (!title) {
+    return null;
+  }
+  return {
+    id: `conv-${now.getTime()}-${Math.random().toString(36).slice(2, 6)}`,
+    title,
+    isTemplate: false,
+    messages: fromTemplate ? INITIAL_MESSAGES.map((m) => ({ ...m })) : [],
+  };
+}
+
 export function formatJapaneseTime(date: Date): string {
   const hours = date.getHours();
   const minutes = String(date.getMinutes()).padStart(2, '0');
   return `今日 ${hours}:${minutes}`;
 }
 
-export function createOutgoingMessage(rawText: string, now: Date = new Date()): ChatMessage | null {
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes}B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))}KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+export function formatDuration(seconds: number): string {
+  const safe = Math.max(0, Math.round(seconds));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
+export function createOutgoingMessage(
+  rawText: string,
+  sender: CharacterProfile = INITIAL_CHARACTERS[0],
+  now: Date = new Date()
+): ChatMessage | null {
   const trimmed = rawText.trim();
   if (!trimmed) {
     return null;
   }
   return {
     id: `msg-${now.getTime()}-${Math.random().toString(36).slice(2, 7)}`,
-    memberId: 'k',
-    username: 'K',
-    avatar: 'k',
+    memberId: sender.id,
+    username: sender.name,
+    avatar: sender.avatarType,
+    customAvatarMediaId: sender.customAvatarMediaId,
     timestamp: formatJapaneseTime(now),
     text: trimmed,
   };
+}
+
+export function createImageMessage(
+  imageMedia: ChatImageMedia,
+  sender: CharacterProfile,
+  caption?: string,
+  now: Date = new Date()
+): ChatMessage {
+  const trimmed = caption?.trim();
+  return {
+    id: `msg-${now.getTime()}-${Math.random().toString(36).slice(2, 7)}`,
+    memberId: sender.id,
+    username: sender.name,
+    avatar: sender.avatarType,
+    customAvatarMediaId: sender.customAvatarMediaId,
+    timestamp: formatJapaneseTime(now),
+    text: trimmed || undefined,
+    imageMedia,
+  };
+}
+
+export function createVoiceMessage(
+  voiceMedia: ChatVoiceMedia,
+  sender: CharacterProfile,
+  now: Date = new Date()
+): ChatMessage {
+  return {
+    id: `msg-${now.getTime()}-${Math.random().toString(36).slice(2, 7)}`,
+    memberId: sender.id,
+    username: sender.name,
+    avatar: sender.avatarType,
+    customAvatarMediaId: sender.customAvatarMediaId,
+    timestamp: formatJapaneseTime(now),
+    voiceMedia,
+  };
+}
+
+export function upsertCharacter(
+  characters: CharacterProfile[],
+  draft: {
+    id?: string;
+    name: string;
+    avatarType: AvatarType;
+    customAvatarMediaId?: string;
+  },
+  now: Date = new Date()
+): { characters: CharacterProfile[]; saved: CharacterProfile | null } {
+  const trimmedName = draft.name.trim();
+  if (!trimmedName) {
+    return { characters, saved: null };
+  }
+  if (draft.id) {
+    let saved: CharacterProfile | null = null;
+    const next = characters.map((item) => {
+      if (item.id !== draft.id) {
+        return item;
+      }
+      saved = {
+        ...item,
+        name: trimmedName,
+        avatarType: draft.avatarType,
+        customAvatarMediaId: draft.customAvatarMediaId,
+      };
+      return saved;
+    });
+    if (saved) {
+      return { characters: next, saved };
+    }
+  }
+  const created: CharacterProfile = {
+    id: `char-${now.getTime()}-${Math.random().toString(36).slice(2, 6)}`,
+    name: trimmedName,
+    avatarType: draft.avatarType,
+    customAvatarMediaId: draft.customAvatarMediaId,
+  };
+  return { characters: [...characters, created], saved: created };
 }
 
 export function toggleMemberMute(members: VoiceMember[], memberId: string): {

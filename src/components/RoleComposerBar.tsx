@@ -1,0 +1,283 @@
+import { useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
+import type { AvatarType, CharacterProfile, UiLanguage } from '../types/nightcord';
+import { getUiText } from '../utils/i18n';
+import { saveLocalMediaBlob } from '../utils/localStorageStore';
+import { formatDuration } from '../utils/nightcordState';
+import { CharacterAvatar } from './LocalMedia';
+import { NightcordAvatar } from './NightcordArt';
+
+const AVATAR_PRESETS: { type: AvatarType; label: string }[] = [
+  { type: 'k', label: 'K（紫）' },
+  { type: 'k-pink', label: 'K（桃）' },
+  { type: 'yuki', label: '雪' },
+  { type: 'enanan', label: 'えななん' },
+  { type: 'amia', label: 'Amia' },
+];
+
+interface RoleComposerBarProps {
+  lang: UiLanguage;
+  characters: CharacterProfile[];
+  activeCharacter: CharacterProfile;
+  isRecording: boolean;
+  recordingSec: number;
+  onSelectCharacter: (character: CharacterProfile) => void;
+  onSaveCharacter: (draft: {
+    id?: string;
+    name: string;
+    avatarType: AvatarType;
+    customAvatarMediaId?: string;
+  }) => void;
+  onTriggerImageUpload: () => void;
+  onStartRecording: () => void;
+  onStopRecording: () => void;
+  onCancelRecording: () => void;
+  onTriggerAudioFileUpload: () => void;
+}
+
+export function RoleComposerBar({
+  lang,
+  characters,
+  activeCharacter,
+  isRecording,
+  recordingSec,
+  onSelectCharacter,
+  onSaveCharacter,
+  onTriggerImageUpload,
+  onStartRecording,
+  onStopRecording,
+  onCancelRecording,
+  onTriggerAudioFileUpload,
+}: RoleComposerBarProps) {
+  const t = getUiText(lang);
+  const [editorMode, setEditorMode] = useState<'closed' | 'edit' | 'create'>('closed');
+  const [draftName, setDraftName] = useState('');
+  const [draftAvatarType, setDraftAvatarType] = useState<AvatarType>('k');
+  const [draftCustomMediaId, setDraftCustomMediaId] = useState<string | undefined>(undefined);
+  const avatarFileRef = useRef<HTMLInputElement | null>(null);
+
+  const openEdit = () => {
+    setDraftName(activeCharacter.name);
+    setDraftAvatarType(activeCharacter.avatarType);
+    setDraftCustomMediaId(activeCharacter.customAvatarMediaId);
+    setEditorMode('edit');
+  };
+
+  const openCreate = () => {
+    setDraftName('');
+    setDraftAvatarType('k');
+    setDraftCustomMediaId(undefined);
+    setEditorMode('create');
+  };
+
+  const handleAvatarFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+    const mediaId = `avatar-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    await saveLocalMediaBlob(mediaId, file);
+    setDraftCustomMediaId(mediaId);
+  };
+
+  const handleSave = () => {
+    if (!draftName.trim()) {
+      return;
+    }
+    onSaveCharacter({
+      id: editorMode === 'edit' ? activeCharacter.id : undefined,
+      name: draftName,
+      avatarType: draftAvatarType,
+      customAvatarMediaId: draftCustomMediaId,
+    });
+    setEditorMode('closed');
+  };
+
+  return (
+    <div className="mb-2 flex flex-col gap-2 rounded-[8px] border border-[#4D3F66] bg-[#2E243D] p-2.5">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex w-full min-w-0 items-center gap-1.5 overflow-x-auto pb-0.5 lg:w-auto lg:flex-1">
+          {characters.map((char) => {
+            const active = char.id === activeCharacter.id;
+            return (
+              <button
+                key={char.id}
+                type="button"
+                data-action={`select-char-${char.id}`}
+                aria-pressed={active}
+                onClick={() => onSelectCharacter(char)}
+                className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[6px] px-2 py-1 text-[12px] font-medium transition-colors ${
+                  active
+                    ? 'bg-[#473A5C] text-white ring-1 ring-[#64D2E6]/60'
+                    : 'bg-[#362B47] text-[#C2B8D3] hover:bg-[#413455] hover:text-white'
+                }`}
+              >
+                <CharacterAvatar
+                  avatarType={char.avatarType}
+                  customAvatarMediaId={char.customAvatarMediaId}
+                  size={18}
+                />
+                <span className="max-w-[90px] truncate">{char.name}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5 lg:shrink-0">
+          <button
+            type="button"
+            data-action="char-edit"
+            onClick={openEdit}
+            className="cursor-pointer rounded-[6px] border border-[#524468] bg-[#362B47] px-2 py-1 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
+          >
+            {t.editChar}
+          </button>
+          <button
+            type="button"
+            data-action="char-create"
+            onClick={openCreate}
+            className="cursor-pointer rounded-[6px] border border-[#524468] bg-[#362B47] px-2 py-1 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
+          >
+            {t.addChar}
+          </button>
+          <button
+            type="button"
+            data-action="send-image"
+            aria-label={t.sendImage}
+            onClick={onTriggerImageUpload}
+            className="cursor-pointer rounded-[6px] border border-[#524468] bg-[#362B47] px-2 py-1 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
+          >
+            {t.sendImage}
+          </button>
+          {!isRecording ? (
+            <>
+              <button
+                type="button"
+                data-action="record-voice"
+                aria-label={t.recordVoice}
+                onClick={onStartRecording}
+                className="cursor-pointer rounded-[6px] border border-[#524468] bg-[#362B47] px-2 py-1 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
+              >
+                {t.recordVoice}
+              </button>
+              <button
+                type="button"
+                data-action="upload-audio"
+                aria-label={t.audioFile}
+                onClick={onTriggerAudioFileUpload}
+                className="cursor-pointer rounded-[6px] border border-[#524468] bg-[#362B47] px-2 py-1 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
+              >
+                {t.audioFile}
+              </button>
+            </>
+          ) : (
+            <div className="flex items-center gap-1.5 rounded-[6px] border border-[#EB7F97]/60 bg-[#3B2335] px-2 py-1 text-[11.5px] text-[#FFE4EA]">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[#EB7F97]" />
+              <span className="tabular-nums">
+                {t.recording} {formatDuration(recordingSec)}
+              </span>
+              <button
+                type="button"
+                data-action="stop-record-voice"
+                onClick={onStopRecording}
+                className="cursor-pointer rounded bg-[#EB7F97] px-2 py-0.5 text-[11px] font-bold text-[#211A2C] hover:brightness-110"
+              >
+                {t.send}
+              </button>
+              <button
+                type="button"
+                data-action="cancel-record-voice"
+                onClick={onCancelRecording}
+                className="cursor-pointer rounded px-1.5 py-0.5 text-[11px] text-[#DCD7E5] hover:text-white"
+              >
+                {t.stopCancel}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {editorMode !== 'closed' && (
+        <div className="flex flex-col gap-2.5 rounded-[6px] border border-[#453859] bg-[#261D33] p-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <CharacterAvatar
+              avatarType={draftAvatarType}
+              customAvatarMediaId={draftCustomMediaId}
+              size={30}
+            />
+            <input
+              type="text"
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              aria-label={t.charNamePlaceholder}
+              placeholder={t.charNamePlaceholder}
+              className="min-w-[140px] flex-1 rounded-[6px] border border-[#453859] bg-[#332844] px-2.5 py-1.5 text-[13px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+            />
+            <input
+              ref={avatarFileRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarFileChange}
+              className="hidden"
+            />
+            <button
+              type="button"
+              data-action="char-avatar-upload"
+              onClick={() => avatarFileRef.current?.click()}
+              className="cursor-pointer rounded-[6px] border border-[#524468] bg-[#362B47] px-2.5 py-1.5 text-[11.5px] text-[#DCD7E5] hover:bg-[#473A5C] hover:text-white"
+            >
+              {t.chooseImage}
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {AVATAR_PRESETS.map((preset) => {
+                const selected = !draftCustomMediaId && draftAvatarType === preset.type;
+                return (
+                  <button
+                    key={preset.type}
+                    type="button"
+                    aria-label={preset.label}
+                    onClick={() => {
+                      setDraftAvatarType(preset.type);
+                      setDraftCustomMediaId(undefined);
+                    }}
+                    className={`flex cursor-pointer items-center gap-1 rounded-[6px] px-1.5 py-1 text-[11px] transition-colors ${
+                      selected
+                        ? 'bg-[#473A5C] text-white ring-1 ring-[#64D2E6]'
+                        : 'bg-[#332844] text-[#9A90A8] hover:text-white'
+                    }`}
+                  >
+                    <NightcordAvatar type={preset.type} size={18} />
+                    <span>{preset.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                data-action="char-editor-cancel"
+                onClick={() => setEditorMode('closed')}
+                className="cursor-pointer rounded-[6px] px-2.5 py-1 text-[12px] text-[#9A90A8] hover:text-white"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                data-action="char-editor-save"
+                onClick={handleSave}
+                className="cursor-pointer rounded-[6px] bg-[#5C4D74] px-3 py-1 text-[12px] font-bold text-white hover:bg-[#6D5C8A]"
+              >
+                {editorMode === 'edit' ? t.save : t.add}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
