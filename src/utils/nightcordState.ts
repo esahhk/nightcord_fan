@@ -141,6 +141,15 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
+export function extractFileType(filename: string): string {
+  const parts = filename.trim().split('.');
+  if (parts.length < 2) {
+    return 'IMG';
+  }
+  const ext = parts[parts.length - 1].replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  return ext ? ext.slice(0, 4) : 'IMG';
+}
+
 export function formatDuration(seconds: number): string {
   const safe = Math.max(0, Math.round(seconds));
   const mins = Math.floor(safe / 60);

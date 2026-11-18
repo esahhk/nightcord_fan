@@ -30,6 +30,8 @@ export interface ChatImageMedia {
   mediaId: string;
   filename: string;
   sizeLabel: string;
+  fileType: string;
+  displayMode: 'card' | 'image';
 }
 
 export interface ChatVoiceMedia {

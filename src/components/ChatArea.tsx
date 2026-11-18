@@ -318,9 +318,15 @@ export function ChatArea({
           <input
             ref={inputRef}
             type="text"
-            value={inputValue}
-            onChange={(event) => onInputChange(event.target.value)}
+            value={mode === 'immersive' ? '' : inputValue}
+            readOnly={mode === 'immersive'}
+            onChange={(event) => {
+              if (mode === 'studio') {
+                onInputChange(event.target.value);
+              }
+            }}
             aria-label="メッセージを送信"
+            aria-readonly={mode === 'immersive'}
             placeholder={
               mode === 'studio'
                 ? t.studioInputPlaceholder(activeCharacter.name)
@@ -328,8 +334,8 @@ export function ChatArea({
             }
             autoComplete="off"
             className={`min-w-0 flex-1 border-none bg-transparent text-[16px] text-[#EFEBF5] outline-none placeholder:text-[#857A99] sm:text-[13px] ${
-              formatActive ? 'font-bold' : 'font-normal'
-            }`}
+              formatActive && mode === 'studio' ? 'font-bold' : 'font-normal'
+            } ${mode === 'immersive' ? 'cursor-default select-none' : ''}`}
           />
           <div className="flex shrink-0 select-none items-center gap-3 sm:gap-3.5">
             <button
@@ -338,7 +344,9 @@ export function ChatArea({
               aria-label="メンション"
               title="メンション"
               onClick={handleMention}
-              className="flex cursor-pointer items-center justify-center bg-transparent p-0 text-[13.5px] font-semibold text-[#9A90A8] transition-colors hover:text-white"
+              className={`flex items-center justify-center bg-transparent p-0 text-[13.5px] font-semibold text-[#9A90A8] transition-colors ${
+                mode === 'studio' ? 'cursor-pointer hover:text-white' : 'cursor-default'
+              }`}
             >
               @
             </button>
@@ -346,12 +354,12 @@ export function ChatArea({
               type="button"
               data-action="input-format"
               aria-label="書式"
-              aria-pressed={formatActive}
+              aria-pressed={formatActive && mode === 'studio'}
               title="書式"
               onClick={onFormatClick}
-              className={`flex cursor-pointer items-center justify-center bg-transparent p-0 text-[13.5px] font-semibold transition-colors hover:text-white ${
-                formatActive ? 'text-white' : 'text-[#9A90A8]'
-              }`}
+              className={`flex items-center justify-center bg-transparent p-0 text-[13.5px] font-semibold transition-colors ${
+                formatActive && mode === 'studio' ? 'text-white' : 'text-[#9A90A8]'
+              } ${mode === 'studio' ? 'cursor-pointer hover:text-white' : 'cursor-default'}`}
             >
               Aa
             </button>
@@ -361,7 +369,9 @@ export function ChatArea({
               aria-label="絵文字"
               title="絵文字"
               onClick={handleEmoji}
-              className="flex cursor-pointer items-center justify-center bg-transparent p-0 text-[#E2DCEB] transition-colors hover:text-white"
+              className={`flex items-center justify-center bg-transparent p-0 text-[#E2DCEB] transition-colors ${
+                mode === 'studio' ? 'cursor-pointer hover:text-white' : 'cursor-default'
+              }`}
             >
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                 <circle cx="10" cy="10" r="8.5" fill="currentColor" />
@@ -381,7 +391,9 @@ export function ChatArea({
               aria-label="ファイルを添付"
               title="ファイルを添付"
               onClick={onAttachClick}
-              className="flex cursor-pointer items-center justify-center bg-transparent p-0 text-[#B4A9C6] transition-colors hover:text-white"
+              className={`flex items-center justify-center bg-transparent p-0 text-[#B4A9C6] transition-colors ${
+                mode === 'studio' ? 'cursor-pointer hover:text-white' : 'cursor-default'
+              }`}
             >
               <svg width="14" height="16" viewBox="0 0 14 16" fill="none" aria-hidden="true">
                 <path

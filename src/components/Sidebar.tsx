@@ -12,19 +12,18 @@ interface SidebarProps {
   voiceExpanded: boolean;
   offlineExpanded: boolean;
   members: VoiceMember[];
-  selectedMemberId: string | null;
   mobileOpen: boolean;
   serverMenuOpen: boolean;
   onSelectLanguage: (lang: UiLanguage) => void;
   onCloseMobile: () => void;
   onToggleServerMenu: () => void;
+  onCloseServerMenu: () => void;
   onSelectConversation: (conversationId: string) => void;
   onCreateConversation: (title: string, fromTemplate: boolean) => void;
   onDeleteConversation: (conversationId: string) => void;
   onChannelSelect: (channelId: string) => void;
   onVoiceToggle: () => void;
   onOfflineToggle: () => void;
-  onMemberClick: (member: VoiceMember) => void;
   onMicToggle: (member: VoiceMember) => void;
 }
 
@@ -36,19 +35,18 @@ export function Sidebar({
   voiceExpanded,
   offlineExpanded,
   members,
-  selectedMemberId,
   mobileOpen,
   serverMenuOpen,
   onSelectLanguage,
   onCloseMobile,
   onToggleServerMenu,
+  onCloseServerMenu,
   onSelectConversation,
   onCreateConversation,
   onDeleteConversation,
   onChannelSelect,
   onVoiceToggle,
   onOfflineToggle,
-  onMemberClick,
   onMicToggle,
 }: SidebarProps) {
   const t = getUiText(lang);
@@ -125,11 +123,18 @@ export function Sidebar({
           </button>
 
           {serverMenuOpen && (
-            <div
-              role="region"
-              aria-label={t.convListTitle}
-              className="absolute left-2 right-2 top-[56px] z-50 rounded-[8px] border border-[#524468] bg-[#211A2C] p-2.5 shadow-[0_14px_34px_rgba(0,0,0,0.6)]"
-            >
+            <>
+              <button
+                type="button"
+                aria-label="閉じる"
+                onClick={onCloseServerMenu}
+                className="fixed inset-0 z-40 cursor-default bg-transparent"
+              />
+              <div
+                role="region"
+                aria-label={t.convListTitle}
+                className="nc-scroll absolute left-2 right-2 top-[56px] z-50 max-h-[calc(100dvh-100px)] rounded-[8px] border border-[#524468] bg-[#211A2C] p-2.5 shadow-[0_14px_34px_rgba(0,0,0,0.6)]"
+              >
               <div className="mb-1.5 px-1 text-[11px] font-bold text-[#9A90A8]">
                 {t.convListTitle}
               </div>
@@ -238,6 +243,7 @@ export function Sidebar({
                 </div>
               </div>
             </div>
+            </>
           )}
         </div>
 
@@ -275,40 +281,30 @@ export function Sidebar({
 
           {voiceExpanded && (
             <div className="mb-3 flex flex-col gap-0.5">
-              {members.map((member) => {
-                const isSelected = selectedMemberId === member.id;
-                return (
-                  <div
-                    key={member.id}
-                    className={`mx-1.5 flex h-[36px] items-center justify-between rounded-[6px] pl-4 pr-3 transition-colors ${
-                      isSelected ? 'bg-[#3C3050]' : 'hover:bg-[#382D4A]'
+              {members.map((member) => (
+                <div
+                  key={member.id}
+                  className="mx-1.5 flex h-[36px] items-center justify-between rounded-[6px] pl-4 pr-3"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5 py-1">
+                    <NightcordAvatar type={member.avatar} size={25} showOnlineDot={member.online} />
+                    <span className="truncate text-[13px] font-medium text-[#DCD7E5]">
+                      {member.name}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    data-action={`mic-${member.id}`}
+                    aria-label={`${member.name}のマイク切替`}
+                    aria-pressed={member.muted}
+                    title="マイク切替"
+                    onClick={() => onMicToggle(member)}
+                    className={`flex cursor-pointer items-center justify-center rounded p-1 transition-colors ${
+                      member.muted
+                        ? 'text-[#EB7F97] hover:text-[#F49EB2]'
+                        : 'text-[#8C829C] hover:text-[#EFEBF5]'
                     }`}
                   >
-                    <button
-                      type="button"
-                      data-action={`member-${member.id}`}
-                      aria-label={`メンバー：${member.name}`}
-                      onClick={() => onMemberClick(member)}
-                      className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 bg-transparent py-1 text-left"
-                    >
-                      <NightcordAvatar type={member.avatar} size={25} showOnlineDot={member.online} />
-                      <span className="truncate text-[13px] font-medium text-[#DCD7E5]">
-                        {member.name}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      data-action={`mic-${member.id}`}
-                      aria-label={`${member.name}のマイク切替`}
-                      aria-pressed={member.muted}
-                      title="マイク切替"
-                      onClick={() => onMicToggle(member)}
-                      className={`flex cursor-pointer items-center justify-center rounded p-1 transition-colors ${
-                        member.muted
-                          ? 'text-[#EB7F97] hover:text-[#F49EB2]'
-                          : 'text-[#8C829C] hover:text-[#EFEBF5]'
-                      }`}
-                    >
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
                         <path d="M7 1.5C5.9 1.5 5 2.4 5 3.5V7.5C5 8.6 5.9 9.5 7 9.5C8.1 9.5 9 8.6 9 7.5V3.5C9 2.4 8.1 1.5 7 1.5Z" />
                         <path d="M3.2 6.8V7.5C3.2 9.4 4.6 11.0 6.4 11.2V13H7.6V11.2C9.4 11.0 10.8 9.4 10.8 7.5V6.8H9.6V7.5C9.6 8.9 8.4 10.1 7 10.1C5.6 10.1 4.4 8.9 4.4 7.5V6.8H3.2Z" />
@@ -326,8 +322,7 @@ export function Sidebar({
                       </svg>
                     </button>
                   </div>
-                );
-              })}
+              ))}
             </div>
           )}
 

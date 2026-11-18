@@ -64,8 +64,8 @@ export function OnboardingModal({
       aria-labelledby="onboarding-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4"
     >
-      <div className="w-full max-w-[430px] overflow-hidden rounded-[12px] border border-[#524468] bg-[#2E243D] text-[#EFEBF5] shadow-[0_24px_60px_rgba(0,0,0,0.65)]">
-        <div className="flex items-center justify-between border-b border-[#241C30] bg-[#211A2C] px-4 py-3">
+      <div className="flex max-h-[90dvh] w-full max-w-[430px] flex-col overflow-hidden rounded-[12px] border border-[#524468] bg-[#2E243D] text-[#EFEBF5] shadow-[0_24px_60px_rgba(0,0,0,0.65)]">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#241C30] bg-[#211A2C] px-4 py-3">
           <div className="flex items-center gap-2">
             <WorkChannelIcon size={18} />
             <span className="text-[13px] font-bold tracking-wide text-[#EFEBF5]">
@@ -77,7 +77,7 @@ export function OnboardingModal({
           </span>
         </div>
 
-        <div className="px-5 py-5">
+        <div className="nc-scroll px-5 py-5">
           <div className="mb-4 flex min-h-[78px] items-center justify-center rounded-[8px] border border-[#453859] bg-[#3F3352] px-4 py-3">
             {current.visual === 'language' && (
               <div className="grid w-full grid-cols-2 gap-2.5">

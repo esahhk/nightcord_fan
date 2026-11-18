@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { ChatArea } from './components/ChatArea';
+import { ImageSendModal } from './components/ImageSendModal';
 import { WorkChannelIcon } from './components/NightcordArt';
 import { OnboardingModal } from './components/OnboardingModal';
 import { Sidebar } from './components/Sidebar';
@@ -23,7 +24,6 @@ import {
   loadSavedCharacters,
   loadSavedConversations,
   loadSavedLanguage,
-  loadSavedMode,
   markOnboardingCompleted,
   saveActiveCharacterId,
   saveActiveConversationId,
@@ -43,6 +43,7 @@ import {
   createNewConversation,
   createOutgoingMessage,
   createVoiceMessage,
+  extractFileType,
   formatFileSize,
   invokeAction,
   toggleMemberMute,
@@ -76,7 +77,7 @@ export default function App({ actions }: AppProps) {
     }
     return list[0].id;
   });
-  const [mode, setMode] = useState<AppMode>(() => loadSavedMode());
+  const [mode, setMode] = useState<AppMode>('immersive');
   const [lang, setLang] = useState<UiLanguage>(() => loadSavedLanguage());
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -92,11 +93,11 @@ export default function App({ actions }: AppProps) {
   const [voiceExpanded, setVoiceExpanded] = useState(true);
   const [offlineExpanded, setOfflineExpanded] = useState(false);
   const [members, setMembers] = useState<VoiceMember[]>(INITIAL_VOICE_MEMBERS);
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [formatActive, setFormatActive] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const [toastText, setToastText] = useState<string | null>(null);
 
   const [isRecording, setIsRecording] = useState(false);
@@ -316,26 +317,18 @@ export default function App({ actions }: AppProps) {
     });
   };
 
-  const handleMemberClick = (member: VoiceMember) => {
-    setSelectedMemberId((prev) => (prev === member.id ? null : member.id));
-    invokeAction(actionsRef.current, 'onMemberClick', member);
-    showToast(mode === 'studio' ? t.toastMemberSelected(member.name) : `${member.name} を選択しました`);
-  };
-
   const handleMicToggle = (member: VoiceMember) => {
     const result = toggleMemberMute(members, member.id);
     setMembers(result.members);
     if (result.updated) {
       invokeAction(actionsRef.current, 'onMicToggle', result.updated, result.updated.muted);
-      showToast(
-        mode === 'studio'
-          ? result.updated.muted
+      if (mode === 'studio') {
+        showToast(
+          result.updated.muted
             ? t.toastMuted(result.updated.name)
             : t.toastUnmuted(result.updated.name)
-          : result.updated.muted
-            ? `${result.updated.name} をミュートにしました`
-            : `${result.updated.name} のミュートを解除しました`
-      );
+        );
+      }
     }
   };
 
@@ -349,7 +342,9 @@ export default function App({ actions }: AppProps) {
 
   const handleAvatarClick = (memberId: string, username: string) => {
     invokeAction(actionsRef.current, 'onAvatarClick', memberId, username);
-    showToast(mode === 'studio' ? t.toastProfile(username) : `${username} のプロフィール`);
+    if (mode === 'studio') {
+      showToast(t.toastProfile(username));
+    }
   };
 
   const handleFileDownload = (file: ChatAttachment) => {
@@ -363,6 +358,9 @@ export default function App({ actions }: AppProps) {
 
   const handleSubmitMessage = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (mode !== 'studio') {
+      return;
+    }
     if (!inputValue.trim()) {
       return;
     }
@@ -391,25 +389,37 @@ export default function App({ actions }: AppProps) {
     showToast(t.toastCharSaved(res.saved.name));
   };
 
-  const handleImageFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file) {
+    if (!file || mode !== 'studio') {
       return;
     }
+    setPendingImageFile(file);
+  };
+
+  const handleConfirmImageSend = async (options: {
+    file: File;
+    filename: string;
+    displayMode: 'card' | 'image';
+  }) => {
     const mediaId = `img-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    await saveLocalMediaBlob(mediaId, file);
+    await saveLocalMediaBlob(mediaId, options.file);
+    const fileType = extractFileType(options.filename);
     const msg = createImageMessage(
       {
         mediaId,
-        filename: file.name || 'image.png',
-        sizeLabel: formatFileSize(file.size),
+        filename: options.filename,
+        sizeLabel: `${formatFileSize(options.file.size)} ${fileType}`,
+        fileType,
+        displayMode: options.displayMode,
       },
       activeCharacter,
       inputValue
     );
     appendMessageToActive(msg);
     setInputValue('');
+    setPendingImageFile(null);
     invokeAction(actionsRef.current, 'onSendMessage', msg.text ?? '', msg);
     showToast(t.toastImageSaved);
   };
@@ -526,33 +536,37 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleMentionClick = () => {
+    if (mode !== 'studio') {
+      return;
+    }
     setInputValue((prev) => appendInputToken(prev, '@えななん '));
     invokeAction(actionsRef.current, 'onMentionClick');
   };
 
   const handleFormatClick = () => {
+    if (mode !== 'studio') {
+      return;
+    }
     setFormatActive((prev) => {
       const next = !prev;
       invokeAction(actionsRef.current, 'onFormatClick', next);
-      showToast(
-        mode === 'studio'
-          ? next
-            ? t.toastBoldOn
-            : t.toastBoldOff
-          : next
-            ? '太字モードをオンにしました'
-            : '太字モードをオフにしました'
-      );
+      showToast(next ? t.toastBoldOn : t.toastBoldOff);
       return next;
     });
   };
 
   const handleEmojiClick = () => {
+    if (mode !== 'studio') {
+      return;
+    }
     setInputValue((prev) => appendInputToken(prev, '♪'));
     invokeAction(actionsRef.current, 'onEmojiClick');
   };
 
   const handleAttachClick = () => {
+    if (mode !== 'studio') {
+      return;
+    }
     invokeAction(actionsRef.current, 'onAttachClick');
     imageInputRef.current?.click();
   };
@@ -613,19 +627,18 @@ export default function App({ actions }: AppProps) {
           voiceExpanded={voiceExpanded}
           offlineExpanded={offlineExpanded}
           members={members}
-          selectedMemberId={selectedMemberId}
           mobileOpen={mobileSidebarOpen}
           serverMenuOpen={serverMenuOpen}
           onSelectLanguage={setLang}
           onCloseMobile={() => handleSetMobileSidebar(false)}
           onToggleServerMenu={handleToggleServerMenu}
+          onCloseServerMenu={() => setServerMenuOpen(false)}
           onSelectConversation={handleSelectConversation}
           onCreateConversation={handleCreateConversation}
           onDeleteConversation={handleDeleteConversation}
           onChannelSelect={handleChannelSelect}
           onVoiceToggle={handleVoiceToggle}
           onOfflineToggle={handleOfflineToggle}
-          onMemberClick={handleMemberClick}
           onMicToggle={handleMicToggle}
         />
         <ChatArea
@@ -659,6 +672,13 @@ export default function App({ actions }: AppProps) {
           onTriggerAudioFileUpload={() => audioInputRef.current?.click()}
         />
       </div>
+
+      <ImageSendModal
+        file={pendingImageFile}
+        lang={lang}
+        onCancel={() => setPendingImageFile(null)}
+        onConfirm={handleConfirmImageSend}
+      />
 
       <OnboardingModal
         open={showOnboarding}

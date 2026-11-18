@@ -12,6 +12,7 @@ import {
   createNewConversation,
   createOutgoingMessage,
   createVoiceMessage,
+  extractFileType,
   formatDuration,
   formatJapaneseTime,
   invokeAction,
@@ -77,12 +78,21 @@ test('createOutgoingMessage, createImageMessage, and createVoiceMessage preserve
   assert.equal(msg.timestamp, formatJapaneseTime(fixedDate));
 
   const imgMsg = createImageMessage(
-    { mediaId: 'img-1', filename: 'sketch.png', sizeLabel: '1.2MB' },
+    {
+      mediaId: 'img-1',
+      filename: 'sketch.png',
+      sizeLabel: '1.2MB PNG',
+      fileType: 'PNG',
+      displayMode: 'card',
+    },
     sender,
     'これどう？',
     fixedDate
   );
   assert.equal(imgMsg.imageMedia?.filename, 'sketch.png');
+  assert.equal(imgMsg.imageMedia?.displayMode, 'card');
+  assert.equal(extractFileType('ラフC.jpg'), 'JPG');
+  assert.equal(extractFileType('noext'), 'IMG');
   assert.equal(imgMsg.text, 'これどう？');
 
   const voiceMsg = createVoiceMessage(

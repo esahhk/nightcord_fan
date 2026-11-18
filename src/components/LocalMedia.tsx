@@ -88,10 +88,78 @@ interface LocalImageCardProps {
 export function LocalImageCard({ media, onPreview }: LocalImageCardProps) {
   const url = useLocalMediaUrl(media.mediaId);
 
+  if (media.displayMode === 'card') {
+    const handleDownload = () => {
+      if (!url) {
+        return;
+      }
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = media.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    return (
+      <div className="mt-1.5">
+        <button
+          type="button"
+          data-action={`download-local-${media.mediaId}`}
+          aria-label={`${media.filename}をダウンロード`}
+          onClick={handleDownload}
+          className="flex h-[54px] w-full max-w-[310px] cursor-pointer items-center justify-between rounded-[6px] border border-[#61527A] bg-[#524468] px-3.5 text-left transition-all hover:bg-[#5C4D74] active:scale-[0.99]"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <svg width="26" height="32" viewBox="0 0 26 32" fill="none" className="shrink-0" aria-hidden="true">
+              <path
+                d="M3 1.5H17.5L23.5 7.5V29.5C23.5 30.1 23.0 30.5 22.4 30.5H3C2.4 30.5 2 30.1 2 29.5V2.5C2 1.9 2.4 1.5 3 1.5Z"
+                stroke="#C2B8D3"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M17.5 1.5V7.5H23.5"
+                stroke="#C2B8D3"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+              <text
+                x="12.8"
+                y="21.5"
+                textAnchor="middle"
+                fill="#C2B8D3"
+                fontSize="7"
+                fontWeight="700"
+                fontFamily="Inter, sans-serif"
+              >
+                {media.fileType || 'JPG'}
+              </text>
+            </svg>
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate text-[13.5px] leading-[1.25] font-bold text-white">
+                {media.filename}
+              </span>
+              <span className="mt-0.5 text-[10.5px] font-normal text-[#9A90A8]">
+                {media.sizeLabel}
+              </span>
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center justify-center p-1 text-[#EFEBF5]">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M3.5 3.5H12.5L8 9.5L3.5 3.5Z" />
+              <rect x="3" y="11" width="10" height="1.7" rx="0.5" />
+            </svg>
+          </span>
+        </button>
+      </div>
+    );
+  }
+
   if (!url) {
     return (
       <div className="mt-1.5 flex h-[120px] w-full max-w-[260px] items-center justify-center rounded-[8px] border border-[#61527A] bg-[#524468] text-[12px] text-[#B4A9C6]">
-        ローカル画像を読み込み中...
+        ...
       </div>
     );
   }
