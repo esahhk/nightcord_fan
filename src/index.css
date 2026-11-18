@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@layer base {
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+    background-color: #140f1c;
+    font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+    color: #efebf5;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+.nc-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.nc-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.nc-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nc-scroll::-webkit-scrollbar-thumb {
+  background: #2a2138;
+  border-radius: 999px;
+}
+
+.nc-scroll::-webkit-scrollbar-thumb:hover {
+  background: #53466b;
+}

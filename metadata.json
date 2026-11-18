@@ -1,0 +1,8 @@
+{
+  "name": "nightcord",
+  "description": "25時、ナイトコードで。 Nightcord desktop UI",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

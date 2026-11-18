@@ -1,0 +1,1532 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>25時、ナイトコードで。 - Nightcord</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+      background-color: #140F1C;
+      font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      color: #EFEBF5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Main Desktop Window Container */
+    .nightcord-window {
+      width: 100%;
+      height: 100vh;
+      background-color: #3F3352;
+      border-radius: 10px;
+      border: 1px solid #302640;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+    }
+
+    /* Top-most full-width window title bar (28px, #211A2C) */
+    .window-titlebar {
+      width: 100%;
+      height: 28px;
+      min-height: 28px;
+      background-color: #211A2C;
+      border-bottom: 1px solid #191322;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 14px;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    .window-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .win-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+    .win-dot:hover {
+      transform: scale(1.12);
+      filter: brightness(1.08);
+    }
+
+    /* Main Workspace Split Layout */
+    .workspace-split {
+      width: 100%;
+      height: calc(100vh - 28px);
+      display: flex;
+      min-height: 0;
+    }
+
+    /* Locked Scrollbars */
+    .nc-scroll {
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    .nc-scroll::-webkit-scrollbar {
+      width: 5px;
+    }
+    .nc-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .nc-scroll::-webkit-scrollbar-thumb {
+      background: #2A2138;
+      border-radius: 999px;
+    }
+    .nc-scroll::-webkit-scrollbar-thumb:hover {
+      background: #53466B;
+    }
+
+    /* Left Sidebar (255px width, #2E243D) */
+    .sidebar {
+      width: 255px;
+      min-width: 210px;
+      height: 100%;
+      background-color: #2E243D;
+      border-right: 1px solid #241C30;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    .sidebar-header {
+      height: 52px;
+      padding: 0 16px;
+      border-bottom: 1px solid #241C30;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background-color 0.15s ease;
+    }
+    .sidebar-header:hover {
+      background-color: #362B47;
+    }
+
+    .server-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #EFEBF5;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .server-chevron {
+      color: #9A90A8;
+      display: inline-flex;
+      align-items: center;
+      margin-left: 6px;
+    }
+
+    .sidebar-body {
+      flex: 1;
+      padding-bottom: 16px;
+    }
+
+    /* Active Channel Pill (#473A5C) */
+    .channel-pill {
+      margin: 12px 10px;
+      height: 38px;
+      background-color: #473A5C;
+      border-radius: 6px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    .channel-pill-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: #FFFFFF;
+    }
+
+    /* Sidebar Categories */
+    .category-header {
+      padding: 10px 16px 6px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #9A90A8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .category-header:hover {
+      color: #DCD7E5;
+    }
+
+    .voice-members {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 12px;
+    }
+
+    .voice-member-row {
+      height: 36px;
+      padding: 0 14px 0 20px;
+      margin: 0 6px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+    }
+    .voice-member-row:hover {
+      background-color: #382D4A;
+    }
+
+    .voice-member-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .avatar-box-24 {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      overflow: hidden;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .avatar-box-36 {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      overflow: hidden;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .avatar-box-24 svg,
+    .avatar-box-24 canvas,
+    .avatar-box-36 svg,
+    .avatar-box-36 canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .voice-member-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: #DCD7E5;
+    }
+
+    .mic-icon-btn {
+      color: #8C829C;
+      background: transparent;
+      border: none;
+      padding: 4px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: color 0.15s ease;
+    }
+    .mic-icon-btn:hover {
+      color: #EFEBF5;
+    }
+    .mic-icon-btn.muted {
+      color: #EB7F97;
+    }
+
+    /* Right Main Chat Area (#3F3352) */
+    .chat-area {
+      flex: 1;
+      height: 100%;
+      background-color: #3F3352;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .chat-header {
+      height: 52px;
+      padding: 0 24px;
+      border-bottom: 1px solid #322742;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      background-color: #3F3352;
+    }
+
+    .chat-header-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+
+    /* Message Stream */
+    .message-stream {
+      flex: 1;
+      padding: 0 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .msg-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 13px;
+      border-radius: 6px;
+      transition: background-color 0.12s ease;
+    }
+    .msg-item:hover {
+      background-color: rgba(46, 36, 61, 0.32);
+    }
+
+    /* Top edge slightly clipped at scroll top matching reference screenshot */
+    .msg-item.top-clipped {
+      margin-top: -11px;
+    }
+
+    .msg-body-col {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .msg-header-line {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+
+    .msg-username {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #EFEBF5;
+    }
+
+    .msg-timestamp {
+      font-size: 10.5px;
+      font-weight: 400;
+      color: #9A90A8;
+    }
+
+    .msg-text {
+      font-size: 13.5px;
+      font-weight: 400;
+      color: #E2DCEB;
+      line-height: 1.44;
+      word-break: break-word;
+    }
+
+    /* Horizontal Date Divider: 今日 */
+    .date-divider {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin: 3px 0;
+    }
+
+    .date-line {
+      flex: 1;
+      height: 1px;
+      background-color: #504266;
+    }
+
+    .date-text {
+      font-size: 11px;
+      font-weight: 500;
+      color: #9A90A8;
+    }
+
+    /* Stacked File Attachment Cards */
+    .attachments-wrap {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .file-card {
+      width: 260px;
+      max-width: 100%;
+      height: 54px;
+      background-color: #524468;
+      border: 1px solid #61527A;
+      border-radius: 6px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: background-color 0.15s ease, transform 0.1s ease;
+    }
+    .file-card:hover {
+      background-color: #5C4D74;
+    }
+    .file-card:active {
+      transform: scale(0.99);
+    }
+
+    .file-card-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .file-meta {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .file-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #FFFFFF;
+      line-height: 1.25;
+    }
+
+    .file-sub {
+      font-size: 10.5px;
+      font-weight: 400;
+      color: #9A90A8;
+      margin-top: 2px;
+    }
+
+    .file-download-icon {
+      color: #EFEBF5;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Bottom Message Input Bar */
+    .chat-input-wrapper {
+      padding: 0 24px 18px;
+      background-color: #3F3352;
+      flex-shrink: 0;
+    }
+
+    .chat-input-box {
+      width: 100%;
+      height: 42px;
+      background-color: #332844;
+      border: 1px solid #453859;
+      border-radius: 6px;
+      padding: 0 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: border-color 0.15s ease;
+    }
+    .chat-input-box:focus-within {
+      border-color: #675882;
+    }
+
+    .chat-input-field {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-size: 13px;
+      color: #EFEBF5;
+      font-family: inherit;
+    }
+    .chat-input-field::placeholder {
+      color: #857A99;
+    }
+
+    .chat-input-tools {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      user-select: none;
+    }
+
+    .tool-btn {
+      color: #9A90A8;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s ease;
+    }
+    .tool-btn:hover {
+      color: #FFFFFF;
+    }
+
+    /* Toast Notification */
+    .nc-toast {
+      position: fixed;
+      bottom: 72px;
+      right: 28px;
+      background-color: #211A2C;
+      border: 1px solid #524468;
+      color: #EFEBF5;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.48);
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      z-index: 50;
+    }
+    .nc-toast.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 640px) {
+      .sidebar {
+        width: 185px;
+        min-width: 165px;
+      }
+      .message-stream {
+        padding: 0 14px 12px;
+      }
+      .chat-input-wrapper {
+        padding: 0 14px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="nightcord-window">
+
+    <!-- Top-most full-width window title bar (28px, #211A2C) -->
+    <div class="window-titlebar">
+      <div class="window-controls">
+        <span class="win-dot" style="background-color: #64D2E6;" title="最小化" onclick="triggerToast('ウィンドウを最小化しました')"></span>
+        <span class="win-dot" style="background-color: #F6CE71;" title="最大化" onclick="triggerToast('ウィンドウサイズを切り替えました')"></span>
+        <span class="win-dot" style="background-color: #EB7F97;" title="閉じる" onclick="triggerToast('ナイトコードはバックグラウンドで待機中です')"></span>
+      </div>
+    </div>
+
+    <!-- Split Workspace -->
+    <div class="workspace-split">
+
+      <!-- Left Sidebar (255px, #2E243D) -->
+      <aside class="sidebar">
+        <div class="sidebar-header" onclick="triggerToast('サーバー：25時、ナイトコードで。')">
+          <span class="server-name">25時、ナイトコードで。</span>
+          <span class="server-chevron">
+            <svg width="11" height="7" viewBox="0 0 11 7" fill="none">
+              <path d="M1.5 1.5L5.5 5.5L9.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+
+        <div class="sidebar-body nc-scroll">
+          <!-- Active Channel Pill -->
+          <div class="channel-pill">
+            <svg width="19" height="19" viewBox="0 0 100 100" style="flex-shrink:0;display:block;">
+              <circle cx="50" cy="50" r="48" fill="#F3F0F8"/>
+              <circle cx="50" cy="50" r="32" fill="none" stroke="#2E243D" stroke-width="2.4"/>
+              <path fill-rule="evenodd" d="M 50 18 A 32 32 0 1 0 50 82 A 32 32 0 1 0 50 18 Z M 63 23 A 29 29 0 1 1 63 77 A 29 29 0 1 1 63 23 Z" fill="#2E243D"/>
+              <circle cx="54" cy="50" r="3.6" fill="#2E243D"/>
+              <circle cx="67" cy="50" r="3.6" fill="#2E243D"/>
+            </svg>
+            <span class="channel-pill-text">作業</span>
+          </div>
+
+          <!-- Voice Category -->
+          <div class="category-header" onclick="toggleVoiceList(this)">
+            <span class="cat-chevron" style="transition: transform 0.15s ease;">&gt;</span>
+            <span>ボイスチャット</span>
+          </div>
+
+          <!-- Voice Members List (Static SVG Fallback + JS Canvas Upgrade) -->
+          <div id="voice-members" class="voice-members">
+            <!-- K (Sidebar Rose-Magenta #C85A88) -->
+            <div class="voice-member-row">
+              <div class="voice-member-left">
+                <div class="avatar-box-24" data-avatar="k-pink">
+                  <svg viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="50" fill="#C85A88"/>
+                    <circle cx="50" cy="50" r="32" fill="none" stroke="#FFFFFF" stroke-width="3.2"/>
+                    <path fill-rule="evenodd" d="M 50 18 A 32 32 0 1 0 50 82 A 32 32 0 1 0 50 18 Z M 64 23 A 29.5 29.5 0 1 1 64 77 A 29.5 29.5 0 1 1 64 23 Z" fill="#FFFFFF"/>
+                    <circle cx="54" cy="50" r="3.8" fill="#FFFFFF"/>
+                    <circle cx="67" cy="50" r="3.8" fill="#FFFFFF"/>
+                  </svg>
+                </div>
+                <span class="voice-member-name">K</span>
+              </div>
+              <button class="mic-icon-btn" onclick="toggleMicMute(this, 'K')" title="マイク切替">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                  <path d="M7 1.5C5.9 1.5 5 2.4 5 3.5V7.5C5 8.6 5.9 9.5 7 9.5C8.1 9.5 9 8.6 9 7.5V3.5C9 2.4 8.1 1.5 7 1.5Z"/>
+                  <path d="M3.2 6.8V7.5C3.2 9.4 4.6 11.0 6.4 11.2V13H7.6V11.2C9.4 11.0 10.8 9.4 10.8 7.5V6.8H9.6V7.5C9.6 8.9 8.4 10.1 7 10.1C5.6 10.1 4.4 8.9 4.4 7.5V6.8H3.2Z"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- 雪 -->
+            <div class="voice-member-row">
+              <div class="voice-member-left">
+                <div class="avatar-box-24" data-avatar="yuki">
+                  <svg viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="50" fill="#7E7EC2"/>
+                    <g stroke="#FFFFFF" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round" fill="none">
+                      <circle cx="50" cy="50" r="6"/>
+                      <g>
+                        <line x1="50" y1="16" x2="50" y2="84"/>
+                        <polyline points="42,24 50,32 58,24"/>
+                        <polyline points="44.5,33.5 50,39 55.5,33.5"/>
+                        <polyline points="42,76 50,68 58,76"/>
+                        <polyline points="44.5,66.5 50,61 55.5,66.5"/>
+                      </g>
+                      <g transform="rotate(60 50 50)">
+                        <line x1="50" y1="16" x2="50" y2="84"/>
+                        <polyline points="42,24 50,32 58,24"/>
+                        <polyline points="44.5,33.5 50,39 55.5,33.5"/>
+                        <polyline points="42,76 50,68 58,76"/>
+                        <polyline points="44.5,66.5 50,61 55.5,66.5"/>
+                      </g>
+                      <g transform="rotate(120 50 50)">
+                        <line x1="50" y1="16" x2="50" y2="84"/>
+                        <polyline points="42,24 50,32 58,24"/>
+                        <polyline points="44.5,33.5 50,39 55.5,33.5"/>
+                        <polyline points="42,76 50,68 58,76"/>
+                        <polyline points="44.5,66.5 50,61 55.5,66.5"/>
+                      </g>
+                    </g>
+                  </svg>
+                </div>
+                <span class="voice-member-name">雪</span>
+              </div>
+              <button class="mic-icon-btn" onclick="toggleMicMute(this, '雪')" title="マイク切替">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                  <path d="M7 1.5C5.9 1.5 5 2.4 5 3.5V7.5C5 8.6 5.9 9.5 7 9.5C8.1 9.5 9 8.6 9 7.5V3.5C9 2.4 8.1 1.5 7 1.5Z"/>
+                  <path d="M3.2 6.8V7.5C3.2 9.4 4.6 11.0 6.4 11.2V13H7.6V11.2C9.4 11.0 10.8 9.4 10.8 7.5V6.8H9.6V7.5C9.6 8.9 8.4 10.1 7 10.1C5.6 10.1 4.4 8.9 4.4 7.5V6.8H3.2Z"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- えななん -->
+            <div class="voice-member-row">
+              <div class="voice-member-left">
+                <div class="avatar-box-24" data-avatar="enanan">
+                  <svg viewBox="0 0 100 100">
+                    <defs>
+                      <clipPath id="clip-ena-sb"><circle cx="50" cy="50" r="50"/></clipPath>
+                      <linearGradient id="bg-ena-sb" x1="0" y1="0" x2="1" y2="0.4">
+                        <stop offset="0%" stop-color="#B8D8EB"/>
+                        <stop offset="55%" stop-color="#D9E8F2"/>
+                        <stop offset="100%" stop-color="#D8E0B8"/>
+                      </linearGradient>
+                    </defs>
+                    <g clip-path="url(#clip-ena-sb)">
+                      <rect width="100" height="100" fill="url(#bg-ena-sb)"/>
+                      <ellipse cx="50" cy="14" rx="46" ry="20" fill="#F4F8FC" opacity="0.85"/>
+                      <path d="M 16 96 C 14 66, 20 30, 38 20 C 45 16, 55 16, 62 20 C 80 30, 86 66, 84 96 Z" fill="#E3DFEC" stroke="#B6AFC7" stroke-width="2"/>
+                      <path d="M 32 100 L 38 66 L 62 66 L 68 100 Z" fill="#6A7A8C"/>
+                      <path d="M 38 66 L 50 78 L 62 66 L 57 63 L 50 70 L 43 63 Z" fill="#F7F9FC"/>
+                      <rect x="46" y="55" width="8" height="11" fill="#FBF2ED"/>
+                      <path d="M 39 40 C 39 51, 44 58, 50 58 C 56 58, 61 51, 61 40 C 61 30, 56 25, 50 25 C 44 25, 39 30, 39 40 Z" fill="#FCF4EF"/>
+                      <ellipse cx="44.8" cy="44" rx="2.3" ry="2.8" fill="#5A5366"/>
+                      <ellipse cx="55.2" cy="44" rx="2.3" ry="2.8" fill="#5A5366"/>
+                      <path d="M 50 23 C 41 25, 35 34, 31 50 C 27 65, 22 79, 17 92 C 25 84, 32 72, 36 58 C 40 48, 43 36, 50 30 Z" fill="#F5F3FA" stroke="#B5AEC6" stroke-width="1.6"/>
+                      <path d="M 50 23 C 59 25, 65 34, 69 50 C 73 65, 78 79, 83 92 C 75 84, 68 72, 64 58 C 60 48, 57 36, 50 30 Z" fill="#F5F3FA" stroke="#B5AEC6" stroke-width="1.6"/>
+                    </g>
+                  </svg>
+                </div>
+                <span class="voice-member-name">えななん</span>
+              </div>
+              <button class="mic-icon-btn" onclick="toggleMicMute(this, 'えななん')" title="マイク切替">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                  <path d="M7 1.5C5.9 1.5 5 2.4 5 3.5V7.5C5 8.6 5.9 9.5 7 9.5C8.1 9.5 9 8.6 9 7.5V3.5C9 2.4 8.1 1.5 7 1.5Z"/>
+                  <path d="M3.2 6.8V7.5C3.2 9.4 4.6 11.0 6.4 11.2V13H7.6V11.2C9.4 11.0 10.8 9.4 10.8 7.5V6.8H9.6V7.5C9.6 8.9 8.4 10.1 7 10.1C5.6 10.1 4.4 8.9 4.4 7.5V6.8H3.2Z"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Amia -->
+            <div class="voice-member-row">
+              <div class="voice-member-left">
+                <div class="avatar-box-24" data-avatar="amia">
+                  <svg viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="50" fill="#9AD4EB"/>
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="#E4F5FC" stroke-width="4.5" stroke-dasharray="6 5.5"/>
+                    <circle cx="50" cy="50" r="38" fill="#F4B8D0"/>
+                    <circle cx="50" cy="50" r="34" fill="none" stroke="#E595B5" stroke-width="3.8" stroke-dasharray="5 5"/>
+                    <circle cx="50" cy="50" r="28" fill="#FFFFFF" stroke="#E8B5CE" stroke-width="1.8"/>
+                    <path d="M 32 62.5 C 34.5 63.5, 38 61.5, 41.2 54.5 L 53.5 31.5 C 54.5 29.8, 55.8 29.8, 55.8 32 L 54.5 60 C 54.3 62.5, 56 63.5, 58.5 62.5 M 39.5 51 C 45.5 50.2, 52 49.8, 59.5 50.5" fill="none" stroke="#6B5B7B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M 34 42 C 32 37.5, 36.5 32, 44 33.5" fill="none" stroke="#6B5B7B" stroke-width="2.6" stroke-linecap="round"/>
+                  </svg>
+                </div>
+                <span class="voice-member-name">Amia</span>
+              </div>
+              <button class="mic-icon-btn" onclick="toggleMicMute(this, 'Amia')" title="マイク切替">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                  <path d="M7 1.5C5.9 1.5 5 2.4 5 3.5V7.5C5 8.6 5.9 9.5 7 9.5C8.1 9.5 9 8.6 9 7.5V3.5C9 2.4 8.1 1.5 7 1.5Z"/>
+                  <path d="M3.2 6.8V7.5C3.2 9.4 4.6 11.0 6.4 11.2V13H7.6V11.2C9.4 11.0 10.8 9.4 10.8 7.5V6.8H9.6V7.5C9.6 8.9 8.4 10.1 7 10.1C5.6 10.1 4.4 8.9 4.4 7.5V6.8H3.2Z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Offline Category -->
+          <div class="category-header" onclick="triggerToast('オフラインのメンバーはいません')">
+            <span>&gt;</span>
+            <span>オフライン</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right Main Chat Area (#3F3352) -->
+      <main class="chat-area">
+        <!-- Channel Header -->
+        <header class="chat-header">
+          <svg width="19" height="19" viewBox="0 0 100 100" style="flex-shrink:0;display:block;">
+            <circle cx="50" cy="50" r="48" fill="#F3F0F8"/>
+            <circle cx="50" cy="50" r="32" fill="none" stroke="#3F3352" stroke-width="2.4"/>
+            <path fill-rule="evenodd" d="M 50 18 A 32 32 0 1 0 50 82 A 32 32 0 1 0 50 18 Z M 63 23 A 29 29 0 1 1 63 77 A 29 29 0 1 1 63 23 Z" fill="#3F3352"/>
+            <circle cx="54" cy="50" r="3.6" fill="#3F3352"/>
+            <circle cx="67" cy="50" r="3.6" fill="#3F3352"/>
+          </svg>
+          <h1 class="chat-header-title">作業</h1>
+        </header>
+
+        <!-- Message Stream -->
+        <div id="message-stream" class="message-stream nc-scroll">
+
+          <!-- 1. Amia (top clipped) -->
+          <div class="msg-item top-clipped">
+            <div class="avatar-box-36" data-avatar="amia">
+              <svg viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50" fill="#9AD4EB"/>
+                <circle cx="50" cy="50" r="45" fill="none" stroke="#E4F5FC" stroke-width="4.5" stroke-dasharray="6 5.5"/>
+                <circle cx="50" cy="50" r="38" fill="#F4B8D0"/>
+                <circle cx="50" cy="50" r="34" fill="none" stroke="#E595B5" stroke-width="3.8" stroke-dasharray="5 5"/>
+                <circle cx="50" cy="50" r="28" fill="#FFFFFF" stroke="#E8B5CE" stroke-width="1.8"/>
+                <path d="M 32 62.5 C 34.5 63.5, 38 61.5, 41.2 54.5 L 53.5 31.5 C 54.5 29.8, 55.8 29.8, 55.8 32 L 54.5 60 C 54.3 62.5, 56 63.5, 58.5 62.5 M 39.5 51 C 45.5 50.2, 52 49.8, 59.5 50.5" fill="none" stroke="#6B5B7B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M 34 42 C 32 37.5, 36.5 32, 44 33.5" fill="none" stroke="#6B5B7B" stroke-width="2.6" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="msg-body-col">
+              <div class="msg-header-line">
+                <span class="msg-username">Amia</span>
+                <span class="msg-timestamp">昨日 16:13</span>
+              </div>
+              <div class="msg-text">ありがと！</div>
+            </div>
+          </div>
+
+          <!-- 2. 雪 -->
+          <div class="msg-item">
+            <div class="avatar-box-36" data-avatar="yuki">
+              <svg viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50" fill="#7E7EC2"/>
+                <g stroke="#FFFFFF" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" fill="none">
+                  <circle cx="50" cy="50" r="6"/>
+                  <g>
+                    <line x1="50" y1="16" x2="50" y2="84"/>
+                    <polyline points="42,24 50,32 58,24"/>
+                    <polyline points="44.5,33.5 50,39 55.5,33.5"/>
+                    <polyline points="42,76 50,68 58,76"/>
+                    <polyline points="44.5,66.5 50,61 55.5,66.5"/>
+                  </g>
+                  <g transform="rotate(60 50 50)">
+                    <line x1="50" y1="16" x2="50" y2="84"/>
+                    <polyline points="42,24 50,32 58,24"/>
+                    <polyline points="44.5,33.5 50,39 55.5,33.5"/>
+                    <polyline points="42,76 50,68 58,76"/>
+                    <polyline points="44.5,66.5 50,61 55.5,66.5"/>
+                  </g>
+                  <g transform="rotate(120 50 50)">
+                    <line x1="50" y1="16" x2="50" y2="84"/>
+                    <polyline points="42,24 50,32 58,24"/>
+                    <polyline points="44.5,33.5 50,39 55.5,33.5"/>
+                    <polyline points="42,76 50,68 58,76"/>
+                    <polyline points="44.5,66.5 50,61 55.5,66.5"/>
+                  </g>
+                </g>
+              </svg>
+            </div>
+            <div class="msg-body-col">
+              <div class="msg-header-line">
+                <span class="msg-username">雪</span>
+                <span class="msg-timestamp">昨日 16:15</span>
+              </div>
+              <div class="msg-text">聴いとくね</div>
+            </div>
+          </div>
+
+          <!-- 3. えななん -->
+          <div class="msg-item">
+            <div class="avatar-box-36" data-avatar="enanan">
+              <svg viewBox="0 0 100 100">
+                <defs>
+                  <clipPath id="clip-ena-1"><circle cx="50" cy="50" r="50"/></clipPath>
+                  <linearGradient id="bg-ena-1" x1="0" y1="0" x2="1" y2="0.4">
+                    <stop offset="0%" stop-color="#B8D8EB"/>
+                    <stop offset="55%" stop-color="#D9E8F2"/>
+                    <stop offset="100%" stop-color="#D8E0B8"/>
+                  </linearGradient>
+                </defs>
+                <g clip-path="url(#clip-ena-1)">
+                  <rect width="100" height="100" fill="url(#bg-ena-1)"/>
+                  <ellipse cx="50" cy="14" rx="46" ry="20" fill="#F4F8FC" opacity="0.85"/>
+                  <path d="M 16 96 C 14 66, 20 30, 38 20 C 45 16, 55 16, 62 20 C 80 30, 86 66, 84 96 Z" fill="#E3DFEC" stroke="#B6AFC7" stroke-width="2"/>
+                  <path d="M 32 100 L 38 66 L 62 66 L 68 100 Z" fill="#6A7A8C"/>
+                  <path d="M 38 66 L 50 78 L 62 66 L 57 63 L 50 70 L 43 63 Z" fill="#F7F9FC"/>
+                  <rect x="46" y="55" width="8" height="11" fill="#FBF2ED"/>
+                  <path d="M 39 40 C 39 51, 44 58, 50 58 C 56 58, 61 51, 61 40 C 61 30, 56 25, 50 25 C 44 25, 39 30, 39 40 Z" fill="#FCF4EF"/>
+                  <ellipse cx="44.8" cy="44" rx="2.3" ry="2.8" fill="#5A5366"/>
+                  <ellipse cx="55.2" cy="44" rx="2.3" ry="2.8" fill="#5A5366"/>
+                  <path d="M 50 23 C 41 25, 35 34, 31 50 C 27 65, 22 79, 17 92 C 25 84, 32 72, 36 58 C 40 48, 43 36, 50 30 Z" fill="#F5F3FA" stroke="#B5AEC6" stroke-width="1.6"/>
+                  <path d="M 50 23 C 59 25, 65 34, 69 50 C 73 65, 78 79, 83 92 C 75 84, 68 72, 64 58 C 60 48, 57 36, 50 30 Z" fill="#F5F3FA" stroke="#B5AEC6" stroke-width="1.6"/>
+                </g>
+              </svg>
+            </div>
+            <div class="msg-body-col">
+              <div class="msg-header-line">
+                <span class="msg-username">えななん</span>
+                <span class="msg-timestamp">昨日 20:36</span>
+              </div>
+              <div class="msg-text">じゃ、一旦落ちる</div>
+            </div>
+          </div>
+
+          <!-- 4. K (Chat Deep Plum-Purple #7E3B82 with Uniform Crescent + Thin Closing Arc) -->
+          <div class="msg-item">
+            <div class="avatar-box-36" data-avatar="k">
+              <svg viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50" fill="#7E3B82"/>
+                <circle cx="50" cy="50" r="32" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+                <path fill-rule="evenodd" d="M 50 18 A 32 32 0 1 0 50 82 A 32 32 0 1 0 50 18 Z M 64 23 A 29.5 29.5 0 1 1 64 77 A 29.5 29.5 0 1 1 64 23 Z" fill="#FFFFFF"/>
+                <circle cx="54" cy="50" r="3.6" fill="#FFFFFF"/>
+                <circle cx="67" cy="50" r="3.6" fill="#FFFFFF"/>
+              </svg>
+            </div>
+            <div class="msg-body-col">
+              <div class="msg-header-line">
+                <span class="msg-username">K</span>
+                <span class="msg-timestamp">昨日 20:38</span>
+              </div>
+              <div class="msg-text">うん。また25時に</div>
+            </div>
+          </div>
+
+          <!-- 5. えななん -->
+          <div class="msg-item">
+            <div class="avatar-box-36" data-avatar="enanan">
+              <svg viewBox="0 0 100 100">
+                <defs>
+                  <clipPath id="clip-ena-2"><circle cx="50" cy="50" r="50"/></clipPath>
+                  <linearGradient id="bg-ena-2" x1="0" y1="0" x2="1" y2="0.4">
+                    <stop offset="0%" stop-color="#B8D8EB"/>
+                    <stop offset="55%" stop-color="#D9E8F2"/>
+                    <stop offset="100%" stop-color="#D8E0B8"/>
+                  </linearGradient>
+                </defs>
+                <g clip-path="url(#clip-ena-2)">
+                  <rect width="100" height="100" fill="url(#bg-ena-2)"/>
+                  <ellipse cx="50" cy="14" rx="46" ry="20" fill="#F4F8FC" opacity="0.85"/>
+                  <path d="M 16 96 C 14 66, 20 30, 38 20 C 45 16, 55 16, 62 20 C 80 30, 86 66, 84 96 Z" fill="#E3DFEC" stroke="#B6AFC7" stroke-width="2"/>
+                  <path d="M 32 100 L 38 66 L 62 66 L 68 100 Z" fill="#6A7A8C"/>
+                  <path d="M 38 66 L 50 78 L 62 66 L 57 63 L 50 70 L 43 63 Z" fill="#F7F9FC"/>
+                  <rect x="46" y="55" width="8" height="11" fill="#FBF2ED"/>
+                  <path d="M 39 40 C 39 51, 44 58, 50 58 C 56 58, 61 51, 61 40 C 61 30, 56 25, 50 25 C 44 25, 39 30, 39 40 Z" fill="#FCF4EF"/>
+                  <ellipse cx="44.8" cy="44" rx="2.3" ry="2.8" fill="#5A5366"/>
+                  <ellipse cx="55.2" cy="44" rx="2.3" ry="2.8" fill="#5A5366"/>
+                  <path d="M 50 23 C 41 25, 35 34, 31 50 C 27 65, 22 79, 17 92 C 25 84, 32 72, 36 58 C 40 48, 43 36, 50 30 Z" fill="#F5F3FA" stroke="#B5AEC6" stroke-width="1.6"/>
+                  <path d="M 50 23 C 59 25, 65 34, 69 50 C 73 65, 78 79, 83 92 C 75 84, 68 72, 64 58 C 60 48, 57 36, 50 30 Z" fill="#F5F3FA" stroke="#B5AEC6" stroke-width="1.6"/>
+                </g>
+              </svg>
+            </div>
+            <div class="msg-body-col">
+              <div class="msg-header-line">
+                <span class="msg-username">えななん</span>
+                <span class="msg-timestamp">昨日 20:39</span>
+              </div>
+              <div class="msg-text">はーい</div>
+            </div>
+          </div>
+
+          <!-- 6. Amia -->
+          <div class="msg-item">
+            <div class="avatar-box-36" data-avatar="amia">
+              <svg viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50" fill="#9AD4EB"/>
+                <circle cx="50" cy="50" r="45" fill="none" stroke="#E4F5FC" stroke-width="4.5" stroke-dasharray="6 5.5"/>
+                <circle cx="50" cy="50" r="38" fill="#F4B8D0"/>
+                <circle cx="50" cy="50" r="34" fill="none" stroke="#E595B5" stroke-width="3.8" stroke-dasharray="5 5"/>
+                <circle cx="50" cy="50" r="28" fill="#FFFFFF" stroke="#E8B5CE" stroke-width="1.8"/>
+                <path d="M 32 62.5 C 34.5 63.5, 38 61.5, 41.2 54.5 L 53.5 31.5 C 54.5 29.8, 55.8 29.8, 55.8 32 L 54.5 60 C 54.3 62.5, 56 63.5, 58.5 62.5 M 39.5 51 C 45.5 50.2, 52 49.8, 59.5 50.5" fill="none" stroke="#6B5B7B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M 34 42 C 32 37.5, 36.5 32, 44 33.5" fill="none" stroke="#6B5B7B" stroke-width="2.6" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="msg-body-col">
+              <div class="msg-header-line">
+                <span class="msg-username">Amia</span>
+                <span class="msg-timestamp">昨日 23:45</span>
+              </div>
+              <div class="msg-text">誰かいるー？</div>
+            </div>
+          </div>
+
+          <!-- 7. K -->
+          <div class="msg-item">
+            <div class="avatar-box-36" data-avatar="k">
+              <svg viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50" fill="#7E3B82"/>
+                <circle cx="50" cy="50" r="32" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+                <path fill-rule="evenodd" d="M 50 18 A 32 32 0 1 0 50 82 A 32 32 0 1 0 50 18 Z M 64 23 A 29.5 29.5 0 1 1 64 77 A 29.5 29.5 0 1 1 64 23 Z" fill="#FFFFFF"/>
+                <circle cx="54" cy="50" r="3.6" fill="#FFFFFF"/>
+                <circle cx="67" cy="50" r="3.6" fill="#FFFFFF"/>
+              </svg>
+            </div>
+            <div class="msg-body-col">
+              <div class="msg-header-line">
+                <span class="msg-username">K</span>
+                <span class="msg-timestamp">昨日 23:46</span>
+              </div>
+              <div class="msg-text">いるよ</div>
+            </div>
+          </div>
+
+          <!-- Date Divider: 今日 -->
+          <div class="date-divider">
+            <div class="date-line"></div>
+            <span class="date-text">今日</span>
+            <div class="date-line"></div>
+          </div>
+
+          <!-- 8. えななん + 2 Stacked File Attachment Cards -->
+          <div class="msg-item">
+            <div class="avatar-box-36" data-avatar="enanan">
+              <svg viewBox="0 0 100 100">
+                <defs>
+                  <clipPath id="clip-ena-3"><circle cx="50" cy="50" r="50"/></clipPath>
+                  <linearGradient id="bg-ena-3" x1="0" y1="0" x2="1" y2="0.4">
+                    <stop offset="0%" stop-color="#B8D8EB"/>
+                    <stop offset="55%" stop-color="#D9E8F2"/>
+                    <stop offset="100%" stop-color="#D8E0B8"/>
+                  </linearGradient>
+                </defs>
+                <g clip-path="url(#clip-ena-3)">
+                  <rect width="100" height="100" fill="url(#bg-ena-3)"/>
+                  <ellipse cx="50" cy="14" rx="46" ry="20" fill="#F4F8FC" opacity="0.85"/>
+                  <path d="M 16 96 C 14 66, 20 30, 38 20 C 45 16, 55 16, 62 20 C 80 30, 86 66, 84 96 Z" fill="#E3DFEC" stroke="#B6AFC7" stroke-width="2"/>
+                  <path d="M 32 100 L 38 66 L 62 66 L 68 100 Z" fill="#6A7A8C"/>
+                  <path d="M 38 66 L 50 78 L 62 66 L 57 63 L 50 70 L 43 63 Z" fill="#F7F9FC"/>
+                  <rect x="46" y="55" width="8" height="11" fill="#FBF2ED"/>
+                  <path d="M 39 40 C 39 51, 44 58, 50 58 C 56 58, 61 51, 61 40 C 61 30, 56 25, 50 25 C 44 25, 39 30, 39 40 Z" fill="#FCF4EF"/>
+                  <ellipse cx="44.8" cy="44" rx="2.3" ry="2.8" fill="#5A5366"/>
+                  <ellipse cx="55.2" cy="44" rx="2.3" ry="2.8" fill="#5A5366"/>
+                  <path d="M 50 23 C 41 25, 35 34, 31 50 C 27 65, 22 79, 17 92 C 25 84, 32 72, 36 58 C 40 48, 43 36, 50 30 Z" fill="#F5F3FA" stroke="#B5AEC6" stroke-width="1.6"/>
+                  <path d="M 50 23 C 59 25, 65 34, 69 50 C 73 65, 78 79, 83 92 C 75 84, 68 72, 64 58 C 60 48, 57 36, 50 30 Z" fill="#F5F3FA" stroke="#B5AEC6" stroke-width="1.6"/>
+                </g>
+              </svg>
+            </div>
+            <div class="msg-body-col">
+              <div class="msg-header-line">
+                <span class="msg-username">えななん</span>
+                <span class="msg-timestamp">今日 1:36</span>
+              </div>
+
+              <div class="attachments-wrap">
+                <!-- Card 1: ラフA.jpg -->
+                <div class="file-card" onclick="triggerToast('ラフA.jpg (5MB) をダウンロード中...')">
+                  <div class="file-card-left">
+                    <svg width="26" height="32" viewBox="0 0 26 32" fill="none">
+                      <path d="M3 1.5H17.5L23.5 7.5V29.5C23.5 30.1 23.0 30.5 22.4 30.5H3C2.4 30.5 2 30.1 2 29.5V2.5C2 1.9 2.4 1.5 3 1.5Z" stroke="#C2B8D3" stroke-width="1.5" stroke-linejoin="round"/>
+                      <path d="M17.5 1.5V7.5H23.5" stroke="#C2B8D3" stroke-width="1.5" stroke-linejoin="round"/>
+                      <text x="12.8" y="21.5" text-anchor="middle" fill="#C2B8D3" font-size="7" font-weight="700" font-family="Inter, sans-serif">JPG</text>
+                    </svg>
+                    <div class="file-meta">
+                      <span class="file-title">ラフA.jpg</span>
+                      <span class="file-sub">5MB JPG</span>
+                    </div>
+                  </div>
+                  <div class="file-download-icon" title="ダウンロード">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M3.5 3.5H12.5L8 9.5L3.5 3.5Z"/>
+                      <rect x="3" y="11" width="10" height="1.7" rx="0.5"/>
+                    </svg>
+                  </div>
+                </div>
+
+                <!-- Card 2: ラフB.jpg -->
+                <div class="file-card" onclick="triggerToast('ラフB.jpg (3MB) をダウンロード中...')">
+                  <div class="file-card-left">
+                    <svg width="26" height="32" viewBox="0 0 26 32" fill="none">
+                      <path d="M3 1.5H17.5L23.5 7.5V29.5C23.5 30.1 23.0 30.5 22.4 30.5H3C2.4 30.5 2 30.1 2 29.5V2.5C2 1.9 2.4 1.5 3 1.5Z" stroke="#C2B8D3" stroke-width="1.5" stroke-linejoin="round"/>
+                      <path d="M17.5 1.5V7.5H23.5" stroke="#C2B8D3" stroke-width="1.5" stroke-linejoin="round"/>
+                      <text x="12.8" y="21.5" text-anchor="middle" fill="#C2B8D3" font-size="7" font-weight="700" font-family="Inter, sans-serif">JPG</text>
+                    </svg>
+                    <div class="file-meta">
+                      <span class="file-title">ラフB.jpg</span>
+                      <span class="file-sub">3MB JPG</span>
+                    </div>
+                  </div>
+                  <div class="file-download-icon" title="ダウンロード">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M3.5 3.5H12.5L8 9.5L3.5 3.5Z"/>
+                      <rect x="3" y="11" width="10" height="1.7" rx="0.5"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Bottom Message Input Bar -->
+        <footer class="chat-input-wrapper">
+          <form class="chat-input-box" onsubmit="sendNewMessage(event)">
+            <input
+              id="msg-input"
+              type="text"
+              class="chat-input-field"
+              placeholder="メッセージを送信"
+              autocomplete="off"
+            />
+            <div class="chat-input-tools">
+              <span class="tool-btn" onclick="appendMention()" title="メンション">@</span>
+              <span class="tool-btn" onclick="triggerToast('テキスト書式ツール')" title="書式">Aa</span>
+              <span class="tool-btn" style="color: #E2DCEB;" onclick="appendEmoji()" title="絵文字">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                  <circle cx="10" cy="10" r="8.5" fill="currentColor"/>
+                  <circle cx="7.2" cy="8.2" r="1.15" fill="#332844"/>
+                  <circle cx="12.8" cy="8.2" r="1.15" fill="#332844"/>
+                  <path d="M6.8 11.8C7.5 13.3 8.7 14 10 14C11.3 14 12.5 13.3 13.2 11.8" stroke="#332844" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="tool-btn" style="color: #B4A9C6;" onclick="triggerToast('添付ファイルを選択してください')" title="ファイルを添付">
+                <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
+                  <path d="M2 1.5H9L12.5 5V14C12.5 14.55 12.05 15 11.5 15H2C1.45 15 1 14.55 1 14V2.5C1 1.95 1.45 1.5 2 1.5Z" fill="currentColor"/>
+                  <path d="M9 1.5V5H12.5" fill="#332844"/>
+                </svg>
+              </span>
+            </div>
+          </form>
+        </footer>
+      </main>
+    </div>
+  </div>
+
+  <!-- Toast Popup -->
+  <div id="nc-toast" class="nc-toast">
+    <svg width="15" height="15" viewBox="0 0 100 100" style="flex-shrink:0;">
+      <circle cx="50" cy="50" r="48" fill="#F3F0F8"/>
+      <circle cx="50" cy="50" r="32" fill="none" stroke="#211A2C" stroke-width="3"/>
+      <path fill-rule="evenodd" d="M 50 18 A 32 32 0 1 0 50 82 A 32 32 0 1 0 50 18 Z M 64 23 A 29.5 29.5 0 1 1 64 77 A 29.5 29.5 0 1 1 64 23 Z" fill="#211A2C"/>
+      <circle cx="54" cy="50" r="3.6" fill="#211A2C"/>
+      <circle cx="67" cy="50" r="3.6" fill="#211A2C"/>
+    </svg>
+    <span id="nc-toast-text">通知</span>
+  </div>
+
+  <script>
+    /**
+     * High-DPI Canvas Renderer for Nightcord Avatars
+     * Replaces static fallback SVGs on DOMContentLoaded with ultra-crisp 2x/3x anti-aliased canvas art.
+     */
+    function drawKAvatar(ctx, s, bgColor) {
+      const cx = s * 0.5;
+      const cy = s * 0.5;
+
+      // Circle background
+      ctx.fillStyle = bgColor;
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Thin right-side closing circular arc line
+      const outerR = s * 0.32;
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = Math.max(1.35, s * 0.032);
+      ctx.beginPath();
+      ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Balanced uniform crescent on the left (using even-odd cutout with shifted inner circle)
+      const innerR = s * 0.285;
+      const shiftX = s * 0.125;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(cx, cy, outerR, 0, Math.PI * 2, false);
+      ctx.arc(cx + shiftX, cy, innerR, 0, Math.PI * 2, true);
+      ctx.fill('evenodd');
+
+      // Two crisp small white dots centered horizontally inside
+      const dotR = s * 0.037;
+      ctx.beginPath();
+      ctx.arc(cx + s * 0.04, cy, dotR, 0, Math.PI * 2);
+      ctx.arc(cx + s * 0.17, cy, dotR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawYukiAvatar(ctx, s) {
+      const cx = s * 0.5;
+      const cy = s * 0.5;
+
+      // Periwinkle / lavender-blue background (#7E7EC2)
+      ctx.fillStyle = '#7E7EC2';
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = Math.max(1.3, s * 0.036);
+
+      // Tiny central ring
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.058, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 6-pointed symmetrical snowflake with fine crystalline V-branches
+      const armLen = s * 0.34;
+      for (let i = 0; i < 6; i++) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate((i * Math.PI) / 3);
+
+        // Main spoke from center ring to tip
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 0.058);
+        ctx.lineTo(0, -armLen);
+        ctx.stroke();
+
+        // Outer V-branch
+        const y1 = -s * 0.24;
+        const b1 = s * 0.075;
+        ctx.beginPath();
+        ctx.moveTo(-b1, y1 - b1);
+        ctx.lineTo(0, y1);
+        ctx.lineTo(b1, y1 - b1);
+        ctx.stroke();
+
+        // Inner fine V-branch
+        const y2 = -s * 0.145;
+        const b2 = s * 0.052;
+        ctx.beginPath();
+        ctx.moveTo(-b2, y2 - b2);
+        ctx.lineTo(0, y2);
+        ctx.lineTo(b2, y2 - b2);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
+    function drawEnananAvatar(ctx, s) {
+      const cx = s * 0.5;
+      const cy = s * 0.5;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.5, 0, Math.PI * 2);
+      ctx.clip();
+
+      // Airy left sky-blue (#B8D8EB) to right pale lime/cream (#D8E0B8) gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, s, s * 0.45);
+      bgGrad.addColorStop(0, '#B8D8EB');
+      bgGrad.addColorStop(0.55, '#DCEBF4');
+      bgGrad.addColorStop(1, '#D8E0B8');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, s, s);
+
+      // Soft upper cloud/halo glow
+      const haloGrad = ctx.createRadialGradient(cx, s * 0.14, s * 0.04, cx, s * 0.14, s * 0.48);
+      haloGrad.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
+      haloGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = haloGrad;
+      ctx.fillRect(0, 0, s, s * 0.55);
+
+      // Soft lower meadow tint
+      ctx.fillStyle = 'rgba(184, 212, 165, 0.55)';
+      ctx.beginPath();
+      ctx.moveTo(0, s * 0.72);
+      ctx.quadraticCurveTo(s * 0.5, s * 0.65, s, s * 0.74);
+      ctx.lineTo(s, s);
+      ctx.lineTo(0, s);
+      ctx.closePath();
+      ctx.fill();
+
+      // Back flowing silver-white / pale-lavender hair mass
+      const backHairGrad = ctx.createLinearGradient(0, s * 0.18, 0, s * 0.98);
+      backHairGrad.addColorStop(0, '#ECE9F5');
+      backHairGrad.addColorStop(0.6, '#DCD6EA');
+      backHairGrad.addColorStop(1, '#C9C1DC');
+      ctx.fillStyle = backHairGrad;
+      ctx.strokeStyle = '#AEA5C4';
+      ctx.lineWidth = Math.max(1, s * 0.016);
+      ctx.beginPath();
+      ctx.moveTo(s * 0.15, s * 0.98);
+      ctx.bezierCurveTo(s * 0.13, s * 0.64, s * 0.20, s * 0.28, s * 0.38, s * 0.19);
+      ctx.quadraticCurveTo(cx, s * 0.15, s * 0.62, s * 0.19);
+      ctx.bezierCurveTo(s * 0.80, s * 0.28, s * 0.87, s * 0.64, s * 0.85, s * 0.98);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Muted slate-blue/grey sailor uniform top (#6A7A8C)
+      ctx.fillStyle = '#6A7A8C';
+      ctx.beginPath();
+      ctx.moveTo(s * 0.30, s);
+      ctx.lineTo(s * 0.37, s * 0.66);
+      ctx.lineTo(s * 0.63, s * 0.66);
+      ctx.lineTo(s * 0.70, s);
+      ctx.closePath();
+      ctx.fill();
+
+      // White sailor collar trim
+      ctx.fillStyle = '#F7F9FC';
+      ctx.strokeStyle = '#8FA0B3';
+      ctx.lineWidth = Math.max(0.8, s * 0.012);
+      ctx.beginPath();
+      ctx.moveTo(s * 0.37, s * 0.66);
+      ctx.lineTo(cx, s * 0.80);
+      ctx.lineTo(s * 0.63, s * 0.66);
+      ctx.lineTo(s * 0.58, s * 0.62);
+      ctx.lineTo(cx, s * 0.71);
+      ctx.lineTo(s * 0.42, s * 0.62);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Subtle sailor ribbon tie
+      ctx.fillStyle = '#8394A8';
+      ctx.beginPath();
+      ctx.moveTo(s * 0.475, s * 0.73);
+      ctx.lineTo(s * 0.525, s * 0.73);
+      ctx.lineTo(s * 0.54, s * 0.85);
+      ctx.lineTo(cx, s * 0.81);
+      ctx.lineTo(s * 0.46, s * 0.85);
+      ctx.closePath();
+      ctx.fill();
+
+      // Neck & delicate anime face
+      ctx.fillStyle = '#FBF1EC';
+      ctx.fillRect(s * 0.455, s * 0.55, s * 0.09, s * 0.12);
+
+      ctx.fillStyle = '#FCF4EF';
+      ctx.beginPath();
+      ctx.moveTo(s * 0.39, s * 0.39);
+      ctx.bezierCurveTo(s * 0.39, s * 0.51, s * 0.44, s * 0.585, cx, s * 0.585);
+      ctx.bezierCurveTo(s * 0.56, s * 0.585, s * 0.61, s * 0.51, s * 0.61, s * 0.39);
+      ctx.bezierCurveTo(s * 0.61, s * 0.29, s * 0.56, s * 0.24, cx, s * 0.24);
+      ctx.bezierCurveTo(s * 0.44, s * 0.24, s * 0.39, s * 0.29, s * 0.39, s * 0.39);
+      ctx.fill();
+
+      // Subtle dark anime eyes & soft blush
+      ctx.fillStyle = 'rgba(232, 165, 175, 0.38)';
+      ctx.beginPath();
+      ctx.ellipse(s * 0.43, s * 0.485, s * 0.025, s * 0.013, 0, 0, Math.PI * 2);
+      ctx.ellipse(s * 0.57, s * 0.485, s * 0.025, s * 0.013, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#534C61';
+      ctx.beginPath();
+      ctx.ellipse(s * 0.448, s * 0.442, s * 0.022, s * 0.028, 0, 0, Math.PI * 2);
+      ctx.ellipse(s * 0.552, s * 0.442, s * 0.022, s * 0.028, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tiny eye highlights
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(s * 0.442, s * 0.432, s * 0.008, 0, Math.PI * 2);
+      ctx.arc(s * 0.546, s * 0.432, s * 0.008, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Layered silver-white / pale-lavender side hair locks framing face and shoulders
+      ctx.fillStyle = '#F7F5FC';
+      ctx.strokeStyle = '#B3ACC4';
+      ctx.lineWidth = Math.max(0.9, s * 0.014);
+
+      // Left framing locks
+      ctx.beginPath();
+      ctx.moveTo(cx, s * 0.22);
+      ctx.bezierCurveTo(s * 0.40, s * 0.24, s * 0.34, s * 0.35, s * 0.29, s * 0.52);
+      ctx.bezierCurveTo(s * 0.25, s * 0.67, s * 0.20, s * 0.81, s * 0.16, s * 0.93);
+      ctx.bezierCurveTo(s * 0.24, s * 0.85, s * 0.31, s * 0.72, s * 0.36, s * 0.57);
+      ctx.bezierCurveTo(s * 0.40, s * 0.46, s * 0.43, s * 0.35, cx, s * 0.29);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Right framing locks
+      ctx.beginPath();
+      ctx.moveTo(cx, s * 0.22);
+      ctx.bezierCurveTo(s * 0.60, s * 0.24, s * 0.66, s * 0.35, s * 0.71, s * 0.52);
+      ctx.bezierCurveTo(s * 0.75, s * 0.67, s * 0.80, s * 0.81, s * 0.84, s * 0.93);
+      ctx.bezierCurveTo(s * 0.76, s * 0.85, s * 0.69, s * 0.72, s * 0.64, s * 0.57);
+      ctx.bezierCurveTo(s * 0.60, s * 0.46, s * 0.57, s * 0.35, cx, s * 0.29);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Wispy center bangs
+      ctx.strokeStyle = '#BDB6CE';
+      ctx.lineWidth = Math.max(0.8, s * 0.013);
+      ctx.beginPath();
+      ctx.moveTo(s * 0.44, s * 0.27);
+      ctx.quadraticCurveTo(s * 0.43, s * 0.35, s * 0.45, s * 0.41);
+      ctx.moveTo(cx, s * 0.26);
+      ctx.quadraticCurveTo(s * 0.495, s * 0.34, s * 0.505, s * 0.40);
+      ctx.moveTo(s * 0.56, s * 0.27);
+      ctx.quadraticCurveTo(s * 0.57, s * 0.35, s * 0.55, s * 0.41);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawAmiaAvatar(ctx, s) {
+      const cx = s * 0.5;
+      const cy = s * 0.5;
+
+      // Outer pastel sky-blue base (#9AD4EB)
+      ctx.fillStyle = '#9AD4EB';
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Scalloped pastel sky-blue & soft white lace ring
+      const outerScallops = 20;
+      ctx.fillStyle = '#E6F6FC';
+      for (let i = 0; i < outerScallops; i++) {
+        const ang = (i * Math.PI * 2) / outerScallops;
+        const rx = cx + Math.cos(ang) * (s * 0.435);
+        const ry = cy + Math.sin(ang) * (s * 0.435);
+        ctx.beginPath();
+        ctx.arc(rx, ry, s * 0.042, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Soft pink lace ring (#F4B8D0)
+      ctx.fillStyle = '#F4B8D0';
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.39, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Inner pink scalloped frills
+      const innerScallops = 16;
+      ctx.fillStyle = '#E595B5';
+      for (let i = 0; i < innerScallops; i++) {
+        const ang = (i * Math.PI * 2) / innerScallops + 0.1;
+        const rx = cx + Math.cos(ang) * (s * 0.335);
+        const ry = cy + Math.sin(ang) * (s * 0.335);
+        ctx.beginPath();
+        ctx.arc(rx, ry, s * 0.036, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Crisp white inner circle (#FFFFFF)
+      ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#E8B5CE';
+      ctx.lineWidth = Math.max(1, s * 0.018);
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.285, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Elegant dark plum-grey calligraphic cursive capital letter "A" (#6B5B7B)
+      ctx.strokeStyle = '#6B5B7B';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // Main calligraphic A stroke
+      ctx.lineWidth = Math.max(1.4, s * 0.036);
+      ctx.beginPath();
+      ctx.moveTo(s * 0.32, s * 0.625);
+      ctx.bezierCurveTo(s * 0.345, s * 0.635, s * 0.38, s * 0.615, s * 0.412, s * 0.545);
+      ctx.lineTo(s * 0.535, s * 0.315);
+      ctx.bezierCurveTo(s * 0.545, s * 0.298, s * 0.558, s * 0.298, s * 0.558, s * 0.32);
+      ctx.lineTo(s * 0.545, s * 0.60);
+      ctx.bezierCurveTo(s * 0.543, s * 0.625, s * 0.56, s * 0.635, s * 0.585, s * 0.625);
+      ctx.stroke();
+
+      // Crossbar & upper calligraphic flourish
+      ctx.lineWidth = Math.max(1.1, s * 0.025);
+      ctx.beginPath();
+      ctx.moveTo(s * 0.39, s * 0.51);
+      ctx.quadraticCurveTo(s * 0.49, s * 0.495, s * 0.60, s * 0.505);
+      ctx.moveTo(s * 0.34, s * 0.42);
+      ctx.bezierCurveTo(s * 0.32, s * 0.37, s * 0.37, s * 0.315, s * 0.45, s * 0.335);
+      ctx.stroke();
+    }
+
+    function renderAvatarCanvas(container) {
+      const type = container.getAttribute('data-avatar');
+      if (!type) return;
+
+      const cssSize = container.classList.contains('avatar-box-24') ? 24 : 36;
+      const dpr = Math.max(2, window.devicePixelRatio || 2);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = cssSize * dpr;
+      canvas.height = cssSize * dpr;
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+
+      if (type === 'k-pink') {
+        drawKAvatar(ctx, cssSize, '#C85A88');
+      } else if (type === 'k') {
+        drawKAvatar(ctx, cssSize, '#7E3B82');
+      } else if (type === 'yuki') {
+        drawYukiAvatar(ctx, cssSize);
+      } else if (type === 'enanan') {
+        drawEnananAvatar(ctx, cssSize);
+      } else if (type === 'amia') {
+        drawAmiaAvatar(ctx, cssSize);
+      }
+
+      // Replace static fallback SVG with upgraded high-DPI Canvas
+      container.innerHTML = '';
+      container.appendChild(canvas);
+    }
+
+    function upgradeAllAvatars() {
+      document.querySelectorAll('[data-avatar]').forEach(renderAvatarCanvas);
+    }
+
+    document.addEventListener('DOMContentLoaded', upgradeAllAvatars);
+
+    // Interactive UI Controls
+    let toastTimeout = null;
+    function triggerToast(text) {
+      const toast = document.getElementById('nc-toast');
+      const label = document.getElementById('nc-toast-text');
+      label.textContent = text;
+      toast.classList.add('visible');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('visible');
+      }, 2400);
+    }
+
+    function toggleVoiceList(headerEl) {
+      const list = document.getElementById('voice-members');
+      const chevron = headerEl.querySelector('.cat-chevron');
+      if (list.style.display === 'none') {
+        list.style.display = 'flex';
+        chevron.style.transform = 'rotate(0deg)';
+      } else {
+        list.style.display = 'none';
+        chevron.style.transform = 'rotate(-90deg)';
+      }
+    }
+
+    function toggleMicMute(btn, memberName) {
+      btn.classList.toggle('muted');
+      const isMuted = btn.classList.contains('muted');
+      triggerToast(isMuted ? `${memberName} をミュートにしました` : `${memberName} のミュートを解除しました`);
+    }
+
+    function appendMention() {
+      const input = document.getElementById('msg-input');
+      input.value += '@えななん ';
+      input.focus();
+    }
+
+    function appendEmoji() {
+      const input = document.getElementById('msg-input');
+      input.value += '♪';
+      input.focus();
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, tag => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        "'": '&#39;',
+        '"': '&quot;'
+      }[tag]));
+    }
+
+    function sendNewMessage(event) {
+      event.preventDefault();
+      const input = document.getElementById('msg-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const stream = document.getElementById('message-stream');
+      const now = new Date();
+      const timeStr = `今日 ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      const item = document.createElement('div');
+      item.className = 'msg-item';
+      item.innerHTML = `
+        <div class="avatar-box-36" data-avatar="k">
+          <svg viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="50" fill="#7E3B82"/>
+            <circle cx="50" cy="50" r="32" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+            <path fill-rule="evenodd" d="M 50 18 A 32 32 0 1 0 50 82 A 32 32 0 1 0 50 18 Z M 64 23 A 29.5 29.5 0 1 1 64 77 A 29.5 29.5 0 1 1 64 23 Z" fill="#FFFFFF"/>
+            <circle cx="54" cy="50" r="3.6" fill="#FFFFFF"/>
+            <circle cx="67" cy="50" r="3.6" fill="#FFFFFF"/>
+          </svg>
+        </div>
+        <div class="msg-body-col">
+          <div class="msg-header-line">
+            <span class="msg-username">K</span>
+            <span class="msg-timestamp">${timeStr}</span>
+          </div>
+          <div class="msg-text">${escapeHTML(text)}</div>
+        </div>
+      `;
+
+      stream.appendChild(item);
+      const avatarContainer = item.querySelector('[data-avatar]');
+      if (avatarContainer) renderAvatarCanvas(avatarContainer);
+
+      input.value = '';
+      stream.scrollTop = stream.scrollHeight;
+    }
+  </script>
+</body>
+</html>
