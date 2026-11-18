@@ -1,10 +1,17 @@
-import type { AppMode, CharacterProfile, Conversation, UiLanguage } from '../types/nightcord';
+import type {
+  AppMode,
+  CharacterProfile,
+  Conversation,
+  UiLanguage,
+  VoiceMember,
+} from '../types/nightcord';
 
 const STORAGE_KEYS = {
   conversations: 'nightcord_conversations_v1',
   activeConversationId: 'nightcord_active_conv_v1',
   characters: 'nightcord_characters_v1',
   activeCharacterId: 'nightcord_active_char_v1',
+  members: 'nightcord_members_v1',
   mode: 'nightcord_mode_v1',
   language: 'nightcord_lang_v1',
   onboardingDone: 'nightcord_onboarding_done_v1',
@@ -197,6 +204,15 @@ export function saveLanguage(lang: UiLanguage): void {
   }
 }
 
+export function loadSavedMembers(): VoiceMember[] | null {
+  const data = readJson<VoiceMember[]>(STORAGE_KEYS.members);
+  return Array.isArray(data) && data.length > 0 ? data : null;
+}
+
+export function saveMembers(members: VoiceMember[]): void {
+  writeJson(STORAGE_KEYS.members, members);
+}
+
 export async function clearLocalCacheData(): Promise<void> {
   memoryBlobFallback.clear();
   try {
@@ -204,6 +220,7 @@ export async function clearLocalCacheData(): Promise<void> {
     localStorage.removeItem(STORAGE_KEYS.activeConversationId);
     localStorage.removeItem(STORAGE_KEYS.characters);
     localStorage.removeItem(STORAGE_KEYS.activeCharacterId);
+    localStorage.removeItem(STORAGE_KEYS.members);
   } catch {
   }
   const db = await openMediaDb();

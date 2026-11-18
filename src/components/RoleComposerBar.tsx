@@ -1,17 +1,19 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import type {
   AvatarType,
   CharacterProfile,
   CustomMessageTime,
+  MessageDateTime,
   UiLanguage,
 } from '../types/nightcord';
 import { getUiText } from '../utils/i18n';
 import { saveLocalMediaBlob } from '../utils/localStorageStore';
 import {
-  formatCustomJapaneseTime,
-  formatDuration,
-  parseJapaneseTimestampToMinutes,
+  dateTimeToEpochMinutes,
+  formatDateTimeBadge,
+  getDaysInMonth,
+  parseCustomDateTimeInput,
 } from '../utils/nightcordState';
 import { CharacterAvatar } from './LocalMedia';
 import { NightcordAvatar } from './NightcordArt';
@@ -24,12 +26,13 @@ const AVATAR_PRESETS: { type: AvatarType; label: string }[] = [
   { type: 'amia', label: 'Amia' },
 ];
 
+const YEARS_LIST: number[] = Array.from({ length: 1001 }, (_, idx) => 2000 + idx);
+const MONTHS_LIST: number[] = Array.from({ length: 12 }, (_, idx) => idx + 1);
+
 interface RoleComposerBarProps {
   lang: UiLanguage;
   characters: CharacterProfile[];
   activeCharacter: CharacterProfile;
-  isRecording: boolean;
-  recordingSec: number;
   onSelectCharacter: (character: CharacterProfile) => void;
   onSaveCharacter: (draft: {
     id?: string;
@@ -37,13 +40,12 @@ interface RoleComposerBarProps {
     avatarType: AvatarType;
     customAvatarMediaId?: string;
   }) => void;
+  onMentionCharacter: (name: string) => void;
   onTriggerImageUpload: () => void;
-  onStartRecording: () => void;
-  onStopRecording: () => void;
-  onCancelRecording: () => void;
-  onTriggerAudioFileUpload: () => void;
+  onTriggerVideoUpload: () => void;
+  onTriggerAudioUpload: () => void;
   customTime: CustomMessageTime;
-  lastMessageTimestamp: string | null;
+  lastMessageDateTime: MessageDateTime | null;
   onChangeCustomTime: (next: CustomMessageTime) => void;
   onSyncCustomTimeNow: () => void;
 }
@@ -52,36 +54,53 @@ export function RoleComposerBar({
   lang,
   characters,
   activeCharacter,
-  isRecording,
-  recordingSec,
   onSelectCharacter,
   onSaveCharacter,
+  onMentionCharacter,
   onTriggerImageUpload,
-  onStartRecording,
-  onStopRecording,
-  onCancelRecording,
-  onTriggerAudioFileUpload,
+  onTriggerVideoUpload,
+  onTriggerAudioUpload,
   customTime,
-  lastMessageTimestamp,
+  lastMessageDateTime,
   onChangeCustomTime,
   onSyncCustomTimeNow,
 }: RoleComposerBarProps) {
   const t = getUiText(lang);
   const [editorMode, setEditorMode] = useState<'closed' | 'edit' | 'create'>('closed');
   const [timePanelOpen, setTimePanelOpen] = useState(false);
+  const [charMenuId, setCharMenuId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [draftAvatarType, setDraftAvatarType] = useState<AvatarType>('k');
   const [draftCustomMediaId, setDraftCustomMediaId] = useState<string | undefined>(undefined);
   const avatarFileRef = useRef<HTMLInputElement | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
 
-  const formattedCustomTs = formatCustomJapaneseTime(customTime.day, customTime.time);
-  const customMin = formattedCustomTs ? parseJapaneseTimestampToMinutes(formattedCustomTs) : null;
-  const lastMin = lastMessageTimestamp
-    ? parseJapaneseTimestampToMinutes(lastMessageTimestamp)
-    : null;
+  const daysList = useMemo(
+    () => Array.from({ length: getDaysInMonth(customTime.year, customTime.month) }, (_, i) => i + 1),
+    [customTime.year, customTime.month]
+  );
+
+  const parsedCustom = parseCustomDateTimeInput(customTime);
   const isEarlierThanPrevious =
     customTime.enabled &&
-    (customMin === null || (lastMin !== null && customMin < lastMin));
+    (!parsedCustom ||
+      (lastMessageDateTime !== null &&
+        dateTimeToEpochMinutes(parsedCustom) < dateTimeToEpochMinutes(lastMessageDateTime)));
+  const minTimeLabel = lastMessageDateTime ? formatDateTimeBadge(lastMessageDateTime) : null;
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const startCharLongPress = (charId: string) => {
+    clearLongPress();
+    longPressTimerRef.current = window.setTimeout(() => {
+      setCharMenuId(charId);
+    }, 450);
+  };
 
   const openEdit = () => {
     setDraftName(activeCharacter.name);
@@ -121,6 +140,17 @@ export function RoleComposerBar({
     setEditorMode('closed');
   };
 
+  const updateYearOrMonth = (nextYear: number, nextMonth: number) => {
+    const maxDay = getDaysInMonth(nextYear, nextMonth);
+    onChangeCustomTime({
+      ...customTime,
+      enabled: true,
+      year: nextYear,
+      month: nextMonth,
+      day: Math.min(customTime.day, maxDay),
+    });
+  };
+
   return (
     <div className="mb-2 flex flex-col gap-2 rounded-[8px] border border-[#4D3F66] bg-[#2E243D] p-2.5">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
@@ -128,25 +158,57 @@ export function RoleComposerBar({
           {characters.map((char) => {
             const active = char.id === activeCharacter.id;
             return (
-              <button
-                key={char.id}
-                type="button"
-                data-action={`select-char-${char.id}`}
-                aria-pressed={active}
-                onClick={() => onSelectCharacter(char)}
-                className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[6px] px-2 py-1 text-[12px] font-medium transition-colors ${
-                  active
-                    ? 'bg-[#473A5C] text-white ring-1 ring-[#64D2E6]/60'
-                    : 'bg-[#362B47] text-[#C2B8D3] hover:bg-[#413455] hover:text-white'
-                }`}
-              >
-                <CharacterAvatar
-                  avatarType={char.avatarType}
-                  customAvatarMediaId={char.customAvatarMediaId}
-                  size={18}
-                />
-                <span className="max-w-[90px] truncate">{char.name}</span>
-              </button>
+              <div key={char.id} className="relative shrink-0">
+                <button
+                  type="button"
+                  data-action={`select-char-${char.id}`}
+                  aria-pressed={active}
+                  onPointerDown={() => startCharLongPress(char.id)}
+                  onPointerUp={clearLongPress}
+                  onPointerLeave={clearLongPress}
+                  onPointerCancel={clearLongPress}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setCharMenuId(char.id);
+                  }}
+                  onClick={() => onSelectCharacter(char)}
+                  className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[6px] px-2 py-1 text-[12px] font-medium transition-colors ${
+                    active
+                      ? 'bg-[#473A5C] text-white ring-1 ring-[#64D2E6]/60'
+                      : 'bg-[#362B47] text-[#C2B8D3] hover:bg-[#413455] hover:text-white'
+                  }`}
+                >
+                  <CharacterAvatar
+                    avatarType={char.avatarType}
+                    customAvatarMediaId={char.customAvatarMediaId}
+                    size={18}
+                  />
+                  <span className="max-w-[90px] truncate">{char.name}</span>
+                </button>
+                {charMenuId === char.id && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="閉じる"
+                      onClick={() => setCharMenuId(null)}
+                      className="fixed inset-0 z-40 cursor-default bg-transparent"
+                    />
+                    <div className="nc-modal-enter absolute bottom-[34px] left-0 z-50 min-w-[116px] rounded-[8px] border border-[#524468] bg-[#211A2C] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.55)]">
+                      <button
+                        type="button"
+                        data-action={`char-mention-${char.id}`}
+                        onClick={() => {
+                          onMentionCharacter(char.name);
+                          setCharMenuId(null);
+                        }}
+                        className="w-full cursor-pointer rounded-[6px] px-2.5 py-1.5 text-left text-[12px] font-medium text-[#EFEBF5] transition-colors hover:bg-[#473A5C]"
+                      >
+                        {t.mentionTargetBtn(char.name)}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             );
           })}
         </div>
@@ -177,66 +239,41 @@ export function RoleComposerBar({
           >
             {t.sendImage}
           </button>
-          {!isRecording ? (
-            <>
-              <button
-                type="button"
-                data-action="record-voice"
-                aria-label={t.recordVoice}
-                onClick={onStartRecording}
-                className="cursor-pointer rounded-[6px] border border-[#524468] bg-[#362B47] px-2 py-1 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
-              >
-                {t.recordVoice}
-              </button>
-              <button
-                type="button"
-                data-action="upload-audio"
-                aria-label={t.audioFile}
-                onClick={onTriggerAudioFileUpload}
-                className="cursor-pointer rounded-[6px] border border-[#524468] bg-[#362B47] px-2 py-1 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
-              >
-                {t.audioFile}
-              </button>
-              <button
-                type="button"
-                data-action="toggle-custom-time"
-                aria-expanded={timePanelOpen}
-                onClick={() => setTimePanelOpen((prev) => !prev)}
-                className={`cursor-pointer rounded-[6px] border px-2 py-1 text-[11.5px] font-medium transition-colors ${
-                  isEarlierThanPrevious
-                    ? 'border-[#EB7F97] bg-[#4B2538] text-[#FFD5DF]'
-                    : customTime.enabled
-                      ? 'border-[#64D2E6]/70 bg-[#473A5C] text-white'
-                      : 'border-[#524468] bg-[#362B47] text-[#DCD7E5] hover:bg-[#473A5C] hover:text-white'
-                }`}
-              >
-                {customTime.enabled && formattedCustomTs ? formattedCustomTs : t.timeBtnLabel}
-              </button>
-            </>
-          ) : (
-            <div className="flex items-center gap-1.5 rounded-[6px] border border-[#EB7F97]/60 bg-[#3B2335] px-2 py-1 text-[11.5px] text-[#FFE4EA]">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-[#EB7F97]" />
-              <span className="tabular-nums">
-                {t.recording} {formatDuration(recordingSec)}
-              </span>
-              <button
-                type="button"
-                data-action="stop-record-voice"
-                onClick={onStopRecording}
-                className="cursor-pointer rounded bg-[#EB7F97] px-2 py-0.5 text-[11px] font-bold text-[#211A2C] hover:brightness-110"
-              >
-                {t.send}
-              </button>
-              <button
-                type="button"
-                data-action="cancel-record-voice"
-                onClick={onCancelRecording}
-                className="cursor-pointer rounded px-1.5 py-0.5 text-[11px] text-[#DCD7E5] hover:text-white"
-              >
-                {t.stopCancel}
-              </button>
-            </div>
-          )}
+          <button
+            type="button"
+            data-action="send-mp4"
+            aria-label={t.sendMp4}
+            onClick={onTriggerVideoUpload}
+            className="cursor-pointer rounded-[6px] border border-[#524468] bg-[#362B47] px-2 py-1 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
+          >
+            {t.sendMp4}
+          </button>
+          <button
+            type="button"
+            data-action="send-mp3"
+            aria-label={t.sendMp3}
+            onClick={onTriggerAudioUpload}
+            className="cursor-pointer rounded-[6px] border border-[#524468] bg-[#362B47] px-2 py-1 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
+          >
+            {t.sendMp3}
+          </button>
+          <button
+            type="button"
+            data-action="toggle-custom-time"
+            aria-expanded={timePanelOpen}
+            onClick={() => setTimePanelOpen((prev) => !prev)}
+            className={`cursor-pointer rounded-[6px] border px-2 py-1 text-[11.5px] font-medium transition-colors ${
+              isEarlierThanPrevious
+                ? 'border-[#EB7F97] bg-[#4B2538] text-[#FFD5DF]'
+                : customTime.enabled
+                  ? 'border-[#64D2E6]/70 bg-[#473A5C] text-white'
+                  : 'border-[#524468] bg-[#362B47] text-[#DCD7E5] hover:bg-[#473A5C] hover:text-white'
+            }`}
+          >
+            {customTime.enabled && parsedCustom
+              ? formatDateTimeBadge(parsedCustom)
+              : t.timeBtnLabel}
+          </button>
         </div>
       </div>
 
@@ -257,38 +294,56 @@ export function RoleComposerBar({
             </label>
 
             <div className="flex flex-wrap items-center gap-1.5">
-              <div className="flex overflow-hidden rounded-[6px] border border-[#4D3F66] bg-[#332844]">
-                <button
-                  type="button"
-                  data-action="custom-time-day-yesterday"
-                  aria-pressed={customTime.day === 'yesterday'}
-                  onClick={() =>
-                    onChangeCustomTime({ ...customTime, enabled: true, day: 'yesterday' })
-                  }
-                  className={`cursor-pointer px-2 py-1 text-[11.5px] font-medium transition-colors ${
-                    customTime.day === 'yesterday'
-                      ? 'bg-[#473A5C] text-white'
-                      : 'text-[#9A90A8] hover:text-white'
-                  }`}
-                >
-                  昨日
-                </button>
-                <button
-                  type="button"
-                  data-action="custom-time-day-today"
-                  aria-pressed={customTime.day === 'today'}
-                  onClick={() =>
-                    onChangeCustomTime({ ...customTime, enabled: true, day: 'today' })
-                  }
-                  className={`cursor-pointer px-2 py-1 text-[11.5px] font-medium transition-colors ${
-                    customTime.day === 'today'
-                      ? 'bg-[#473A5C] text-white'
-                      : 'text-[#9A90A8] hover:text-white'
-                  }`}
-                >
-                  今日
-                </button>
-              </div>
+              <select
+                data-action="custom-time-year"
+                aria-label={t.yearUnit}
+                value={customTime.year}
+                onChange={(e) => updateYearOrMonth(Number(e.target.value), customTime.month)}
+                className="cursor-pointer rounded-[6px] border border-[#4D3F66] bg-[#332844] px-2 py-1 text-[12px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+              >
+                {YEARS_LIST.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                    {t.yearUnit}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                data-action="custom-time-month"
+                aria-label={t.monthUnit}
+                value={customTime.month}
+                onChange={(e) => updateYearOrMonth(customTime.year, Number(e.target.value))}
+                className="cursor-pointer rounded-[6px] border border-[#4D3F66] bg-[#332844] px-2 py-1 text-[12px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+              >
+                {MONTHS_LIST.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                    {t.monthUnit}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                data-action="custom-time-day"
+                aria-label={t.dayUnit}
+                value={customTime.day}
+                onChange={(e) =>
+                  onChangeCustomTime({
+                    ...customTime,
+                    enabled: true,
+                    day: Number(e.target.value),
+                  })
+                }
+                className="cursor-pointer rounded-[6px] border border-[#4D3F66] bg-[#332844] px-2 py-1 text-[12px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+              >
+                {daysList.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                    {t.dayUnit}
+                  </option>
+                ))}
+              </select>
 
               <input
                 type="time"
@@ -325,10 +380,10 @@ export function RoleComposerBar({
               isEarlierThanPrevious ? 'font-medium text-[#FF9EB3]' : 'text-[#9A90A8]'
             }`}
           >
-            {isEarlierThanPrevious && lastMessageTimestamp
-              ? t.timeEarlierError(lastMessageTimestamp)
-              : lastMessageTimestamp
-                ? t.timeMinHint(lastMessageTimestamp)
+            {isEarlierThanPrevious && minTimeLabel
+              ? t.timeEarlierError(minTimeLabel)
+              : minTimeLabel
+                ? t.timeMinHint(minTimeLabel)
                 : t.timeAnyHint}
           </div>
         </div>

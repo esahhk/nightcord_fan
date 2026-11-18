@@ -44,6 +44,7 @@ export function PlaybackSetupModal({
   const [pacingMode, setPacingMode] = useState<PlaybackPacingMode>('timeline');
   const [evenIntervalSec, setEvenIntervalSec] = useState<number>(2.5);
   const [startIndex, setStartIndex] = useState<number>(0);
+  const [anchorToToday, setAnchorToToday] = useState<boolean>(true);
 
   useEffect(() => {
     if (open) {
@@ -67,6 +68,7 @@ export function PlaybackSetupModal({
       pacingMode,
       evenIntervalSec: Math.min(40, Math.max(0.5, evenIntervalSec)),
       startIndex: Math.min(Math.max(0, startIndex), Math.max(0, messages.length - 1)),
+      anchorToToday,
     });
   };
 
@@ -160,6 +162,47 @@ export function PlaybackSetupModal({
                     />
                   </div>
                 )}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <span className="text-[11.5px] font-bold text-[#9A90A8]">
+                  {t.playbackAnchorLabel}
+                </span>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    data-action="playback-anchor-today"
+                    aria-pressed={anchorToToday}
+                    onClick={() => setAnchorToToday(true)}
+                    className={`flex cursor-pointer flex-col items-start rounded-[8px] border p-2.5 text-left transition-colors ${
+                      anchorToToday
+                        ? 'border-[#64D2E6] bg-[#473A5C] text-white'
+                        : 'border-[#524468] bg-[#362B47] text-[#DCD7E5] hover:bg-[#3F3352]'
+                    }`}
+                  >
+                    <span className="text-[12.5px] font-bold">{t.playbackAnchorTodayTitle}</span>
+                    <span className="mt-1 text-[11px] leading-[1.4] text-[#B4A9C6]">
+                      {t.playbackAnchorTodaySub}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-action="playback-anchor-flow"
+                    aria-pressed={!anchorToToday}
+                    onClick={() => setAnchorToToday(false)}
+                    className={`flex cursor-pointer flex-col items-start rounded-[8px] border p-2.5 text-left transition-colors ${
+                      !anchorToToday
+                        ? 'border-[#64D2E6] bg-[#473A5C] text-white'
+                        : 'border-[#524468] bg-[#362B47] text-[#DCD7E5] hover:bg-[#3F3352]'
+                    }`}
+                  >
+                    <span className="text-[12.5px] font-bold">{t.playbackAnchorFlowTitle}</span>
+                    <span className="mt-1 text-[11px] leading-[1.4] text-[#B4A9C6]">
+                      {t.playbackAnchorFlowSub}
+                    </span>
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-col gap-1.5">

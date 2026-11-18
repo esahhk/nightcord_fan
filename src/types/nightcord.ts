@@ -26,6 +26,25 @@ export interface ChatAttachment {
   fileType: string;
 }
 
+export type FileMediaKind = 'image' | 'video' | 'audio' | 'text';
+
+export interface MessageDateTime {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+}
+
+export interface ChatFileMedia {
+  mediaId: string;
+  filename: string;
+  sizeLabel: string;
+  fileType: string;
+  kind: FileMediaKind;
+  displayMode?: 'card' | 'image';
+}
+
 export interface ChatImageMedia {
   mediaId: string;
   filename: string;
@@ -47,15 +66,15 @@ export interface ChatMessage {
   avatar: AvatarType;
   customAvatarMediaId?: string;
   timestamp: string;
+  sentAt?: MessageDateTime;
   text?: string;
   attachments?: ChatAttachment[];
   imageMedia?: ChatImageMedia;
   voiceMedia?: ChatVoiceMedia;
+  fileMedia?: ChatFileMedia;
   topClipped?: boolean;
   dividerBefore?: string;
 }
-
-export type MessageDayKey = 'yesterday' | 'today';
 
 export type PlaybackPacingMode = 'timeline' | 'even';
 
@@ -63,11 +82,14 @@ export interface PlaybackConfig {
   pacingMode: PlaybackPacingMode;
   evenIntervalSec: number;
   startIndex: number;
+  anchorToToday: boolean;
 }
 
 export interface CustomMessageTime {
   enabled: boolean;
-  day: MessageDayKey;
+  year: number;
+  month: number;
+  day: number;
   time: string;
 }
 

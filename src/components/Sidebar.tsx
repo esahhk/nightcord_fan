@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import type { Conversation, UiLanguage, VoiceMember } from '../types/nightcord';
+import type { AppMode, Conversation, UiLanguage, VoiceMember } from '../types/nightcord';
 import { getUiText } from '../utils/i18n';
 import { NightcordAvatar, WorkChannelIcon } from './NightcordArt';
 
 interface SidebarProps {
   lang: UiLanguage;
+  mode: AppMode;
   conversations: Conversation[];
   activeConversationId: string;
   activeChannelTitle: string;
@@ -25,6 +26,7 @@ interface SidebarProps {
   onVoiceToggle: () => void;
   onOfflineToggle: () => void;
   onMicToggle: (member: VoiceMember) => void;
+  onSetMemberOnline: (member: VoiceMember, online: boolean) => void;
   onExportData: () => void;
   onTriggerImportData: () => void;
   onRequestClearCache: () => void;
@@ -32,6 +34,7 @@ interface SidebarProps {
 
 export function Sidebar({
   lang,
+  mode,
   conversations,
   activeConversationId,
   activeChannelTitle,
@@ -51,6 +54,7 @@ export function Sidebar({
   onVoiceToggle,
   onOfflineToggle,
   onMicToggle,
+  onSetMemberOnline,
   onExportData,
   onTriggerImportData,
   onRequestClearCache,
@@ -58,6 +62,25 @@ export function Sidebar({
   const t = getUiText(lang);
   const [newTitle, setNewTitle] = useState('');
   const [fromTemplate, setFromTemplate] = useState(false);
+  const [memberMenuId, setMemberMenuId] = useState<string | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const startMemberLongPress = (memberId: string) => {
+    if (mode !== 'studio') {
+      return;
+    }
+    clearLongPress();
+    longPressTimerRef.current = window.setTimeout(() => {
+      setMemberMenuId(memberId);
+    }, 450);
+  };
 
   const handleCreateSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -280,6 +303,40 @@ export function Sidebar({
                   </button>
                 </div>
               </div>
+
+              <div className="mt-2 flex flex-col gap-1.5 border-t border-[#332844] pt-2 text-[11px]">
+                <div className="px-1 font-bold text-[#9A90A8]">{t.linksSectionTitle}</div>
+                <div className="flex flex-wrap items-center gap-1.5 px-1">
+                  <a
+                    href="https://esahhk.xyz"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-action="link-esahhk"
+                    className="rounded border border-[#4D3F66] bg-[#332844] px-2 py-0.5 text-[#64D2E6] transition-colors hover:bg-[#473A5C] hover:text-white"
+                  >
+                    esahhk.xyz
+                  </a>
+                  <a
+                    href="https://github.com/esahhk/nightcord_fan"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-action="link-github"
+                    className="rounded border border-[#4D3F66] bg-[#332844] px-2 py-0.5 text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
+                  >
+                    GitHub
+                  </a>
+                </div>
+                <div className="px-1 text-[10.5px] text-[#9A90A8]">
+                  <span>{t.reportIssueLabel}: </span>
+                  <a
+                    href="mailto:esahhk@outlook.com"
+                    data-action="link-email"
+                    className="text-[#C2B8D3] underline hover:text-white"
+                  >
+                    esahhk@outlook.com
+                  </a>
+                </div>
+              </div>
             </div>
             </>
           )}
@@ -322,11 +379,31 @@ export function Sidebar({
               {members.map((member) => (
                 <div
                   key={member.id}
-                  className="mx-1.5 flex h-[36px] items-center justify-between rounded-[6px] pl-4 pr-3"
+                  data-member-row={member.id}
+                  onPointerDown={() => startMemberLongPress(member.id)}
+                  onPointerUp={clearLongPress}
+                  onPointerLeave={clearLongPress}
+                  onPointerCancel={clearLongPress}
+                  onContextMenu={(e) => {
+                    if (mode === 'studio') {
+                      e.preventDefault();
+                      setMemberMenuId(member.id);
+                    }
+                  }}
+                  className="relative mx-1.5 flex h-[36px] items-center justify-between rounded-[6px] pl-4 pr-3"
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2.5 py-1">
-                    <NightcordAvatar type={member.avatar} size={25} showOnlineDot={member.online} />
-                    <span className="truncate text-[13px] font-medium text-[#DCD7E5]">
+                    <NightcordAvatar
+                      type={member.avatar}
+                      size={25}
+                      showOnlineDot={true}
+                      isOnline={member.online}
+                    />
+                    <span
+                      className={`truncate text-[13px] font-medium ${
+                        member.online ? 'text-[#DCD7E5]' : 'text-[#857A99]'
+                      }`}
+                    >
                       {member.name}
                     </span>
                   </div>
@@ -336,6 +413,7 @@ export function Sidebar({
                     aria-label={`${member.name}のマイク切替`}
                     aria-pressed={member.muted}
                     title="マイク切替"
+                    onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => onMicToggle(member)}
                     className={`flex cursor-pointer items-center justify-center rounded p-1 transition-colors ${
                       member.muted
@@ -343,23 +421,52 @@ export function Sidebar({
                         : 'text-[#8C829C] hover:text-[#EFEBF5]'
                     }`}
                   >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-                        <path d="M7 1.5C5.9 1.5 5 2.4 5 3.5V7.5C5 8.6 5.9 9.5 7 9.5C8.1 9.5 9 8.6 9 7.5V3.5C9 2.4 8.1 1.5 7 1.5Z" />
-                        <path d="M3.2 6.8V7.5C3.2 9.4 4.6 11.0 6.4 11.2V13H7.6V11.2C9.4 11.0 10.8 9.4 10.8 7.5V6.8H9.6V7.5C9.6 8.9 8.4 10.1 7 10.1C5.6 10.1 4.4 8.9 4.4 7.5V6.8H3.2Z" />
-                        {member.muted && (
-                          <line
-                            x1="2"
-                            y1="2"
-                            x2="12"
-                            y2="12"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+                      <path d="M7 1.5C5.9 1.5 5 2.4 5 3.5V7.5C5 8.6 5.9 9.5 7 9.5C8.1 9.5 9 8.6 9 7.5V3.5C9 2.4 8.1 1.5 7 1.5Z" />
+                      <path d="M3.2 6.8V7.5C3.2 9.4 4.6 11.0 6.4 11.2V13H7.6V11.2C9.4 11.0 10.8 9.4 10.8 7.5V6.8H9.6V7.5C9.6 8.9 8.4 10.1 7 10.1C5.6 10.1 4.4 8.9 4.4 7.5V6.8H3.2Z" />
+                      {member.muted && (
+                        <line
+                          x1="2"
+                          y1="2"
+                          x2="12"
+                          y2="12"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                        />
+                      )}
+                    </svg>
+                  </button>
+
+                  {mode === 'studio' && memberMenuId === member.id && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="閉じる"
+                        onClick={() => setMemberMenuId(null)}
+                        className="fixed inset-0 z-40 cursor-default bg-transparent"
+                      />
+                      <div className="nc-modal-enter absolute left-3 top-[38px] z-50 min-w-[130px] rounded-[8px] border border-[#524468] bg-[#211A2C] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.55)]">
+                        <button
+                          type="button"
+                          data-action={`member-toggle-online-${member.id}`}
+                          onClick={() => {
+                            onSetMemberOnline(member, !member.online);
+                            setMemberMenuId(null);
+                          }}
+                          className="flex w-full cursor-pointer items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left text-[12px] font-medium text-[#EFEBF5] transition-colors hover:bg-[#473A5C]"
+                        >
+                          <span
+                            className={`h-2 w-2 rounded-full ${
+                              member.online ? 'bg-[#857A99]' : 'bg-[#55D8C1]'
+                            }`}
                           />
-                        )}
-                      </svg>
-                    </button>
-                  </div>
+                          <span>{member.online ? t.setOfflineBtn : t.setOnlineBtn}</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -382,8 +489,19 @@ export function Sidebar({
           </button>
 
           {offlineExpanded && (
-            <div className="px-6 py-1.5 text-[12px] text-[#857A99]">
-              オフラインのメンバーはいません
+            <div className="flex flex-col gap-0.5 px-4 py-1.5 text-[12px] text-[#857A99]">
+              {members.filter((m) => !m.online).length === 0 ? (
+                <div className="px-2">オフラインのメンバーはいません</div>
+              ) : (
+                members
+                  .filter((m) => !m.online)
+                  .map((m) => (
+                    <div key={m.id} className="flex items-center gap-2 px-2 py-1">
+                      <NightcordAvatar type={m.avatar} size={20} showOnlineDot={true} isOnline={false} />
+                      <span className="truncate">{m.name}</span>
+                    </div>
+                  ))
+              )}
             </div>
           )}
         </div>

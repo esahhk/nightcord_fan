@@ -15,6 +15,7 @@ import type {
   ChatMessage,
   Conversation,
   CustomMessageTime,
+  FileMediaKind,
   NightcordActions,
   NightcordBackupPayload,
   PlaybackConfig,
@@ -33,6 +34,7 @@ import {
   loadSavedCharacters,
   loadSavedConversations,
   loadSavedLanguage,
+  loadSavedMembers,
   markOnboardingCompleted,
   saveActiveCharacterId,
   saveActiveConversationId,
@@ -40,6 +42,7 @@ import {
   saveConversations,
   saveLanguage,
   saveLocalMediaBlob,
+  saveMembers,
   saveMode,
 } from './utils/localStorageStore';
 import {
@@ -48,19 +51,19 @@ import {
   TEMPLATE_CONVERSATION_ID,
   appendInputToken,
   collectReferencedMediaIds,
+  computeDisplayMessagesForPlayback,
   computePlaybackDelayMs,
-  createImageMessage,
+  createFileMessage,
   createInitialConversations,
   createNewConversation,
   createOutgoingMessage,
-  createVoiceMessage,
-  extractFileType,
-  formatFileSize,
-  getLastMessageTimestamp,
+  formatNightcordFileMeta,
+  getLastMessageDateTime,
   getSuggestedCustomTime,
   invokeAction,
   parseNightcordBackup,
   resolveOutgoingTimestamp,
+  setMemberOnlineStatus,
   toggleMemberMute,
   upsertCharacter,
 } from './utils/nightcordState';
@@ -107,32 +110,31 @@ export default function App({ actions }: AppProps) {
 
   const [voiceExpanded, setVoiceExpanded] = useState(true);
   const [offlineExpanded, setOfflineExpanded] = useState(false);
-  const [members, setMembers] = useState<VoiceMember[]>(INITIAL_VOICE_MEMBERS);
+  const [members, setMembers] = useState<VoiceMember[]>(
+    () => loadSavedMembers() ?? INITIAL_VOICE_MEMBERS
+  );
   const [inputValue, setInputValue] = useState('');
   const [formatActive, setFormatActive] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [serverMenuOpen, setServerMenuOpen] = useState(false);
-  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<{
+    file: File;
+    forcedKind?: FileMediaKind;
+  } | null>(null);
   const [clearCacheOpen, setClearCacheOpen] = useState(false);
   const [playbackModalOpen, setPlaybackModalOpen] = useState(false);
   const [playbackConfig, setPlaybackConfig] = useState<PlaybackConfig | null>(null);
   const [playbackVisibleCount, setPlaybackVisibleCount] = useState<number | null>(null);
   const [toastText, setToastText] = useState<string | null>(null);
 
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingSec, setRecordingSec] = useState(0);
-
   const actionsRef = useRef<Partial<NightcordActions>>(actions ?? {});
   const toastTimerRef = useRef<number | null>(null);
   const playbackTimerRef = useRef<number | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
+  const anyFileInputRef = useRef<HTMLInputElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordingChunksRef = useRef<Blob[]>([]);
-  const recordingIntervalRef = useRef<number | null>(null);
-  const recordingStartedAtRef = useRef<number>(0);
-  const recordingCancelRef = useRef<boolean>(false);
 
   const activeConversation = useMemo(
     () => conversations.find((c) => c.id === activeConversationId) ?? conversations[0],
@@ -144,8 +146,8 @@ export default function App({ actions }: AppProps) {
     [characters, activeCharacterId]
   );
 
-  const lastMessageTimestamp = useMemo(
-    () => getLastMessageTimestamp(activeConversation.messages),
+  const lastMessageDateTime = useMemo(
+    () => getLastMessageDateTime(activeConversation.messages),
     [activeConversation.messages]
   );
 
@@ -186,6 +188,10 @@ export default function App({ actions }: AppProps) {
   useEffect(() => {
     saveActiveCharacterId(activeCharacterId);
   }, [activeCharacterId]);
+
+  useEffect(() => {
+    saveMembers(members);
+  }, [members]);
 
   useEffect(() => {
     saveMode(mode);
@@ -233,6 +239,7 @@ export default function App({ actions }: AppProps) {
       }
       const nextMsg = createOutgoingMessage(rawText, activeCharacter, new Date(), {
         timestamp: resolved.timestamp,
+        sentAt: resolved.sentAt,
         dividerBefore: resolved.dividerBefore,
       });
       if (!nextMsg) {
@@ -294,13 +301,6 @@ export default function App({ actions }: AppProps) {
       if (playbackTimerRef.current !== null) {
         window.clearTimeout(playbackTimerRef.current);
       }
-      if (recordingIntervalRef.current !== null) {
-        window.clearInterval(recordingIntervalRef.current);
-      }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        recordingCancelRef.current = true;
-        mediaRecorderRef.current.stop();
-      }
     };
   }, []);
 
@@ -315,6 +315,14 @@ export default function App({ actions }: AppProps) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  const displayedMessages = useMemo(() => {
+    if (playbackVisibleCount !== null && playbackConfig) {
+      const sliced = activeConversation.messages.slice(0, playbackVisibleCount);
+      return computeDisplayMessagesForPlayback(sliced, playbackConfig.anchorToToday);
+    }
+    return activeConversation.messages;
+  }, [activeConversation.messages, playbackVisibleCount, playbackConfig]);
 
   const handleCompleteOnboarding = () => {
     markOnboardingCompleted();
@@ -333,6 +341,7 @@ export default function App({ actions }: AppProps) {
   const handleSwitchImmersiveMode = () => {
     stopPlayback();
     setPlaybackModalOpen(false);
+    setPendingUpload(null);
     setMode('immersive');
     setServerMenuOpen(false);
     invokeAction(actionsRef.current, 'onWindowMaximize');
@@ -341,6 +350,7 @@ export default function App({ actions }: AppProps) {
 
   const handlePlaybackTrigger = () => {
     stopPlayback();
+    setPendingUpload(null);
     setMode('immersive');
     setServerMenuOpen(false);
     setMobileSidebarOpen(false);
@@ -393,6 +403,20 @@ export default function App({ actions }: AppProps) {
       return next;
     });
     showToast(t.toastConvDeleted);
+  };
+
+  const handleDeleteMessage = (messageId: string) => {
+    if (mode !== 'studio') {
+      return;
+    }
+    setConversations((prev) =>
+      prev.map((conv) =>
+        conv.id === activeConversation.id
+          ? { ...conv, messages: conv.messages.filter((m) => m.id !== messageId) }
+          : conv
+      )
+    );
+    showToast(t.toastMessageDeleted);
   };
 
   const handleExportData = async () => {
@@ -479,6 +503,7 @@ export default function App({ actions }: AppProps) {
     setActiveConversationId(TEMPLATE_CONVERSATION_ID);
     setCharacters(INITIAL_CHARACTERS);
     setActiveCharacterId(INITIAL_CHARACTERS[0].id);
+    setMembers(INITIAL_VOICE_MEMBERS);
     setInputValue('');
     setClearCacheOpen(false);
     setServerMenuOpen(false);
@@ -542,6 +567,18 @@ export default function App({ actions }: AppProps) {
     }
   };
 
+  const handleSetMemberOnline = (member: VoiceMember, online: boolean) => {
+    const result = setMemberOnlineStatus(members, member.id, online);
+    setMembers(result.members);
+    if (result.updated) {
+      showToast(
+        online
+          ? t.toastMemberOnline(result.updated.name)
+          : t.toastMemberOffline(result.updated.name)
+      );
+    }
+  };
+
   const handleChatHeaderClick = () => {
     invokeAction(actionsRef.current, 'onChatHeaderClick', activeConversation.id);
   };
@@ -600,18 +637,41 @@ export default function App({ actions }: AppProps) {
     showToast(t.toastCharSaved(res.saved.name));
   };
 
-  const handleImageFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
+  const openPendingUpload = (file: File | undefined, forcedKind?: FileMediaKind) => {
     if (!file || mode !== 'studio') {
       return;
     }
-    setPendingImageFile(file);
+    setPendingUpload({ file, forcedKind });
   };
 
-  const handleConfirmImageSend = async (options: {
+  const handleImageFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    openPendingUpload(file, 'image');
+  };
+
+  const handleVideoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    openPendingUpload(file, 'video');
+  };
+
+  const handleAudioFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    openPendingUpload(file, 'audio');
+  };
+
+  const handleAnyFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    openPendingUpload(file);
+  };
+
+  const handleConfirmFileSend = async (options: {
     file: File;
     filename: string;
+    kind: FileMediaKind;
     displayMode: 'card' | 'image';
   }) => {
     const resolved = resolveOutgoingTimestamp(activeConversation.messages, customTime);
@@ -619,168 +679,39 @@ export default function App({ actions }: AppProps) {
       showToast(t.timeEarlierError(resolved.minTimestamp));
       return;
     }
-    const mediaId = `img-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const mediaId = `${options.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     await saveLocalMediaBlob(mediaId, options.file);
-    const fileType = extractFileType(options.filename);
-    const msg = createImageMessage(
+    const meta = formatNightcordFileMeta(options.file.size, options.filename, options.kind);
+    const msg = createFileMessage(
       {
         mediaId,
+        kind: options.kind,
         filename: options.filename,
-        sizeLabel: `${formatFileSize(options.file.size)} ${fileType}`,
-        fileType,
-        displayMode: options.displayMode,
+        sizeLabel: meta.sizeLabel,
+        fileType: meta.fileType,
+        displayMode: options.kind === 'image' ? options.displayMode : 'card',
       },
       activeCharacter,
       inputValue,
       new Date(),
       {
         timestamp: resolved.timestamp,
+        sentAt: resolved.sentAt,
         dividerBefore: resolved.dividerBefore,
       }
     );
     appendMessageToActive(msg);
     setInputValue('');
-    setPendingImageFile(null);
+    setPendingUpload(null);
     invokeAction(actionsRef.current, 'onSendMessage', msg.text ?? '', msg);
-    showToast(t.toastImageSaved);
+    showToast(t.toastFileSaved);
   };
 
-  const handleAudioFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) {
-      return;
-    }
-    const resolved = resolveOutgoingTimestamp(activeConversation.messages, customTime);
-    if (!resolved.ok) {
-      showToast(t.timeEarlierError(resolved.minTimestamp));
-      return;
-    }
-    const mediaId = `aud-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    await saveLocalMediaBlob(mediaId, file);
-    const msg = createVoiceMessage(
-      {
-        mediaId,
-        durationSec: 0,
-        filename: file.name || 'voice.webm',
-      },
-      activeCharacter,
-      new Date(),
-      {
-        timestamp: resolved.timestamp,
-        dividerBefore: resolved.dividerBefore,
-      }
-    );
-    appendMessageToActive(msg);
-    invokeAction(actionsRef.current, 'onSendMessage', '', msg);
-    showToast(t.toastAudioSaved);
-  };
-
-  const clearRecordingTimer = () => {
-    if (recordingIntervalRef.current !== null) {
-      window.clearInterval(recordingIntervalRef.current);
-      recordingIntervalRef.current = null;
-    }
-  };
-
-  const handleStartRecording = async () => {
-    if (
-      typeof navigator === 'undefined' ||
-      !navigator.mediaDevices?.getUserMedia ||
-      typeof MediaRecorder === 'undefined'
-    ) {
-      showToast(t.toastMicUnsupported);
-      audioInputRef.current?.click();
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      recordingChunksRef.current = [];
-      recordingCancelRef.current = false;
-      recordingStartedAtRef.current = Date.now();
-      setRecordingSec(0);
-      setIsRecording(true);
-
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          recordingChunksRef.current.push(e.data);
-        }
-      };
-
-      recorder.onstop = async () => {
-        clearRecordingTimer();
-        stream.getTracks().forEach((track) => track.stop());
-        setIsRecording(false);
-        if (recordingCancelRef.current || recordingChunksRef.current.length === 0) {
-          return;
-        }
-        const resolved = resolveOutgoingTimestamp(activeConversation.messages, customTime);
-        if (!resolved.ok) {
-          showToast(t.timeEarlierError(resolved.minTimestamp));
-          return;
-        }
-        const blob = new Blob(recordingChunksRef.current, {
-          type: recorder.mimeType || 'audio/webm',
-        });
-        const durationSec = Math.max(
-          1,
-          Math.round((Date.now() - recordingStartedAtRef.current) / 1000)
-        );
-        const mediaId = `rec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        await saveLocalMediaBlob(mediaId, blob);
-        const msg = createVoiceMessage(
-          {
-            mediaId,
-            durationSec,
-            filename: 'voice.webm',
-          },
-          activeCharacter,
-          new Date(),
-          {
-            timestamp: resolved.timestamp,
-            dividerBefore: resolved.dividerBefore,
-          }
-        );
-        appendMessageToActive(msg);
-        invokeAction(actionsRef.current, 'onSendMessage', '', msg);
-        showToast(t.toastVoiceSaved);
-      };
-
-      mediaRecorderRef.current = recorder;
-      recorder.start();
-      clearRecordingTimer();
-      recordingIntervalRef.current = window.setInterval(() => {
-        setRecordingSec(Math.floor((Date.now() - recordingStartedAtRef.current) / 1000));
-      }, 500);
-    } catch {
-      showToast(t.toastMicDenied);
-      audioInputRef.current?.click();
-    }
-  };
-
-  const handleStopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      recordingCancelRef.current = false;
-      mediaRecorderRef.current.stop();
-    }
-  };
-
-  const handleCancelRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      recordingCancelRef.current = true;
-      mediaRecorderRef.current.stop();
-    } else {
-      clearRecordingTimer();
-      setIsRecording(false);
-    }
-  };
-
-  const handleMentionClick = () => {
+  const handleMentionCharacter = (name: string) => {
     if (mode !== 'studio') {
       return;
     }
-    setInputValue((prev) => appendInputToken(prev, '@えななん '));
+    setInputValue((prev) => appendInputToken(prev, `@${name} `));
     invokeAction(actionsRef.current, 'onMentionClick');
   };
 
@@ -809,7 +740,7 @@ export default function App({ actions }: AppProps) {
       return;
     }
     invokeAction(actionsRef.current, 'onAttachClick');
-    imageInputRef.current?.click();
+    anyFileInputRef.current?.click();
   };
 
   return (
@@ -822,10 +753,24 @@ export default function App({ actions }: AppProps) {
         className="hidden"
       />
       <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/mp4,video/*"
+        onChange={handleVideoFileChange}
+        className="hidden"
+      />
+      <input
         ref={audioInputRef}
         type="file"
-        accept="audio/*"
+        accept="audio/mpeg,.mp3,audio/*"
         onChange={handleAudioFileChange}
+        className="hidden"
+      />
+      <input
+        ref={anyFileInputRef}
+        type="file"
+        accept="image/*,video/mp4,video/*,audio/mpeg,.mp3,audio/*,.txt,.md,text/plain"
+        onChange={handleAnyFileChange}
         className="hidden"
       />
       <input
@@ -873,6 +818,7 @@ export default function App({ actions }: AppProps) {
       <div className="relative flex min-h-0 flex-1">
         <Sidebar
           lang={lang}
+          mode={mode}
           conversations={conversations}
           activeConversationId={activeConversation.id}
           activeChannelTitle={activeConversation.title}
@@ -892,6 +838,7 @@ export default function App({ actions }: AppProps) {
           onVoiceToggle={handleVoiceToggle}
           onOfflineToggle={handleOfflineToggle}
           onMicToggle={handleMicToggle}
+          onSetMemberOnline={handleSetMemberOnline}
           onExportData={handleExportData}
           onTriggerImportData={() => importInputRef.current?.click()}
           onRequestClearCache={() => {
@@ -903,39 +850,32 @@ export default function App({ actions }: AppProps) {
           lang={lang}
           channelTitle={activeConversation.title}
           mode={mode}
-          messages={
-            playbackVisibleCount !== null
-              ? activeConversation.messages.slice(0, playbackVisibleCount)
-              : activeConversation.messages
-          }
+          messages={displayedMessages}
           isPlaying={playbackConfig !== null}
           animatedFromIndex={playbackConfig ? playbackConfig.startIndex : null}
           characters={characters}
           activeCharacter={activeCharacter}
           inputValue={inputValue}
           formatActive={formatActive}
-          isRecording={isRecording}
-          recordingSec={recordingSec}
           onOpenSidebar={() => handleSetMobileSidebar(true)}
           onInputChange={setInputValue}
           onSubmitMessage={handleSubmitMessage}
           onChatHeaderClick={handleChatHeaderClick}
           onMessageClick={handleMessageClick}
+          onDeleteMessage={handleDeleteMessage}
           onAvatarClick={handleAvatarClick}
           onFileDownload={handleFileDownload}
-          onMentionClick={handleMentionClick}
+          onMentionCharacter={handleMentionCharacter}
           onFormatClick={handleFormatClick}
           onEmojiClick={handleEmojiClick}
           onAttachClick={handleAttachClick}
           onSelectCharacter={handleSelectCharacter}
           onSaveCharacter={handleSaveCharacter}
           onTriggerImageUpload={() => imageInputRef.current?.click()}
-          onStartRecording={handleStartRecording}
-          onStopRecording={handleStopRecording}
-          onCancelRecording={handleCancelRecording}
-          onTriggerAudioFileUpload={() => audioInputRef.current?.click()}
+          onTriggerVideoUpload={() => videoInputRef.current?.click()}
+          onTriggerAudioUpload={() => audioInputRef.current?.click()}
           customTime={customTime}
-          lastMessageTimestamp={lastMessageTimestamp}
+          lastMessageDateTime={lastMessageDateTime}
           onChangeCustomTime={setCustomTime}
           onSyncCustomTimeNow={handleSyncCustomTimeNow}
         />
@@ -950,10 +890,11 @@ export default function App({ actions }: AppProps) {
       />
 
       <ImageSendModal
-        file={pendingImageFile}
+        file={pendingUpload?.file ?? null}
+        forcedKind={pendingUpload?.forcedKind}
         lang={lang}
-        onCancel={() => setPendingImageFile(null)}
-        onConfirm={handleConfirmImageSend}
+        onCancel={() => setPendingUpload(null)}
+        onConfirm={handleConfirmFileSend}
       />
 
       <ClearCacheModal

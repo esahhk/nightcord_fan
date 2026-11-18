@@ -102,6 +102,29 @@ export interface UiText {
   playbackStartBtn: string;
   playbackCapNote: string;
   toastPlaybackDone: string;
+  playbackAnchorLabel: string;
+  playbackAnchorTodayTitle: string;
+  playbackAnchorTodaySub: string;
+  playbackAnchorFlowTitle: string;
+  playbackAnchorFlowSub: string;
+  linksSectionTitle: string;
+  reportIssueLabel: string;
+  setOfflineBtn: string;
+  setOnlineBtn: string;
+  toastMemberOnline: (name: string) => string;
+  toastMemberOffline: (name: string) => string;
+  mentionTargetBtn: (name: string) => string;
+  mentionPickerTitle: string;
+  deleteMessageBtn: string;
+  toastMessageDeleted: string;
+  sendMp4: string;
+  sendMp3: string;
+  sendFile: string;
+  fileModalTitle: string;
+  toastFileSaved: string;
+  yearUnit: string;
+  monthUnit: string;
+  dayUnit: string;
 }
 
 const JA_TEXT: UiText = {
@@ -214,6 +237,29 @@ const JA_TEXT: UiText = {
   playbackStartBtn: '開始',
   playbackCapNote: '※ すべての送信間隔は最大40秒以内に制限されます。再生中に赤い点をもう一度押すと設定を開き直せます。',
   toastPlaybackDone: 'メッセージの自動再生が完了しました',
+  playbackAnchorLabel: '日時の基準',
+  playbackAnchorTodayTitle: '今日の日時に固定する',
+  playbackAnchorTodaySub: '同月の過去は「13日 23:13」、別月・別年は「2021年6月17日」表示',
+  playbackAnchorFlowTitle: '再生中のメッセージ日時を基準',
+  playbackAnchorFlowSub: '開始メッセージを「今日」とし、24時を過ぎると前日が「昨日」に変化',
+  linksSectionTitle: 'リンク・お問い合わせ',
+  reportIssueLabel: '不具合報告',
+  setOfflineBtn: 'オフラインにする',
+  setOnlineBtn: 'オンラインにする',
+  toastMemberOnline: (name) => `${name} をオンラインにしました`,
+  toastMemberOffline: (name) => `${name} をオフラインにしました`,
+  mentionTargetBtn: (name) => `@${name} をメンション`,
+  mentionPickerTitle: 'メンション相手を選択',
+  deleteMessageBtn: 'メッセージを削除',
+  toastMessageDeleted: 'メッセージを削除しました',
+  sendMp4: 'MP4',
+  sendMp3: 'MP3',
+  sendFile: 'ファイル',
+  fileModalTitle: 'ファイル送信設定',
+  toastFileSaved: 'ファイルをローカルに保存して送信しました',
+  yearUnit: '年',
+  monthUnit: '月',
+  dayUnit: '日',
 };
 
 const ZH_TEXT: UiText = {
@@ -325,6 +371,29 @@ const ZH_TEXT: UiText = {
   playbackStartBtn: '开始',
   playbackCapNote: '※ 每次发送间隔均严格不超过 40 秒。播放中再次点击红点可重新设置或取消。',
   toastPlaybackDone: '消息逐条播放已完成',
+  playbackAnchorLabel: '时间基准',
+  playbackAnchorTodayTitle: '锚定在今日时间',
+  playbackAnchorTodaySub: '同月之前显示「13日 23:13」，跨月/跨年显示「2021年6月17日」',
+  playbackAnchorFlowTitle: '不锚定（随播放时间推进）',
+  playbackAnchorFlowSub: '以播放消息的时间为「今日」，跨过 24 点后之前的消息自动变为「昨日」',
+  linksSectionTitle: '相关链接与反馈',
+  reportIssueLabel: '报告问题',
+  setOfflineBtn: '设为离线',
+  setOnlineBtn: '设为在线',
+  toastMemberOnline: (name) => `已将 ${name} 设为在线`,
+  toastMemberOffline: (name) => `已将 ${name} 设为离线`,
+  mentionTargetBtn: (name) => `@${name}`,
+  mentionPickerTitle: '选择要 @ 的角色',
+  deleteMessageBtn: '删除消息',
+  toastMessageDeleted: '已删除该消息',
+  sendMp4: 'MP4',
+  sendMp3: 'MP3',
+  sendFile: '文件',
+  fileModalTitle: '文件发送设置',
+  toastFileSaved: '文件已保存至本地并发送',
+  yearUnit: '年',
+  monthUnit: '月',
+  dayUnit: '日',
 };
 
 export function getUiText(lang: UiLanguage): UiText {

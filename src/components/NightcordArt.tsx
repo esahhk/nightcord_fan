@@ -69,6 +69,7 @@ interface NightcordAvatarProps {
   type: AvatarType;
   size: number;
   showOnlineDot?: boolean;
+  isOnline?: boolean;
   className?: string;
 }
 
@@ -76,6 +77,7 @@ export function NightcordAvatar({
   type,
   size,
   showOnlineDot = false,
+  isOnline = true,
   className = '',
 }: NightcordAvatarProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -122,7 +124,10 @@ export function NightcordAvatar({
       </span>
       {showOnlineDot && (
         <span
-          className="pointer-events-none absolute -bottom-0.5 -right-0.5 block h-2.5 w-2.5 rounded-full border-2 border-[#2E243D] bg-[#55D8C1]"
+          data-status={isOnline ? 'online' : 'offline'}
+          className={`pointer-events-none absolute -bottom-0.5 -right-0.5 block h-2.5 w-2.5 rounded-full border-2 border-[#2E243D] transition-colors ${
+            isOnline ? 'bg-[#55D8C1]' : 'bg-[#857A99]'
+          }`}
           aria-hidden="true"
         />
       )}

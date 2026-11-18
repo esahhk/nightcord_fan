@@ -9,20 +9,22 @@ import {
   TEMPLATE_CONVERSATION_ID,
   appendInputToken,
   collectReferencedMediaIds,
+  computeDisplayMessagesForPlayback,
   computePlaybackDelayMs,
+  createFileMessage,
   createImageMessage,
   createInitialConversations,
   createNewConversation,
   createOutgoingMessage,
-  createVoiceMessage,
+  detectFileMediaKind,
   extractFileType,
-  formatCustomJapaneseTime,
   formatDuration,
   formatJapaneseTime,
+  formatNightcordFileMeta,
   invokeAction,
-  parseJapaneseTimestampToMinutes,
   parseNightcordBackup,
   resolveOutgoingTimestamp,
+  setMemberOnlineStatus,
   toggleMemberMute,
   upsertCharacter,
 } from './nightcordState';
@@ -74,7 +76,7 @@ test('upsertCharacter creates new character and edits existing character', () =>
   assert.equal(editedRes.saved.customAvatarMediaId, 'media-1');
 });
 
-test('createOutgoingMessage, createImageMessage, and createVoiceMessage preserve sender identity', () => {
+test('createOutgoingMessage and createFileMessage preserve sender and format Nightcord file cards', () => {
   assert.equal(createOutgoingMessage('   '), null);
   const sender = { id: 'c1', name: 'ミク', avatarType: 'enanan' as const, customAvatarMediaId: 'av-1' };
   const fixedDate = new Date(2026, 10, 18, 1, 5);
@@ -84,30 +86,37 @@ test('createOutgoingMessage, createImageMessage, and createVoiceMessage preserve
   assert.equal(msg.customAvatarMediaId, 'av-1');
   assert.equal(msg.timestamp, formatJapaneseTime(fixedDate));
 
-  const imgMsg = createImageMessage(
+  assert.equal(detectFileMediaKind('Vrough01.mp4', 'video/mp4'), 'video');
+  assert.equal(detectFileMediaKind('MIX1_oke.mp3', 'audio/mpeg'), 'audio');
+  assert.equal(detectFileMediaKind('歌詞_調整版01.txt', 'text/plain'), 'text');
+  assert.equal(detectFileMediaKind('ラフA_04.jpg', 'image/jpeg'), 'image');
+
+  const mp4Meta = formatNightcordFileMeta(220 * 1024 * 1024, 'Vrough01.mp4', 'video');
+  assert.equal(mp4Meta.sizeLabel, '220MB MP4 ビデオ');
+  const mp3Meta = formatNightcordFileMeta(7 * 1024 * 1024, 'MIX1_oke.mp3', 'audio');
+  assert.equal(mp3Meta.sizeLabel, '7MB MP3');
+  const txtMeta = formatNightcordFileMeta(1024, '歌詞_調整版01.txt', 'text');
+  assert.equal(txtMeta.sizeLabel, '1KB テキスト');
+  const jpgMeta = formatNightcordFileMeta(7 * 1024 * 1024, 'ラフA_04.jpg', 'image');
+  assert.equal(jpgMeta.sizeLabel, '7MB JPG');
+
+  const fileMsg = createFileMessage(
     {
-      mediaId: 'img-1',
-      filename: 'sketch.png',
-      sizeLabel: '1.2MB PNG',
-      fileType: 'PNG',
+      mediaId: 'vid-1',
+      kind: 'video',
+      filename: 'Vrough01.mp4',
+      sizeLabel: mp4Meta.sizeLabel,
+      fileType: mp4Meta.fileType,
       displayMode: 'card',
     },
     sender,
-    'これどう？',
+    '今の進捗',
     fixedDate
   );
-  assert.equal(imgMsg.imageMedia?.filename, 'sketch.png');
-  assert.equal(imgMsg.imageMedia?.displayMode, 'card');
+  assert.equal(fileMsg.fileMedia?.kind, 'video');
+  assert.equal(fileMsg.fileMedia?.filename, 'Vrough01.mp4');
+  assert.equal(fileMsg.text, '今の進捗');
   assert.equal(extractFileType('ラフC.jpg'), 'JPG');
-  assert.equal(extractFileType('noext'), 'IMG');
-  assert.equal(imgMsg.text, 'これどう？');
-
-  const voiceMsg = createVoiceMessage(
-    { mediaId: 'aud-1', durationSec: 12, filename: 'voice.webm' },
-    sender,
-    fixedDate
-  );
-  assert.equal(voiceMsg.voiceMedia?.durationSec, 12);
   assert.equal(formatDuration(65), '1:05');
 });
 
@@ -118,11 +127,18 @@ test('i18n dictionary provides distinct zh and ja control text', () => {
   assert.equal(ja.stepBadges[0], 'ステップ 1 / 4');
   assert.equal(zh.editChar, '编辑');
   assert.equal(ja.editChar, '編集');
+  assert.equal(zh.emptyConvTitle('雑談'), '开始「雑談」的对话吧');
 });
 
-test('toggleMemberMute, appendInputToken, and invokeAction work as expected', () => {
+test('toggleMemberMute, setMemberOnlineStatus, appendInputToken, and invokeAction work', () => {
   const first = toggleMemberMute(INITIAL_VOICE_MEMBERS, 'k');
   assert.equal(first.updated?.muted, true);
+
+  const offlineRes = setMemberOnlineStatus(INITIAL_VOICE_MEMBERS, 'k', false);
+  assert.equal(offlineRes.updated?.online, false);
+  const onlineRes = setMemberOnlineStatus(offlineRes.members, 'k', true);
+  assert.equal(onlineRes.updated?.online, true);
+
   assert.equal(appendInputToken('了解', '♪'), '了解♪');
 
   let received = '';
@@ -139,46 +155,86 @@ test('toggleMemberMute, appendInputToken, and invokeAction work as expected', ()
   assert.equal(received, 'work');
 });
 
-test('custom timestamp validation prevents earlier timestamps and inserts day divider', () => {
-  assert.equal(formatCustomJapaneseTime('today', '01:36'), '今日 1:36');
-  assert.equal(parseJapaneseTimestampToMinutes('昨日 23:46'), 23 * 60 + 46);
-  assert.equal(parseJapaneseTimestampToMinutes('今日 1:36'), 1440 + 96);
+test('custom date-time validation prevents earlier dates and supports 2000-3000 range', () => {
+  const refNow = new Date(2026, 5, 18, 12, 0);
 
-  const earlier = resolveOutgoingTimestamp(INITIAL_MESSAGES, {
-    enabled: true,
-    day: 'today',
-    time: '01:35',
-  });
+  const earlier = resolveOutgoingTimestamp(
+    INITIAL_MESSAGES,
+    { enabled: true, year: 2026, month: 6, day: 18, time: '01:35' },
+    refNow
+  );
   assert.equal(earlier.ok, false);
 
-  const earlierYesterday = resolveOutgoingTimestamp(INITIAL_MESSAGES, {
-    enabled: true,
-    day: 'yesterday',
-    time: '23:59',
-  });
-  assert.equal(earlierYesterday.ok, false);
+  const earlierYear = resolveOutgoingTimestamp(
+    INITIAL_MESSAGES,
+    { enabled: true, year: 2021, month: 6, day: 17, time: '23:59' },
+    refNow
+  );
+  assert.equal(earlierYear.ok, false);
 
-  const sameTime = resolveOutgoingTimestamp(INITIAL_MESSAGES, {
-    enabled: true,
-    day: 'today',
-    time: '01:36',
-  });
+  const sameTime = resolveOutgoingTimestamp(
+    INITIAL_MESSAGES,
+    { enabled: true, year: 2026, month: 6, day: 18, time: '01:36' },
+    refNow
+  );
   assert.equal(sameTime.ok, true);
   if (sameTime.ok) {
     assert.equal(sameTime.timestamp, '今日 1:36');
   }
 
+  const futureYear = resolveOutgoingTimestamp(
+    INITIAL_MESSAGES,
+    { enabled: true, year: 2999, month: 12, day: 31, time: '23:59' },
+    refNow
+  );
+  assert.equal(futureYear.ok, true);
+  if (futureYear.ok) {
+    assert.equal(futureYear.timestamp, '2999年12月31日');
+  }
+
   const yesterdayOnly = INITIAL_MESSAGES.slice(0, 7);
-  const crossing = resolveOutgoingTimestamp(yesterdayOnly, {
-    enabled: true,
-    day: 'today',
-    time: '00:10',
-  });
+  const crossing = resolveOutgoingTimestamp(
+    yesterdayOnly,
+    { enabled: true, year: 2026, month: 6, day: 18, time: '00:10' },
+    refNow
+  );
   assert.equal(crossing.ok, true);
   if (crossing.ok) {
     assert.equal(crossing.timestamp, '今日 0:10');
     assert.equal(crossing.dividerBefore, '今日');
   }
+});
+
+test('computeDisplayMessagesForPlayback handles anchored-to-today and unanchored day rollover', () => {
+  const baseNow = new Date(2026, 5, 18, 12, 0);
+  const sender = INITIAL_CHARACTERS[0];
+  const m1 = createOutgoingMessage('old year', sender, baseNow, {
+    sentAt: { year: 2021, month: 6, day: 17, hour: 15, minute: 30 },
+    timestamp: '2021年6月17日',
+  })!;
+  const m2 = createOutgoingMessage('same month', sender, baseNow, {
+    sentAt: { year: 2026, month: 6, day: 13, hour: 23, minute: 13 },
+    timestamp: '13日 23:13',
+  })!;
+  const m3 = createOutgoingMessage('next day', sender, baseNow, {
+    sentAt: { year: 2026, month: 6, day: 14, hour: 0, minute: 5 },
+    timestamp: '14日 0:05',
+  })!;
+
+  const anchored = computeDisplayMessagesForPlayback([m1, m2, m3], true, baseNow);
+  assert.equal(anchored[0].timestamp, '2021年6月17日');
+  assert.equal(anchored[1].timestamp, '13日 23:13');
+  assert.equal(anchored[2].timestamp, '14日 0:05');
+
+  const unanchoredStep2 = computeDisplayMessagesForPlayback([m1, m2], false, baseNow);
+  assert.equal(unanchoredStep2[0].timestamp, '2021年6月17日');
+  assert.equal(unanchoredStep2[1].timestamp, '今日 23:13');
+
+  const unanchoredStep3 = computeDisplayMessagesForPlayback([m1, m2, m3], false, baseNow);
+  assert.equal(unanchoredStep3[0].timestamp, '2021年6月17日');
+  assert.equal(unanchoredStep3[1].timestamp, '昨日 23:13');
+  assert.equal(unanchoredStep3[2].timestamp, '今日 0:05');
+  assert.equal(unanchoredStep3[2].dividerBefore, '今日');
 });
 
 test('collectReferencedMediaIds and parseNightcordBackup handle valid and invalid payloads', () => {

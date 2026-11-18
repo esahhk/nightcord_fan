@@ -1,10 +1,13 @@
 import type {
   AvatarType,
   CharacterProfile,
+  ChatFileMedia,
   ChatImageMedia,
   ChatMessage,
   ChatVoiceMedia,
   Conversation,
+  FileMediaKind,
+  MessageDateTime,
   NightcordActions,
   VoiceMember,
 } from '../types/nightcord';
@@ -125,114 +128,275 @@ export function createNewConversation(
   };
 }
 
+export function getDaysInMonth(year: number, month: number): number {
+  const safeYear = Math.min(3000, Math.max(2000, Math.floor(year)));
+  const safeMonth = Math.min(12, Math.max(1, Math.floor(month)));
+  return new Date(Date.UTC(safeYear, safeMonth, 0)).getUTCDate();
+}
+
+export function dateToMessageDateTime(date: Date): MessageDateTime {
+  return {
+    year: Math.min(3000, Math.max(2000, date.getFullYear())),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+    hour: date.getHours(),
+    minute: date.getMinutes(),
+  };
+}
+
+export function dateTimeToEpochMinutes(dt: MessageDateTime): number {
+  const utcMs = Date.UTC(dt.year, dt.month - 1, dt.day, dt.hour, dt.minute);
+  return Math.floor(utcMs / 60000);
+}
+
+export function dayDiffBetween(
+  target: { year: number; month: number; day: number },
+  ref: { year: number; month: number; day: number }
+): number {
+  const targetUtc = Date.UTC(target.year, target.month - 1, target.day);
+  const refUtc = Date.UTC(ref.year, ref.month - 1, ref.day);
+  return Math.round((refUtc - targetUtc) / 86400000);
+}
+
 export function formatJapaneseTime(date: Date): string {
   const hours = date.getHours();
   const minutes = String(date.getMinutes()).padStart(2, '0');
   return `今日 ${hours}:${minutes}`;
 }
 
-export function formatCustomJapaneseTime(day: 'yesterday' | 'today', timeHHMM: string): string | null {
-  const match = /^(\d{1,2}):(\d{2})$/.exec(timeHHMM.trim());
+export function formatTimestampRelativeToRef(
+  dt: MessageDateTime,
+  ref: { year: number; month: number; day: number }
+): string {
+  const mm = String(dt.minute).padStart(2, '0');
+  const diff = dayDiffBetween(dt, ref);
+  if (diff === 0) {
+    return `今日 ${dt.hour}:${mm}`;
+  }
+  if (diff === 1) {
+    return `昨日 ${dt.hour}:${mm}`;
+  }
+  if (dt.year === ref.year && dt.month === ref.month) {
+    return `${dt.day}日 ${dt.hour}:${mm}`;
+  }
+  return `${dt.year}年${dt.month}月${dt.day}日`;
+}
+
+export function formatDateTimeBadge(dt: MessageDateTime): string {
+  const mm = String(dt.minute).padStart(2, '0');
+  return `${dt.year}/${dt.month}/${dt.day} ${dt.hour}:${mm}`;
+}
+
+export function parseCustomDateTimeInput(input: {
+  year: number;
+  month: number;
+  day: number;
+  time: string;
+}): MessageDateTime | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(input.time.trim());
   if (!match) {
     return null;
   }
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
     return null;
   }
-  const prefix = day === 'yesterday' ? '昨日' : '今日';
-  return `${prefix} ${hours}:${String(minutes).padStart(2, '0')}`;
+  const year = Math.min(3000, Math.max(2000, Math.floor(input.year)));
+  const month = Math.min(12, Math.max(1, Math.floor(input.month)));
+  const maxDay = getDaysInMonth(year, month);
+  const day = Math.min(maxDay, Math.max(1, Math.floor(input.day)));
+  return { year, month, day, hour, minute };
 }
 
-export function parseJapaneseTimestampToMinutes(timestamp: string): number | null {
-  const match = /^(昨日|今日)\s+(\d{1,2}):(\d{2})$/.exec(timestamp.trim());
-  if (!match) {
-    return null;
+export function parseLegacyJapaneseTimestamp(
+  timestamp: string,
+  baseNow: Date = new Date()
+): MessageDateTime | null {
+  const trimmed = timestamp.trim();
+  const relMatch = /^(昨日|今日)\s+(\d{1,2}):(\d{2})$/.exec(trimmed);
+  if (relMatch) {
+    const d = new Date(baseNow.getFullYear(), baseNow.getMonth(), baseNow.getDate());
+    if (relMatch[1] === '昨日') {
+      d.setDate(d.getDate() - 1);
+    }
+    return {
+      year: d.getFullYear(),
+      month: d.getMonth() + 1,
+      day: d.getDate(),
+      hour: Number(relMatch[2]),
+      minute: Number(relMatch[3]),
+    };
   }
-  const dayOffset = match[1] === '昨日' ? 0 : 1440;
-  const hours = Number(match[2]);
-  const minutes = Number(match[3]);
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    return null;
+  const dayMatch = /^(\d{1,2})[日号]\s+(\d{1,2}):(\d{2})$/.exec(trimmed);
+  if (dayMatch) {
+    return {
+      year: baseNow.getFullYear(),
+      month: baseNow.getMonth() + 1,
+      day: Number(dayMatch[1]),
+      hour: Number(dayMatch[2]),
+      minute: Number(dayMatch[3]),
+    };
   }
-  return dayOffset + hours * 60 + minutes;
+  const fullMatch = /^(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})[日号](?:\s+(\d{1,2}):(\d{2}))?$/.exec(
+    trimmed
+  );
+  if (fullMatch) {
+    return {
+      year: Number(fullMatch[1]),
+      month: Number(fullMatch[2]),
+      day: Number(fullMatch[3]),
+      hour: fullMatch[4] ? Number(fullMatch[4]) : 0,
+      minute: fullMatch[5] ? Number(fullMatch[5]) : 0,
+    };
+  }
+  return null;
 }
 
-export function getLastMessageTimestamp(messages: ChatMessage[]): string | null {
+export function getMessageDateTime(
+  msg: ChatMessage,
+  baseNow: Date = new Date()
+): MessageDateTime | null {
+  if (msg.sentAt) {
+    return msg.sentAt;
+  }
+  return parseLegacyJapaneseTimestamp(msg.timestamp, baseNow);
+}
+
+export function getLastMessageDateTime(
+  messages: ChatMessage[],
+  baseNow: Date = new Date()
+): MessageDateTime | null {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const ts = messages[i]?.timestamp;
-    if (ts && parseJapaneseTimestampToMinutes(ts) !== null) {
-      return ts;
+    const dt = getMessageDateTime(messages[i], baseNow);
+    if (dt) {
+      return dt;
     }
   }
   return null;
 }
 
-export function isTimestampNotEarlierThanPrevious(
-  candidateTimestamp: string,
-  messages: ChatMessage[]
-): boolean {
-  const candidateMinutes = parseJapaneseTimestampToMinutes(candidateTimestamp);
-  if (candidateMinutes === null) {
-    return false;
+export function getLastMessageTimestamp(
+  messages: ChatMessage[],
+  baseNow: Date = new Date()
+): string | null {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const msg = messages[i];
+    if (msg?.sentAt) {
+      return formatTimestampRelativeToRef(msg.sentAt, dateToMessageDateTime(baseNow));
+    }
+    if (msg?.timestamp) {
+      return msg.timestamp;
+    }
   }
-  const prevTs = getLastMessageTimestamp(messages);
-  if (!prevTs) {
-    return true;
-  }
-  const prevMinutes = parseJapaneseTimestampToMinutes(prevTs);
-  if (prevMinutes === null) {
-    return true;
-  }
-  return candidateMinutes >= prevMinutes;
+  return null;
 }
 
 export function getSuggestedCustomTime(
   messages: ChatMessage[],
   now: Date = new Date()
-): { day: 'yesterday' | 'today'; time: string } {
-  const nowStr = formatJapaneseTime(now);
-  const nowMinutes = parseJapaneseTimestampToMinutes(nowStr) ?? 1440;
-  const prevTs = getLastMessageTimestamp(messages);
-  const prevMinutes = prevTs ? parseJapaneseTimestampToMinutes(prevTs) : null;
-  const targetMinutes = prevMinutes !== null && prevMinutes > nowMinutes ? prevMinutes : nowMinutes;
-  const day: 'yesterday' | 'today' = targetMinutes < 1440 ? 'yesterday' : 'today';
-  const dayMinutes = targetMinutes % 1440;
-  const hh = String(Math.floor(dayMinutes / 60)).padStart(2, '0');
-  const mm = String(dayMinutes % 60).padStart(2, '0');
-  return { day, time: `${hh}:${mm}` };
+): { year: number; month: number; day: number; time: string } {
+  const nowDt = dateToMessageDateTime(now);
+  const lastDt = getLastMessageDateTime(messages, now);
+  const chosen =
+    lastDt && dateTimeToEpochMinutes(lastDt) > dateTimeToEpochMinutes(nowDt) ? lastDt : nowDt;
+  return {
+    year: chosen.year,
+    month: chosen.month,
+    day: chosen.day,
+    time: `${String(chosen.hour).padStart(2, '0')}:${String(chosen.minute).padStart(2, '0')}`,
+  };
 }
 
 export function resolveOutgoingTimestamp(
   messages: ChatMessage[],
-  customTime?: { enabled: boolean; day: 'yesterday' | 'today'; time: string },
+  customTime?: { enabled: boolean; year: number; month: number; day: number; time: string },
   now: Date = new Date()
-): { ok: true; timestamp: string; dividerBefore?: string } | { ok: false; minTimestamp: string } {
-  const prevTs = getLastMessageTimestamp(messages);
-  let timestamp: string;
+):
+  | { ok: true; timestamp: string; sentAt: MessageDateTime; dividerBefore?: string }
+  | { ok: false; minTimestamp: string } {
+  const refNow = dateToMessageDateTime(now);
+  const prevDt = getLastMessageDateTime(messages, now);
+  let sentAt: MessageDateTime;
 
   if (customTime?.enabled) {
-    const formatted = formatCustomJapaneseTime(customTime.day, customTime.time);
-    if (!formatted || !isTimestampNotEarlierThanPrevious(formatted, messages)) {
-      return { ok: false, minTimestamp: prevTs ?? formatJapaneseTime(now) };
+    const parsed = parseCustomDateTimeInput(customTime);
+    if (
+      !parsed ||
+      (prevDt && dateTimeToEpochMinutes(parsed) < dateTimeToEpochMinutes(prevDt))
+    ) {
+      const minLabel = prevDt ? formatDateTimeBadge(prevDt) : formatDateTimeBadge(refNow);
+      return { ok: false, minTimestamp: minLabel };
     }
-    timestamp = formatted;
+    sentAt = parsed;
   } else {
-    const autoTs = formatJapaneseTime(now);
-    const autoMin = parseJapaneseTimestampToMinutes(autoTs);
-    const prevMin = prevTs ? parseJapaneseTimestampToMinutes(prevTs) : null;
-    if (prevTs && prevMin !== null && autoMin !== null && autoMin < prevMin) {
-      timestamp = prevTs;
+    sentAt =
+      prevDt && dateTimeToEpochMinutes(refNow) < dateTimeToEpochMinutes(prevDt)
+        ? prevDt
+        : refNow;
+  }
+
+  const timestamp = formatTimestampRelativeToRef(sentAt, refNow);
+  let dividerBefore: string | undefined;
+  if (
+    prevDt &&
+    (prevDt.year !== sentAt.year || prevDt.month !== sentAt.month || prevDt.day !== sentAt.day)
+  ) {
+    const diff = dayDiffBetween(sentAt, refNow);
+    if (diff === 0) {
+      dividerBefore = '今日';
+    } else if (diff === 1) {
+      dividerBefore = '昨日';
+    } else if (sentAt.year === refNow.year && sentAt.month === refNow.month) {
+      dividerBefore = `${sentAt.day}日`;
     } else {
-      timestamp = autoTs;
+      dividerBefore = `${sentAt.year}年${sentAt.month}月${sentAt.day}日`;
     }
   }
 
-  const dividerBefore =
-    prevTs && prevTs.startsWith('昨日 ') && timestamp.startsWith('今日 ') ? '今日' : undefined;
+  return { ok: true, timestamp, sentAt, dividerBefore };
+}
 
-  return { ok: true, timestamp, dividerBefore };
+export function computeDisplayMessagesForPlayback(
+  visibleMessages: ChatMessage[],
+  anchorToToday: boolean,
+  baseNow: Date = new Date()
+): ChatMessage[] {
+  if (visibleMessages.length === 0) {
+    return [];
+  }
+  const refDate = anchorToToday
+    ? dateToMessageDateTime(baseNow)
+    : (getMessageDateTime(visibleMessages[visibleMessages.length - 1], baseNow) ??
+      dateToMessageDateTime(baseNow));
+
+  let prevDayKey: string | null = null;
+  return visibleMessages.map((msg) => {
+    const dt = getMessageDateTime(msg, baseNow);
+    if (!dt) {
+      return msg;
+    }
+    const dayKey = `${dt.year}-${dt.month}-${dt.day}`;
+    let dividerBefore: string | undefined;
+    if (prevDayKey !== null && prevDayKey !== dayKey) {
+      const diff = dayDiffBetween(dt, refDate);
+      if (diff === 0) {
+        dividerBefore = '今日';
+      } else if (diff === 1) {
+        dividerBefore = '昨日';
+      } else if (dt.year === refDate.year && dt.month === refDate.month) {
+        dividerBefore = `${dt.day}日`;
+      } else {
+        dividerBefore = `${dt.year}年${dt.month}月${dt.day}日`;
+      }
+    }
+    prevDayKey = dayKey;
+    return {
+      ...msg,
+      timestamp: formatTimestampRelativeToRef(dt, refDate),
+      dividerBefore,
+    };
+  });
 }
 
 export const MAX_PLAYBACK_INTERVAL_MS = 40000;
@@ -241,7 +405,8 @@ export function computePlaybackDelayMs(
   messages: ChatMessage[],
   nextIndex: number,
   pacingMode: 'timeline' | 'even',
-  evenIntervalSec: number = 2.5
+  evenIntervalSec: number = 2.5,
+  baseNow: Date = new Date()
 ): number {
   if (pacingMode === 'even') {
     const safeSec = Number.isFinite(evenIntervalSec) ? evenIntervalSec : 2.5;
@@ -252,18 +417,55 @@ export function computePlaybackDelayMs(
     return 1200;
   }
 
-  const prevMin = parseJapaneseTimestampToMinutes(messages[nextIndex - 1]?.timestamp ?? '');
-  const nextMin = parseJapaneseTimestampToMinutes(messages[nextIndex]?.timestamp ?? '');
-  if (prevMin === null || nextMin === null) {
+  const prevDt = getMessageDateTime(messages[nextIndex - 1], baseNow);
+  const nextDt = getMessageDateTime(messages[nextIndex], baseNow);
+  if (!prevDt || !nextDt) {
     return 2000;
   }
 
-  const diffMin = Math.max(0, nextMin - prevMin);
+  const diffMin = Math.max(0, dateTimeToEpochMinutes(nextDt) - dateTimeToEpochMinutes(prevDt));
   if (diffMin === 0) {
     return 1200;
   }
 
   return Math.min(MAX_PLAYBACK_INTERVAL_MS, Math.max(1000, diffMin * 1000));
+}
+
+export function detectFileMediaKind(filename: string, mimeType: string = ''): FileMediaKind {
+  const lowerName = filename.toLowerCase();
+  const lowerMime = mimeType.toLowerCase();
+  if (lowerMime.startsWith('video/') || /\.(mp4|mov|webm|mkv)$/.test(lowerName)) {
+    return 'video';
+  }
+  if (lowerMime.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|flac)$/.test(lowerName)) {
+    return 'audio';
+  }
+  if (lowerMime.startsWith('text/') || /\.(txt|md|log|csv)$/.test(lowerName)) {
+    return 'text';
+  }
+  return 'image';
+}
+
+export function formatNightcordFileMeta(
+  bytes: number,
+  filename: string,
+  kind: FileMediaKind
+): { sizeLabel: string; fileType: string } {
+  const size = formatFileSize(bytes);
+  const ext = extractFileType(filename);
+  if (kind === 'video') {
+    const labelType = ext === 'IMG' ? 'MP4' : ext;
+    return { sizeLabel: `${size} ${labelType} ビデオ`, fileType: labelType };
+  }
+  if (kind === 'audio') {
+    const labelType = ext === 'IMG' ? 'MP3' : ext;
+    return { sizeLabel: `${size} ${labelType}`, fileType: labelType };
+  }
+  if (kind === 'text') {
+    const labelType = ext === 'IMG' ? 'TXT' : ext;
+    return { sizeLabel: `${size} テキスト`, fileType: labelType };
+  }
+  return { sizeLabel: `${size} ${ext}`, fileType: ext };
 }
 
 export function collectReferencedMediaIds(
@@ -286,6 +488,9 @@ export function collectReferencedMediaIds(
       }
       if (msg.voiceMedia?.mediaId) {
         ids.add(msg.voiceMedia.mediaId);
+      }
+      if (msg.fileMedia?.mediaId) {
+        ids.add(msg.fileMedia.mediaId);
       }
     }
   }
@@ -412,7 +617,8 @@ export function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) {
     return `${Math.max(1, Math.round(bytes / 1024))}KB`;
   }
-  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  const mb = bytes / (1024 * 1024);
+  return `${mb.toFixed(1).replace(/\.0$/, '')}MB`;
 }
 
 export function extractFileType(filename: string): string {
@@ -435,7 +641,7 @@ export function createOutgoingMessage(
   rawText: string,
   sender: CharacterProfile = INITIAL_CHARACTERS[0],
   now: Date = new Date(),
-  override?: { timestamp?: string; dividerBefore?: string }
+  override?: { timestamp?: string; sentAt?: MessageDateTime; dividerBefore?: string }
 ): ChatMessage | null {
   const trimmed = rawText.trim();
   if (!trimmed) {
@@ -448,6 +654,7 @@ export function createOutgoingMessage(
     avatar: sender.avatarType,
     customAvatarMediaId: sender.customAvatarMediaId,
     timestamp: override?.timestamp ?? formatJapaneseTime(now),
+    sentAt: override?.sentAt ?? dateToMessageDateTime(now),
     dividerBefore: override?.dividerBefore,
     text: trimmed,
   };
@@ -458,7 +665,7 @@ export function createImageMessage(
   sender: CharacterProfile,
   caption?: string,
   now: Date = new Date(),
-  override?: { timestamp?: string; dividerBefore?: string }
+  override?: { timestamp?: string; sentAt?: MessageDateTime; dividerBefore?: string }
 ): ChatMessage {
   const trimmed = caption?.trim();
   return {
@@ -468,9 +675,32 @@ export function createImageMessage(
     avatar: sender.avatarType,
     customAvatarMediaId: sender.customAvatarMediaId,
     timestamp: override?.timestamp ?? formatJapaneseTime(now),
+    sentAt: override?.sentAt ?? dateToMessageDateTime(now),
     dividerBefore: override?.dividerBefore,
     text: trimmed || undefined,
     imageMedia,
+  };
+}
+
+export function createFileMessage(
+  fileMedia: ChatFileMedia,
+  sender: CharacterProfile,
+  caption?: string,
+  now: Date = new Date(),
+  override?: { timestamp?: string; sentAt?: MessageDateTime; dividerBefore?: string }
+): ChatMessage {
+  const trimmed = caption?.trim();
+  return {
+    id: `msg-${now.getTime()}-${Math.random().toString(36).slice(2, 7)}`,
+    memberId: sender.id,
+    username: sender.name,
+    avatar: sender.avatarType,
+    customAvatarMediaId: sender.customAvatarMediaId,
+    timestamp: override?.timestamp ?? formatJapaneseTime(now),
+    sentAt: override?.sentAt ?? dateToMessageDateTime(now),
+    dividerBefore: override?.dividerBefore,
+    text: trimmed || undefined,
+    fileMedia,
   };
 }
 
@@ -478,7 +708,7 @@ export function createVoiceMessage(
   voiceMedia: ChatVoiceMedia,
   sender: CharacterProfile,
   now: Date = new Date(),
-  override?: { timestamp?: string; dividerBefore?: string }
+  override?: { timestamp?: string; sentAt?: MessageDateTime; dividerBefore?: string }
 ): ChatMessage {
   return {
     id: `msg-${now.getTime()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -487,6 +717,7 @@ export function createVoiceMessage(
     avatar: sender.avatarType,
     customAvatarMediaId: sender.customAvatarMediaId,
     timestamp: override?.timestamp ?? formatJapaneseTime(now),
+    sentAt: override?.sentAt ?? dateToMessageDateTime(now),
     dividerBefore: override?.dividerBefore,
     voiceMedia,
   };
@@ -543,6 +774,26 @@ export function toggleMemberMute(members: VoiceMember[], memberId: string): {
       return member;
     }
     const nextMember = { ...member, muted: !member.muted };
+    updated = nextMember;
+    return nextMember;
+  });
+  return { members: next, updated };
+}
+
+export function setMemberOnlineStatus(
+  members: VoiceMember[],
+  memberId: string,
+  online: boolean
+): {
+  members: VoiceMember[];
+  updated: VoiceMember | null;
+} {
+  let updated: VoiceMember | null = null;
+  const next = members.map((member) => {
+    if (member.id !== memberId) {
+      return member;
+    }
+    const nextMember = { ...member, online };
     updated = nextMember;
     return nextMember;
   });
