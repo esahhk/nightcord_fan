@@ -135,6 +135,7 @@ export interface UiText {
   homepageLabel: string;
   tutorialLabel: string;
   githubLabel: string;
+  bilibiliLabel: string;
   playbackTimelineModeLabel: string;
   playbackTimelineExact: string;
   playbackTimelineExactSub: string;
@@ -287,6 +288,7 @@ const JA_TEXT: UiText = {
   homepageLabel: '個人ページ',
   tutorialLabel: 'ガイド',
   githubLabel: 'GitHub',
+  bilibiliLabel: 'Bilibili',
   playbackTimelineModeLabel: '時間流速モード',
   playbackTimelineExact: '完全に実時間流速',
   playbackTimelineExactSub: '設定した分差をそのまま実時間で待機（最短 0.5 秒）',
@@ -438,6 +440,7 @@ const ZH_TEXT: UiText = {
   homepageLabel: '个人主页',
   tutorialLabel: '新手教程',
   githubLabel: 'GitHub',
+  bilibiliLabel: 'B站',
   playbackTimelineModeLabel: '时间流速方式',
   playbackTimelineExact: '完全按发送时间流速',
   playbackTimelineExactSub: '严格按两条消息的真实时间差等待（最少 0.5 秒）',
@@ -593,6 +596,7 @@ const EN_TEXT: UiText = {
   homepageLabel: 'Home',
   tutorialLabel: 'Guide',
   githubLabel: 'GitHub',
+  bilibiliLabel: 'Bilibili',
   playbackTimelineModeLabel: 'Timeline Flow Mode',
   playbackTimelineExact: 'Exact Real-Time Flow',
   playbackTimelineExactSub: 'Wait the exact minute difference between messages (min 0.5s)',

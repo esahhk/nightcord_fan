@@ -433,19 +433,54 @@ export function Sidebar({
                 </button>
               </div>
 
-              <div className="mt-3 grid grid-cols-3 gap-1.5">
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 <a
                   href="https://github.com/esahhk/nightcord_fan"
                   target="_blank"
                   rel="noopener noreferrer"
                   data-action="link-github"
-                  className="flex flex-col items-center justify-center gap-1 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-1.5 py-2 text-[#DCD7E5] transition-colors hover:border-[#594A75] hover:bg-[#3A2D50] hover:text-white"
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-2 py-2.5 text-[#DCD7E5] transition-colors hover:border-[#594A75] hover:bg-[#3A2D50] hover:text-white"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M12 2C6.48 2 2 6.58 2 12.23c0 4.52 2.87 8.35 6.84 9.7.5.1.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.08 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05A9.38 9.38 0 0 1 12 6.84c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.64 1.03 2.76 0 3.95-2.34 4.82-4.57 5.07.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .27.18.6.69.49A10.22 10.22 0 0 0 22 12.23C22 6.58 17.52 2 12 2Z" />
                   </svg>
-                  <span className="text-[10px] font-medium leading-none text-[#BEB5D0]">
+                  <span className="text-[10.5px] font-medium leading-none text-[#BEB5D0]">
                     {t.githubLabel}
+                  </span>
+                </a>
+
+                <a
+                  href="https://space.bilibili.com/2058030122"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-action="link-bilibili"
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-2 py-2.5 text-[#DCD7E5] transition-colors hover:border-[#EB7F97]/55 hover:bg-[#3A2D50] hover:text-white"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M7.5 4.2L10 6.8M16.5 4.2L14 6.8"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                    />
+                    <rect
+                      x="3.2"
+                      y="6.8"
+                      width="17.6"
+                      height="12.6"
+                      rx="3.2"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                    />
+                    <path
+                      d="M8.8 11.6V14.2M15.2 11.6V14.2"
+                      stroke="currentColor"
+                      strokeWidth="1.9"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <span className="text-[10.5px] font-medium leading-none text-[#BEB5D0]">
+                    {t.bilibiliLabel}
                   </span>
                 </a>
 
@@ -454,7 +489,7 @@ export function Sidebar({
                   target="_blank"
                   rel="noopener noreferrer"
                   data-action="link-homepage"
-                  className="flex flex-col items-center justify-center gap-1 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-1.5 py-2 text-[#DCD7E5] transition-colors hover:border-[#594A75] hover:bg-[#3A2D50] hover:text-white"
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-2 py-2.5 text-[#DCD7E5] transition-colors hover:border-[#594A75] hover:bg-[#3A2D50] hover:text-white"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.75" />
@@ -466,7 +501,7 @@ export function Sidebar({
                       strokeLinejoin="round"
                     />
                   </svg>
-                  <span className="text-[10px] font-medium leading-none text-[#BEB5D0]">
+                  <span className="text-[10.5px] font-medium leading-none text-[#BEB5D0]">
                     {t.homepageLabel}
                   </span>
                 </a>
@@ -475,7 +510,7 @@ export function Sidebar({
                   type="button"
                   data-action="open-tutorial"
                   onClick={onOpenTutorial}
-                  className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-1.5 py-2 text-[#DCD7E5] transition-colors hover:border-[#64D2E6]/60 hover:bg-[#3A2D50] hover:text-white"
+                  className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-2 py-2.5 text-[#DCD7E5] transition-colors hover:border-[#64D2E6]/60 hover:bg-[#3A2D50] hover:text-white"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path
@@ -491,7 +526,7 @@ export function Sidebar({
                       strokeLinejoin="round"
                     />
                   </svg>
-                  <span className="text-[10px] font-medium leading-none text-[#BEB5D0]">
+                  <span className="text-[10.5px] font-medium leading-none text-[#BEB5D0]">
                     {t.tutorialLabel}
                   </span>
                 </button>
