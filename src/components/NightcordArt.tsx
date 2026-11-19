@@ -73,6 +73,11 @@ interface NightcordAvatarProps {
   className?: string;
 }
 
+const AVATAR_IMAGE_SRC: Partial<Record<AvatarType, string>> = {
+  amia: '/assets/avatars/amia.png',
+  enanan: '/assets/avatars/enanan.png',
+};
+
 export function NightcordAvatar({
   type,
   size,
@@ -82,9 +87,19 @@ export function NightcordAvatar({
 }: NightcordAvatarProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
   const clipId = useId();
+  const imageSrc = AVATAR_IMAGE_SRC[type];
+  const useImage = Boolean(imageSrc && !imageFailed);
 
   useEffect(() => {
+    setImageFailed(false);
+  }, [type]);
+
+  useEffect(() => {
+    if (useImage) {
+      return;
+    }
     const canvas = canvasRef.current;
     if (!canvas) {
       return;
@@ -104,22 +119,35 @@ export function NightcordAvatar({
     } catch {
       setCanvasReady(false);
     }
-  }, [type, size]);
+  }, [type, size, useImage]);
 
   return (
     <span
-      className={`relative inline-flex shrink-0 items-center justify-center ${className}`}
+      className={`relative inline-flex shrink-0 select-none items-center justify-center ${className}`}
       style={{ width: size, height: size }}
       data-testid={`avatar-${type}`}
     >
       <span className="relative block h-full w-full overflow-hidden rounded-full">
-        <canvas
-          ref={canvasRef}
-          className={`block h-full w-full ${canvasReady ? 'opacity-100' : 'opacity-0'}`}
-          aria-hidden="true"
-        />
-        {!canvasReady && (
-          <FallbackAvatarSvg type={type} clipId={clipId} />
+        {useImage ? (
+          <img
+            src={imageSrc}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+            onError={() => setImageFailed(true)}
+            className="pointer-events-none block h-full w-full select-none object-cover"
+          />
+        ) : (
+          <>
+            <canvas
+              ref={canvasRef}
+              className={`block h-full w-full ${canvasReady ? 'opacity-100' : 'opacity-0'}`}
+              aria-hidden="true"
+            />
+            {!canvasReady && (
+              <FallbackAvatarSvg type={type} clipId={clipId} />
+            )}
+          </>
         )}
       </span>
       {showOnlineDot && (

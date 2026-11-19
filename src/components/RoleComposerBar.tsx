@@ -88,17 +88,33 @@ export function RoleComposerBar({
         dateTimeToEpochMinutes(parsedCustom) < dateTimeToEpochMinutes(lastMessageDateTime)));
   const minTimeLabel = lastMessageDateTime ? formatDateTimeBadge(lastMessageDateTime) : null;
 
+  const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
+
   const clearLongPress = () => {
     if (longPressTimerRef.current !== null) {
       window.clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
+    pressOriginRef.current = null;
   };
 
-  const startCharLongPress = (charId: string) => {
+  const handleCharPointerMove = (x: number, y: number) => {
+    const origin = pressOriginRef.current;
+    if (!origin) {
+      return;
+    }
+    if (Math.hypot(x - origin.x, y - origin.y) > 8) {
+      clearLongPress();
+    }
+  };
+
+  const startCharLongPress = (charId: string, x: number, y: number) => {
     clearLongPress();
+    pressOriginRef.current = { x, y };
     longPressTimerRef.current = window.setTimeout(() => {
+      window.getSelection?.()?.removeAllRanges();
       setCharMenuId(charId);
+      pressOriginRef.current = null;
     }, 450);
   };
 
@@ -163,16 +179,18 @@ export function RoleComposerBar({
                   type="button"
                   data-action={`select-char-${char.id}`}
                   aria-pressed={active}
-                  onPointerDown={() => startCharLongPress(char.id)}
+                  onPointerDown={(e) => startCharLongPress(char.id, e.clientX, e.clientY)}
+                  onPointerMove={(e) => handleCharPointerMove(e.clientX, e.clientY)}
                   onPointerUp={clearLongPress}
                   onPointerLeave={clearLongPress}
                   onPointerCancel={clearLongPress}
                   onContextMenu={(e) => {
                     e.preventDefault();
+                    window.getSelection?.()?.removeAllRanges();
                     setCharMenuId(char.id);
                   }}
                   onClick={() => onSelectCharacter(char)}
-                  className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[6px] px-2 py-1 text-[12px] font-medium transition-colors ${
+                  className={`flex shrink-0 cursor-pointer touch-manipulation select-none items-center gap-1.5 rounded-[6px] px-2 py-1 text-[12px] font-medium transition-colors ${
                     active
                       ? 'bg-[#473A5C] text-white ring-1 ring-[#64D2E6]/60'
                       : 'bg-[#362B47] text-[#C2B8D3] hover:bg-[#413455] hover:text-white'

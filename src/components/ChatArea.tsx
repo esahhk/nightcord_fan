@@ -126,19 +126,37 @@ export function ChatArea({
     }
   }, [mode]);
 
+  const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
+
   const clearLongPress = () => {
     if (longPressTimerRef.current !== null) {
       window.clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
+    pressOriginRef.current = null;
   };
 
-  const startLongPress = (callback: () => void) => {
+  const handleLongPressMove = (x: number, y: number) => {
+    const origin = pressOriginRef.current;
+    if (!origin) {
+      return;
+    }
+    if (Math.hypot(x - origin.x, y - origin.y) > 8) {
+      clearLongPress();
+    }
+  };
+
+  const startLongPress = (callback: () => void, x: number, y: number) => {
     if (mode !== 'studio') {
       return;
     }
     clearLongPress();
-    longPressTimerRef.current = window.setTimeout(callback, 450);
+    pressOriginRef.current = { x, y };
+    longPressTimerRef.current = window.setTimeout(() => {
+      window.getSelection?.()?.removeAllRanges();
+      callback();
+      pressOriginRef.current = null;
+    }, 450);
   };
 
   const handleMentionPick = (name: string) => {
@@ -220,23 +238,29 @@ export function ChatArea({
 
                 <div
                   data-message-id={msg.id}
-                  onPointerDown={() =>
-                    startLongPress(() => {
-                      setAvatarMenuMsgId(null);
-                      setDeleteMenuMsgId(msg.id);
-                    })
+                  onPointerDown={(e) =>
+                    startLongPress(
+                      () => {
+                        setAvatarMenuMsgId(null);
+                        setDeleteMenuMsgId(msg.id);
+                      },
+                      e.clientX,
+                      e.clientY
+                    )
                   }
+                  onPointerMove={(e) => handleLongPressMove(e.clientX, e.clientY)}
                   onPointerUp={clearLongPress}
                   onPointerLeave={clearLongPress}
                   onPointerCancel={clearLongPress}
                   onContextMenu={(e) => {
                     if (mode === 'studio') {
                       e.preventDefault();
+                      window.getSelection?.()?.removeAllRanges();
                       setAvatarMenuMsgId(null);
                       setDeleteMenuMsgId(msg.id);
                     }
                   }}
-                  className={`relative flex items-start gap-[13px] rounded-[6px] transition-colors hover:bg-[#2E243D]/30 ${
+                  className={`relative flex touch-manipulation select-none items-start gap-[13px] rounded-[6px] transition-colors hover:bg-[#2E243D]/30 ${
                     msg.topClipped ? '-mt-[11px]' : ''
                   } ${shouldAnimate ? 'nc-msg-enter' : ''}`}
                 >
@@ -247,10 +271,18 @@ export function ChatArea({
                       aria-label={`${msg.username}のプロフィール`}
                       onPointerDown={(e) => {
                         e.stopPropagation();
-                        startLongPress(() => {
-                          setDeleteMenuMsgId(null);
-                          setAvatarMenuMsgId(msg.id);
-                        });
+                        startLongPress(
+                          () => {
+                            setDeleteMenuMsgId(null);
+                            setAvatarMenuMsgId(msg.id);
+                          },
+                          e.clientX,
+                          e.clientY
+                        );
+                      }}
+                      onPointerMove={(e) => {
+                        e.stopPropagation();
+                        handleLongPressMove(e.clientX, e.clientY);
                       }}
                       onPointerUp={(e) => {
                         e.stopPropagation();
@@ -262,12 +294,13 @@ export function ChatArea({
                         if (mode === 'studio') {
                           e.preventDefault();
                           e.stopPropagation();
+                          window.getSelection?.()?.removeAllRanges();
                           setDeleteMenuMsgId(null);
                           setAvatarMenuMsgId(msg.id);
                         }
                       }}
                       onClick={() => onAvatarClick(msg.memberId, msg.username)}
-                      className="shrink-0 cursor-pointer rounded-full bg-transparent p-0"
+                      className="shrink-0 cursor-pointer touch-manipulation select-none rounded-full bg-transparent p-0"
                     >
                       <CharacterAvatar
                         avatarType={msg.avatar}

@@ -64,21 +64,36 @@ export function Sidebar({
   const [fromTemplate, setFromTemplate] = useState(false);
   const [memberMenuId, setMemberMenuId] = useState<string | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
+  const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
 
   const clearLongPress = () => {
     if (longPressTimerRef.current !== null) {
       window.clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
+    pressOriginRef.current = null;
   };
 
-  const startMemberLongPress = (memberId: string) => {
+  const handleMemberPointerMove = (x: number, y: number) => {
+    const origin = pressOriginRef.current;
+    if (!origin) {
+      return;
+    }
+    if (Math.hypot(x - origin.x, y - origin.y) > 8) {
+      clearLongPress();
+    }
+  };
+
+  const startMemberLongPress = (memberId: string, x: number, y: number) => {
     if (mode !== 'studio') {
       return;
     }
     clearLongPress();
+    pressOriginRef.current = { x, y };
     longPressTimerRef.current = window.setTimeout(() => {
+      window.getSelection?.()?.removeAllRanges();
       setMemberMenuId(memberId);
+      pressOriginRef.current = null;
     }, 450);
   };
 
@@ -380,17 +395,19 @@ export function Sidebar({
                 <div
                   key={member.id}
                   data-member-row={member.id}
-                  onPointerDown={() => startMemberLongPress(member.id)}
+                  onPointerDown={(e) => startMemberLongPress(member.id, e.clientX, e.clientY)}
+                  onPointerMove={(e) => handleMemberPointerMove(e.clientX, e.clientY)}
                   onPointerUp={clearLongPress}
                   onPointerLeave={clearLongPress}
                   onPointerCancel={clearLongPress}
                   onContextMenu={(e) => {
                     if (mode === 'studio') {
                       e.preventDefault();
+                      window.getSelection?.()?.removeAllRanges();
                       setMemberMenuId(member.id);
                     }
                   }}
-                  className="relative mx-1.5 flex h-[36px] items-center justify-between rounded-[6px] pl-4 pr-3"
+                  className="relative mx-1.5 flex h-[36px] touch-manipulation select-none items-center justify-between rounded-[6px] pl-4 pr-3"
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2.5 py-1">
                     <NightcordAvatar
