@@ -25,6 +25,7 @@ import {
   parseNightcordBackup,
   resolveOutgoingTimestamp,
   setMemberOnlineStatus,
+  setMemberPresenceStatus,
   toggleMemberMute,
   upsertCharacter,
 } from './nightcordState';
@@ -136,8 +137,13 @@ test('toggleMemberMute, setMemberOnlineStatus, appendInputToken, and invokeActio
 
   const offlineRes = setMemberOnlineStatus(INITIAL_VOICE_MEMBERS, 'k', false);
   assert.equal(offlineRes.updated?.online, false);
-  const onlineRes = setMemberOnlineStatus(offlineRes.members, 'k', true);
-  assert.equal(onlineRes.updated?.online, true);
+  assert.equal(offlineRes.updated?.status, 'offline');
+  const onlineOnlyRes = setMemberPresenceStatus(offlineRes.members, 'k', 'online');
+  assert.equal(onlineOnlyRes.updated?.online, true);
+  assert.equal(onlineOnlyRes.updated?.status, 'online');
+  const voiceRes = setMemberPresenceStatus(onlineOnlyRes.members, 'k', 'voice');
+  assert.equal(voiceRes.updated?.online, true);
+  assert.equal(voiceRes.updated?.status, 'voice');
 
   assert.equal(appendInputToken('了解', '♪'), '了解♪');
 

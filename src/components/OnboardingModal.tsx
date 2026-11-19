@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { UiLanguage } from '../types/nightcord';
 import { getUiText } from '../utils/i18n';
 import { WorkChannelIcon } from './NightcordArt';
@@ -17,6 +17,12 @@ export function OnboardingModal({
   onComplete,
 }: OnboardingModalProps) {
   const [stepIndex, setStepIndex] = useState(0);
+
+  useEffect(() => {
+    if (open) {
+      setStepIndex(0);
+    }
+  }, [open]);
 
   if (!open) {
     return null;

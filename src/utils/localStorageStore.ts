@@ -206,7 +206,22 @@ export function saveLanguage(lang: UiLanguage): void {
 
 export function loadSavedMembers(): VoiceMember[] | null {
   const data = readJson<VoiceMember[]>(STORAGE_KEYS.members);
-  return Array.isArray(data) && data.length > 0 ? data : null;
+  if (!Array.isArray(data) || data.length === 0) {
+    return null;
+  }
+  return data.map((member) => {
+    const status =
+      member.status === 'online' || member.status === 'voice' || member.status === 'offline'
+        ? member.status
+        : member.online === false
+          ? 'offline'
+          : 'voice';
+    return {
+      ...member,
+      status,
+      online: status !== 'offline',
+    };
+  });
 }
 
 export function saveMembers(members: VoiceMember[]): void {

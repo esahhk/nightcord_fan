@@ -11,12 +11,15 @@ export interface CharacterProfile {
   customAvatarMediaId?: string;
 }
 
+export type MemberPresenceStatus = 'online' | 'voice' | 'offline';
+
 export interface VoiceMember {
   id: string;
   name: string;
   avatar: AvatarType;
   muted: boolean;
   online: boolean;
+  status: MemberPresenceStatus;
 }
 
 export interface ChatAttachment {

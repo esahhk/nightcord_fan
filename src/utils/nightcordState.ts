@@ -7,16 +7,17 @@ import type {
   ChatVoiceMedia,
   Conversation,
   FileMediaKind,
+  MemberPresenceStatus,
   MessageDateTime,
   NightcordActions,
   VoiceMember,
 } from '../types/nightcord';
 
 export const INITIAL_VOICE_MEMBERS: VoiceMember[] = [
-  { id: 'k', name: 'K', avatar: 'k-pink', muted: false, online: true },
-  { id: 'yuki', name: '雪', avatar: 'yuki', muted: false, online: true },
-  { id: 'enanan', name: 'えななん', avatar: 'enanan', muted: false, online: true },
-  { id: 'amia', name: 'Amia', avatar: 'amia', muted: false, online: true },
+  { id: 'k', name: 'K', avatar: 'k-pink', muted: false, online: true, status: 'voice' },
+  { id: 'yuki', name: '雪', avatar: 'yuki', muted: false, online: true, status: 'voice' },
+  { id: 'enanan', name: 'えななん', avatar: 'enanan', muted: false, online: true, status: 'voice' },
+  { id: 'amia', name: 'Amia', avatar: 'amia', muted: false, online: true, status: 'voice' },
 ];
 
 export const INITIAL_CHARACTERS: CharacterProfile[] = [
@@ -780,10 +781,10 @@ export function toggleMemberMute(members: VoiceMember[], memberId: string): {
   return { members: next, updated };
 }
 
-export function setMemberOnlineStatus(
+export function setMemberPresenceStatus(
   members: VoiceMember[],
   memberId: string,
-  online: boolean
+  status: MemberPresenceStatus
 ): {
   members: VoiceMember[];
   updated: VoiceMember | null;
@@ -793,11 +794,26 @@ export function setMemberOnlineStatus(
     if (member.id !== memberId) {
       return member;
     }
-    const nextMember = { ...member, online };
+    const nextMember: VoiceMember = {
+      ...member,
+      status,
+      online: status !== 'offline',
+    };
     updated = nextMember;
     return nextMember;
   });
   return { members: next, updated };
+}
+
+export function setMemberOnlineStatus(
+  members: VoiceMember[],
+  memberId: string,
+  online: boolean
+): {
+  members: VoiceMember[];
+  updated: VoiceMember | null;
+} {
+  return setMemberPresenceStatus(members, memberId, online ? 'voice' : 'offline');
 }
 
 export function appendInputToken(current: string, token: string): string {

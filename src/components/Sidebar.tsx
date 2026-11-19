@@ -1,6 +1,12 @@
 import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import type { AppMode, Conversation, UiLanguage, VoiceMember } from '../types/nightcord';
+import type {
+  AppMode,
+  Conversation,
+  MemberPresenceStatus,
+  UiLanguage,
+  VoiceMember,
+} from '../types/nightcord';
 import { getUiText } from '../utils/i18n';
 import { NightcordAvatar, WorkChannelIcon } from './NightcordArt';
 
@@ -26,10 +32,11 @@ interface SidebarProps {
   onVoiceToggle: () => void;
   onOfflineToggle: () => void;
   onMicToggle: (member: VoiceMember) => void;
-  onSetMemberOnline: (member: VoiceMember, online: boolean) => void;
+  onSetMemberStatus: (member: VoiceMember, status: MemberPresenceStatus) => void;
   onExportData: () => void;
   onTriggerImportData: () => void;
   onRequestClearCache: () => void;
+  onOpenTutorial: () => void;
 }
 
 export function Sidebar({
@@ -54,17 +61,23 @@ export function Sidebar({
   onVoiceToggle,
   onOfflineToggle,
   onMicToggle,
-  onSetMemberOnline,
+  onSetMemberStatus,
   onExportData,
   onTriggerImportData,
   onRequestClearCache,
+  onOpenTutorial,
 }: SidebarProps) {
   const t = getUiText(lang);
   const [newTitle, setNewTitle] = useState('');
   const [fromTemplate, setFromTemplate] = useState(false);
+  const [createExpanded, setCreateExpanded] = useState(false);
   const [memberMenuId, setMemberMenuId] = useState<string | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
+
+  const onlineMembers = members.filter((m) => m.status === 'online');
+  const voiceMembers = members.filter((m) => m.status === 'voice');
+  const offlineMembers = members.filter((m) => m.status === 'offline');
 
   const clearLongPress = () => {
     if (longPressTimerRef.current !== null) {
@@ -105,6 +118,52 @@ export function Sidebar({
     onCreateConversation(newTitle, fromTemplate);
     setNewTitle('');
     setFromTemplate(false);
+    setCreateExpanded(false);
+  };
+
+  const renderStatusPopover = (member: VoiceMember) => {
+    if (mode !== 'studio' || memberMenuId !== member.id) {
+      return null;
+    }
+    const options: { value: MemberPresenceStatus; label: string; dotClass: string }[] = [
+      { value: 'online', label: t.statusOnlineBtn, dotClass: 'bg-[#55D8C1]' },
+      { value: 'voice', label: t.statusVoiceBtn, dotClass: 'bg-[#64D2E6]' },
+      { value: 'offline', label: t.statusOfflineBtn, dotClass: 'bg-[#857A99]' },
+    ];
+    return (
+      <div
+        role="menu"
+        className="nc-modal-enter absolute left-3 top-[38px] z-40 min-w-[144px] rounded-[9px] border border-[#524468] bg-[#211A2C] p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.62)]"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        {options.map((opt) => {
+          const isCurrent = member.status === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              data-action={`set-member-status-${opt.value}`}
+              onClick={() => {
+                onSetMemberStatus(member, opt.value);
+                setMemberMenuId(null);
+              }}
+              className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-[6px] px-2.5 py-1.5 text-left text-[12px] transition-colors ${
+                isCurrent
+                  ? 'bg-[#3C2F52] font-medium text-white'
+                  : 'text-[#DCD7E5] hover:bg-[#342946] hover:text-white'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <span className={`h-2 w-2 rounded-full ${opt.dotClass}`} />
+                <span>{opt.label}</span>
+              </span>
+              {isCurrent && <span className="text-[10px] text-[#64D2E6]">✓</span>}
+            </button>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -114,94 +173,102 @@ export function Sidebar({
           type="button"
           aria-label="サイドバーを閉じる"
           onClick={onCloseMobile}
-          className="fixed inset-x-0 bottom-0 top-[28px] z-30 bg-black/50 md:hidden"
+          className="fixed inset-0 z-20 bg-black/50 md:hidden"
         />
       )}
+
+      {serverMenuOpen && (
+        <div
+          aria-hidden="true"
+          onClick={onCloseServerMenu}
+          className="fixed inset-0 z-30 bg-transparent"
+        />
+      )}
+
+      {memberMenuId && (
+        <div
+          aria-hidden="true"
+          onClick={() => setMemberMenuId(null)}
+          className="fixed inset-0 z-30 bg-transparent"
+        />
+      )}
+
       <aside
-        className={`fixed bottom-0 left-0 top-[28px] z-40 flex w-[265px] max-w-[82vw] shrink-0 select-none flex-col border-r border-[#241C30] bg-[#2E243D] transition-transform duration-200 ease-out md:static md:top-auto md:z-auto md:h-full md:w-[230px] md:max-w-none md:translate-x-0 lg:w-[255px] ${
-          mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+        className={`fixed bottom-0 left-0 top-[28px] z-30 flex w-[238px] max-w-[82vw] shrink-0 flex-col border-r border-[#241B30] bg-[#2E243D] transition-transform duration-200 md:static md:z-auto md:w-[228px] md:translate-x-0 ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="relative flex h-[52px] w-full shrink-0 items-center justify-between border-b border-[#241C30]">
+        <div className="relative flex h-[54px] shrink-0 items-center border-b border-[#241B30] px-4">
           <button
             type="button"
             data-action="server-menu"
             aria-label="サーバーメニュー：25時、ナイトコードで。"
             aria-expanded={serverMenuOpen}
             onClick={onToggleServerMenu}
-            className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2 px-4 text-left transition-colors hover:bg-[#362B47]"
+            className="flex w-full cursor-pointer items-center justify-between gap-2 text-left text-[13.5px] font-medium tracking-[0.02em] text-[#EAE6F1] transition-colors hover:text-white"
           >
-            <span className="truncate text-[14px] font-bold tracking-[0.01em] text-[#EFEBF5]">
-              25時、ナイトコードで。
-            </span>
-            <span
-              className="inline-flex shrink-0 items-center text-[#9A90A8] transition-transform duration-150"
-              style={{ transform: serverMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+            <span className="truncate">25時、ナイトコードで。</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              className={`shrink-0 text-[#9B90AD] transition-transform duration-150 ${
+                serverMenuOpen ? 'rotate-180' : ''
+              }`}
+              aria-hidden="true"
             >
-              <svg width="11" height="7" viewBox="0 0 11 7" fill="none" aria-hidden="true">
-                <path
-                  d="M1.5 1.5L5.5 5.5L9.5 1.5"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-          </button>
-          <button
-            type="button"
-            data-action="sidebar-close"
-            aria-label="メニューを閉じる"
-            onClick={onCloseMobile}
-            className="mr-2 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md text-[#9A90A8] transition-colors hover:bg-[#362B47] hover:text-white md:hidden"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path
-                d="M4 4L12 12M12 4L4 12"
+                d="M2.4 4.3L6 7.9L9.6 4.3"
                 stroke="currentColor"
-                strokeWidth="1.6"
+                strokeWidth="1.35"
                 strokeLinecap="round"
+                strokeLinejoin="round"
               />
             </svg>
           </button>
 
           {serverMenuOpen && (
-            <>
-              <button
-                type="button"
-                aria-label="閉じる"
-                onClick={onCloseServerMenu}
-                className="fixed inset-0 z-40 cursor-default bg-transparent"
-              />
-              <div
-                role="region"
-                aria-label={t.convListTitle}
-                className="nc-scroll absolute left-2 right-2 top-[56px] z-50 max-h-[calc(100dvh-100px)] rounded-[8px] border border-[#524468] bg-[#211A2C] p-2.5 shadow-[0_14px_34px_rgba(0,0,0,0.6)]"
-              >
-              <div className="mb-1.5 px-1 text-[11px] font-bold text-[#9A90A8]">
-                {t.convListTitle}
+            <div
+              role="menu"
+              className="nc-modal-enter nc-scroll absolute left-2.5 top-[58px] z-40 max-h-[calc(100dvh-100px)] w-[256px] max-w-[calc(100vw-20px)] rounded-[12px] border border-[#46385C] bg-[#241C32] p-3.5 shadow-[0_18px_42px_rgba(0,0,0,0.62)]"
+            >
+              <div className="mb-2 flex items-center justify-between px-0.5">
+                <span className="text-[11px] font-medium tracking-[0.04em] text-[#9E93B3]">
+                  {t.convListTitle}
+                </span>
+                <button
+                  type="button"
+                  data-action="open-create-conv"
+                  onClick={() => setCreateExpanded((prev) => !prev)}
+                  className="cursor-pointer rounded-[6px] bg-[#362B4A] px-2 py-0.5 text-[11px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#493B62] hover:text-white"
+                >
+                  {createExpanded ? t.cancel : `+ ${t.createConvTitle}`}
+                </button>
               </div>
-              <div className="nc-scroll mb-2.5 flex max-h-[180px] flex-col gap-1">
+
+              <div className="nc-scroll max-h-[144px] space-y-1 pr-0.5">
                 {conversations.map((conv) => {
-                  const isActive = conv.id === activeConversationId;
+                  const active = conv.id === activeConversationId;
                   return (
                     <div
                       key={conv.id}
-                      className={`flex items-center justify-between gap-1 rounded-[6px] px-2 py-1.5 transition-colors ${
-                        isActive ? 'bg-[#473A5C] text-white' : 'text-[#DCD7E5] hover:bg-[#332844]'
+                      className={`group flex items-center justify-between gap-1.5 rounded-[7px] px-2.5 py-2 text-[12.5px] transition-colors ${
+                        active
+                          ? 'bg-[#463A5D] text-white'
+                          : 'text-[#CFC7DD] hover:bg-[#332846] hover:text-white'
                       }`}
                     >
                       <button
                         type="button"
-                        data-action={`conv-select-${conv.id}`}
+                        data-action={`select-conv-${conv.id}`}
                         onClick={() => onSelectConversation(conv.id)}
-                        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 bg-transparent text-left text-[12.5px] font-medium"
+                        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
                       >
-                        <WorkChannelIcon size={15} />
-                        <span className="truncate">{conv.title}</span>
+                        <WorkChannelIcon size={14} />
+                        <span className="truncate font-medium">{conv.title}</span>
                         {conv.isTemplate && (
-                          <span className="shrink-0 rounded bg-[#2E243D] px-1.5 py-0.5 text-[9.5px] text-[#C2B8D3]">
+                          <span className="shrink-0 rounded bg-[#2A213B] px-1.5 py-0.5 text-[9.5px] text-[#ACA1C2]">
                             {t.templateBadge}
                           </span>
                         )}
@@ -209,12 +276,18 @@ export function Sidebar({
                       {!conv.isTemplate && (
                         <button
                           type="button"
-                          data-action={`conv-delete-${conv.id}`}
-                          aria-label={`${conv.title}を削除`}
+                          aria-label={`${conv.title}`}
                           onClick={() => onDeleteConversation(conv.id)}
-                          className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-[#9A90A8] hover:bg-[#2E243D] hover:text-[#EB7F97]"
+                          className="shrink-0 cursor-pointer rounded p-0.5 text-[#9B90AD] opacity-70 transition-colors hover:bg-[#4F3B5F] hover:text-[#EB7F97] hover:opacity-100"
                         >
-                          ×
+                          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                            <path
+                              d="M3 3L9 9M9 3L3 9"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                            />
+                          </svg>
                         </button>
                       )}
                     </div>
@@ -222,179 +295,214 @@ export function Sidebar({
                 })}
               </div>
 
-              <form
-                onSubmit={handleCreateSubmit}
-                className="flex flex-col gap-2 border-t border-[#332844] pt-2.5"
-              >
-                <div className="px-1 text-[11px] font-bold text-[#9A90A8]">
-                  {t.createConvTitle}
-                </div>
-                <input
-                  type="text"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  aria-label={t.createConvTitle}
-                  placeholder={t.createConvPlaceholder}
-                  className="w-full rounded-[6px] border border-[#453859] bg-[#332844] px-2.5 py-1.5 text-[12.5px] text-[#EFEBF5] outline-none placeholder:text-[#857A99] focus:border-[#64D2E6]"
-                />
-                <label className="flex cursor-pointer items-center gap-1.5 px-1 text-[11.5px] text-[#C2B8D3]">
-                  <input
-                    type="checkbox"
-                    checked={fromTemplate}
-                    onChange={(e) => setFromTemplate(e.target.checked)}
-                    className="accent-[#64D2E6]"
-                  />
-                  <span>{t.copyTemplateLabel}</span>
-                </label>
-                <button
-                  type="submit"
-                  data-action="conv-create-submit"
-                  className="w-full cursor-pointer rounded-[6px] bg-[#524468] py-1.5 text-[12px] font-bold text-white transition-colors hover:bg-[#61527A]"
+              {createExpanded && (
+                <form
+                  onSubmit={handleCreateSubmit}
+                  className="mt-2.5 space-y-2 rounded-[9px] border border-[#3C3052] bg-[#2D233E] p-2.5"
                 >
-                  {t.createConvBtn}
-                </button>
-              </form>
+                  <input
+                    type="text"
+                    data-action="new-conv-title"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder={t.createConvPlaceholder}
+                    className="h-[32px] w-full rounded-[6px] border border-[#47395E] bg-[#1E1729] px-2.5 text-[12px] text-[#EFEBF5] placeholder-[#827798] outline-none focus:border-[#64D2E6]/70"
+                  />
+                  <label className="flex cursor-pointer items-center gap-2 text-[11px] text-[#BEB5D0]">
+                    <input
+                      type="checkbox"
+                      checked={fromTemplate}
+                      onChange={(e) => setFromTemplate(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded accent-[#64D2E6]"
+                    />
+                    <span>{t.copyTemplateLabel}</span>
+                  </label>
+                  <button
+                    type="submit"
+                    data-action="confirm-create-conv"
+                    className="h-[30px] w-full cursor-pointer rounded-[6px] bg-[#52436B] text-[12px] font-medium text-white transition-colors hover:bg-[#625180]"
+                  >
+                    {t.createConvBtn}
+                  </button>
+                </form>
+              )}
 
-              <div className="mt-2.5 flex flex-col gap-1.5 border-t border-[#332844] pt-2.5">
-                <div className="px-1 text-[11px] font-bold text-[#9A90A8]">
-                  {t.dataSectionTitle}
+              <div className="mt-3 space-y-2.5 rounded-[9px] border border-[#362B49] bg-[#2C223C]/80 p-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-[#A499B8]">{t.langLabel}</span>
+                  <div className="flex items-center rounded-[6px] bg-[#1E172A] p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => onSelectLanguage('zh')}
+                      className={`cursor-pointer rounded-[5px] px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                        lang === 'zh'
+                          ? 'bg-[#4C3E65] text-white'
+                          : 'text-[#9B90AD] hover:text-white'
+                      }`}
+                    >
+                      中文
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSelectLanguage('ja')}
+                      className={`cursor-pointer rounded-[5px] px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                        lang === 'ja'
+                          ? 'bg-[#4C3E65] text-white'
+                          : 'text-[#9B90AD] hover:text-white'
+                      }`}
+                    >
+                      日本語
+                    </button>
+                  </div>
                 </div>
+
+                <div className="h-px w-full bg-[#3A2E4F]" />
+
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
                     type="button"
-                    data-action="data-export"
+                    data-action="export-local-data"
                     onClick={onExportData}
-                    className="cursor-pointer rounded-[6px] border border-[#4D3F66] bg-[#332844] px-2 py-1.5 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
+                    className="flex h-[30px] cursor-pointer items-center justify-center gap-1.5 rounded-[6px] bg-[#362B4A] px-2 text-[11.5px] font-medium text-[#E0DBEB] transition-colors hover:bg-[#46385F] hover:text-white"
                   >
-                    {t.exportDataBtn}
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path
+                        d="M8 2.5V10.5M8 10.5L5 7.5M8 10.5L11 7.5M3 13H13"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span className="truncate">{t.exportDataBtn}</span>
                   </button>
                   <button
                     type="button"
-                    data-action="data-import"
+                    data-action="import-local-data"
                     onClick={onTriggerImportData}
-                    className="cursor-pointer rounded-[6px] border border-[#4D3F66] bg-[#332844] px-2 py-1.5 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
+                    className="flex h-[30px] cursor-pointer items-center justify-center gap-1.5 rounded-[6px] bg-[#362B4A] px-2 text-[11.5px] font-medium text-[#E0DBEB] transition-colors hover:bg-[#46385F] hover:text-white"
                   >
-                    {t.importDataBtn}
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path
+                        d="M8 10.5V2.5M8 2.5L5 5.5M8 2.5L11 5.5M3 13H13"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span className="truncate">{t.importDataBtn}</span>
                   </button>
                 </div>
+
                 <button
                   type="button"
-                  data-action="open-clear-cache"
+                  data-action="clear-local-cache"
                   onClick={onRequestClearCache}
-                  className="w-full cursor-pointer rounded-[6px] border border-[#EB7F97]/40 bg-[#3B2335] px-2 py-1.5 text-[11.5px] font-medium text-[#FFB6C7] transition-colors hover:bg-[#4E2C45] hover:text-white"
+                  className="flex h-[28px] w-full cursor-pointer items-center justify-center gap-1.5 rounded-[6px] border border-[#5B354B]/70 bg-[#352030]/60 text-[11px] font-medium text-[#E7A3B4] transition-colors hover:border-[#EB7F97]/60 hover:bg-[#48273B] hover:text-[#FFD2DC]"
                 >
-                  {t.clearCacheBtn}
+                  <span>{t.clearCacheBtn}</span>
                 </button>
               </div>
 
-              <div className="mt-2.5 flex items-center justify-between border-t border-[#332844] pt-2">
-                <span className="px-1 text-[11px] text-[#9A90A8]">{t.langLabel}</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    data-action="lang-zh"
-                    aria-pressed={lang === 'zh'}
-                    onClick={() => onSelectLanguage('zh')}
-                    className={`cursor-pointer rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                      lang === 'zh'
-                        ? 'bg-[#473A5C] text-white'
-                        : 'text-[#9A90A8] hover:text-white'
-                    }`}
-                  >
-                    中文
-                  </button>
-                  <button
-                    type="button"
-                    data-action="lang-ja"
-                    aria-pressed={lang === 'ja'}
-                    onClick={() => onSelectLanguage('ja')}
-                    className={`cursor-pointer rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                      lang === 'ja'
-                        ? 'bg-[#473A5C] text-white'
-                        : 'text-[#9A90A8] hover:text-white'
-                    }`}
-                  >
-                    日本語
-                  </button>
-                </div>
+              <div className="mt-3 grid grid-cols-3 gap-1.5">
+                <a
+                  href="https://github.com/esahhk/nightcord_fan"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-action="link-github"
+                  className="flex flex-col items-center justify-center gap-1 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-1.5 py-2 text-[#DCD7E5] transition-colors hover:border-[#594A75] hover:bg-[#3A2D50] hover:text-white"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 2C6.48 2 2 6.58 2 12.23c0 4.52 2.87 8.35 6.84 9.7.5.1.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.08 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05A9.38 9.38 0 0 1 12 6.84c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.64 1.03 2.76 0 3.95-2.34 4.82-4.57 5.07.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .27.18.6.69.49A10.22 10.22 0 0 0 22 12.23C22 6.58 17.52 2 12 2Z" />
+                  </svg>
+                  <span className="text-[10px] font-medium leading-none text-[#BEB5D0]">
+                    {t.githubLabel}
+                  </span>
+                </a>
+
+                <a
+                  href="https://esahhk.xyz"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-action="link-homepage"
+                  className="flex flex-col items-center justify-center gap-1 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-1.5 py-2 text-[#DCD7E5] transition-colors hover:border-[#594A75] hover:bg-[#3A2D50] hover:text-white"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.75" />
+                    <path
+                      d="M3.5 12H20.5M12 3C14.5 5.4 15.8 8.5 15.8 12C15.8 15.5 14.5 18.6 12 21C9.5 18.6 8.2 15.5 8.2 12C8.2 8.5 9.5 5.4 12 3Z"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span className="text-[10px] font-medium leading-none text-[#BEB5D0]">
+                    {t.homepageLabel}
+                  </span>
+                </a>
+
+                <button
+                  type="button"
+                  data-action="open-tutorial"
+                  onClick={onOpenTutorial}
+                  className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-1.5 py-2 text-[#DCD7E5] transition-colors hover:border-[#64D2E6]/60 hover:bg-[#3A2D50] hover:text-white"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M4.5 6.5C4.5 5.4 5.4 4.5 6.5 4.5H11.5C12.6 4.5 13.5 5.4 13.5 6.5V19.5C13.5 18.7 12.8 18 12 18H6.5C5.4 18 4.5 17.1 4.5 16V6.5Z"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M19.5 6.5C19.5 5.4 18.6 4.5 17.5 4.5H15C14.2 4.5 13.5 5.2 13.5 6V19.5C13.5 18.7 14.2 18 15 18H17.5C18.6 18 19.5 17.1 19.5 16V6.5Z"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span className="text-[10px] font-medium leading-none text-[#BEB5D0]">
+                    {t.tutorialLabel}
+                  </span>
+                </button>
               </div>
 
-              <div className="mt-2 flex flex-col gap-1.5 border-t border-[#332844] pt-2 text-[11px]">
-                <div className="px-1 font-bold text-[#9A90A8]">{t.linksSectionTitle}</div>
-                <div className="flex flex-wrap items-center gap-1.5 px-1">
-                  <a
-                    href="https://esahhk.xyz"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-action="link-esahhk"
-                    className="rounded border border-[#4D3F66] bg-[#332844] px-2 py-0.5 text-[#64D2E6] transition-colors hover:bg-[#473A5C] hover:text-white"
-                  >
-                    esahhk.xyz
-                  </a>
-                  <a
-                    href="https://github.com/esahhk/nightcord_fan"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-action="link-github"
-                    className="rounded border border-[#4D3F66] bg-[#332844] px-2 py-0.5 text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white"
-                  >
-                    GitHub
-                  </a>
-                </div>
-                <div className="px-1 text-[10.5px] text-[#9A90A8]">
-                  <span>{t.reportIssueLabel}: </span>
-                  <a
-                    href="mailto:esahhk@outlook.com"
-                    data-action="link-email"
-                    className="text-[#C2B8D3] underline hover:text-white"
-                  >
-                    esahhk@outlook.com
-                  </a>
-                </div>
+              <div className="mt-2.5 flex items-center justify-center gap-1.5 border-t border-[#342946] pt-2 text-[10.5px] text-[#8E83A3]">
+                <span>{t.reportIssueLabel}:</span>
+                <a
+                  href="mailto:esahhk@outlook.com"
+                  className="text-[#AEA3C4] underline decoration-[#594B72] underline-offset-2 transition-colors hover:text-white"
+                >
+                  esahhk@outlook.com
+                </a>
               </div>
             </div>
-            </>
           )}
         </div>
 
-        <div className="nc-scroll flex-1 pb-4">
-          <div className="mx-2.5 my-3">
+        <div className="nc-scroll flex flex-1 flex-col pt-3">
+          <div className="px-2.5">
             <button
               type="button"
               data-action="channel-work"
               aria-label={`チャンネル：${activeChannelTitle}`}
-              aria-current="page"
               onClick={() => onChannelSelect(activeConversationId)}
-              className="flex h-[38px] w-full cursor-pointer items-center gap-2.5 rounded-[6px] bg-[#473A5C] px-3 text-left text-white transition-colors"
+              className="flex h-[34px] w-full cursor-pointer items-center gap-2.5 rounded-[6px] bg-[#3E3252] px-2.5 text-left text-[13.5px] font-medium text-[#FFFFFF] transition-colors hover:bg-[#493B5E]"
             >
-              <WorkChannelIcon size={22} />
-              <span className="truncate text-[14px] font-semibold">{activeChannelTitle}</span>
+              <WorkChannelIcon size={19} />
+              <span className="truncate">{activeChannelTitle}</span>
             </button>
           </div>
 
-          <button
-            type="button"
-            data-action="toggle-voice-category"
-            aria-expanded={voiceExpanded}
-            onClick={onVoiceToggle}
-            className="flex w-full cursor-pointer items-center gap-1.5 px-4 pb-1.5 pt-2.5 text-left text-[11px] font-bold text-[#9A90A8] transition-colors hover:text-[#DCD7E5]"
-          >
-            <span
-              className="inline-block transition-transform duration-150"
-              style={{ transform: voiceExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}
-              aria-hidden="true"
-            >
-              &gt;
-            </span>
-            <span>ボイスチャット</span>
-          </button>
-
-          {voiceExpanded && (
-            <div className="mb-3 flex flex-col gap-0.5">
-              {members.map((member) => (
+          {onlineMembers.length > 0 && (
+            <div className="mt-2.5 flex flex-col gap-0.5">
+              {onlineMembers.map((member) => (
                 <div
                   key={member.id}
                   data-member-row={member.id}
+                  data-member-status={member.status}
                   onPointerDown={(e) => startMemberLongPress(member.id, e.clientX, e.clientY)}
                   onPointerMove={(e) => handleMemberPointerMove(e.clientX, e.clientY)}
                   onPointerUp={clearLongPress}
@@ -414,13 +522,65 @@ export function Sidebar({
                       type={member.avatar}
                       size={25}
                       showOnlineDot={true}
-                      isOnline={member.online}
+                      isOnline={true}
                     />
-                    <span
-                      className={`truncate text-[13px] font-medium ${
-                        member.online ? 'text-[#DCD7E5]' : 'text-[#857A99]'
-                      }`}
-                    >
+                    <span className="truncate text-[13px] font-medium text-[#ECE8F4]">
+                      {member.name}
+                    </span>
+                  </div>
+                  {renderStatusPopover(member)}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button
+            type="button"
+            data-action="voice-category"
+            aria-expanded={voiceExpanded}
+            onClick={onVoiceToggle}
+            className="mt-4 mb-1.5 flex w-full cursor-pointer items-center gap-1.5 px-3.5 text-left text-[11px] font-medium tracking-[0.02em] text-[#9E95B0] transition-colors hover:text-[#CFC8DC]"
+          >
+            <span
+              className={`inline-block text-[10px] transition-transform duration-150 ${
+                voiceExpanded ? 'rotate-0' : '-rotate-90'
+              }`}
+              aria-hidden="true"
+            >
+              &gt;
+            </span>
+            <span>ボイスチャット</span>
+          </button>
+
+          {voiceExpanded && (
+            <div className="mb-3 flex flex-col gap-0.5">
+              {voiceMembers.map((member) => (
+                <div
+                  key={member.id}
+                  data-member-row={member.id}
+                  data-member-status={member.status}
+                  onPointerDown={(e) => startMemberLongPress(member.id, e.clientX, e.clientY)}
+                  onPointerMove={(e) => handleMemberPointerMove(e.clientX, e.clientY)}
+                  onPointerUp={clearLongPress}
+                  onPointerLeave={clearLongPress}
+                  onPointerCancel={clearLongPress}
+                  onContextMenu={(e) => {
+                    if (mode === 'studio') {
+                      e.preventDefault();
+                      window.getSelection?.()?.removeAllRanges();
+                      setMemberMenuId(member.id);
+                    }
+                  }}
+                  className="relative mx-1.5 flex h-[36px] touch-manipulation select-none items-center justify-between rounded-[6px] pl-4 pr-3"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5 py-1">
+                    <NightcordAvatar
+                      type={member.avatar}
+                      size={25}
+                      showOnlineDot={true}
+                      isOnline={true}
+                    />
+                    <span className="truncate text-[13px] font-medium text-[#DCD7E5]">
                       {member.name}
                     </span>
                   </div>
@@ -429,60 +589,54 @@ export function Sidebar({
                     data-action={`mic-${member.id}`}
                     aria-label={`${member.name}のマイク切替`}
                     aria-pressed={member.muted}
-                    title="マイク切替"
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => onMicToggle(member)}
-                    className={`flex cursor-pointer items-center justify-center rounded p-1 transition-colors ${
+                    className={`flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded transition-colors ${
                       member.muted
-                        ? 'text-[#EB7F97] hover:text-[#F49EB2]'
-                        : 'text-[#8C829C] hover:text-[#EFEBF5]'
+                        ? 'text-[#EB7F97] hover:bg-[#3A2E4D]'
+                        : 'text-[#8F85A3] hover:bg-[#3A2E4D] hover:text-[#D5CEE2]'
                     }`}
                   >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-                      <path d="M7 1.5C5.9 1.5 5 2.4 5 3.5V7.5C5 8.6 5.9 9.5 7 9.5C8.1 9.5 9 8.6 9 7.5V3.5C9 2.4 8.1 1.5 7 1.5Z" />
-                      <path d="M3.2 6.8V7.5C3.2 9.4 4.6 11.0 6.4 11.2V13H7.6V11.2C9.4 11.0 10.8 9.4 10.8 7.5V6.8H9.6V7.5C9.6 8.9 8.4 10.1 7 10.1C5.6 10.1 4.4 8.9 4.4 7.5V6.8H3.2Z" />
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <rect x="9" y="2.5" width="6" height="11.5" rx="3" fill="currentColor" />
+                      <path
+                        d="M5.5 11.5a6.5 6.5 0 0 0 13 0"
+                        stroke="currentColor"
+                        strokeWidth="2.1"
+                        strokeLinecap="round"
+                      />
+                      <line
+                        x1="12"
+                        y1="18"
+                        x2="12"
+                        y2="21.5"
+                        stroke="currentColor"
+                        strokeWidth="2.1"
+                        strokeLinecap="round"
+                      />
+                      <line
+                        x1="8.5"
+                        y1="21.5"
+                        x2="15.5"
+                        y2="21.5"
+                        stroke="currentColor"
+                        strokeWidth="2.1"
+                        strokeLinecap="round"
+                      />
                       {member.muted && (
                         <line
-                          x1="2"
-                          y1="2"
-                          x2="12"
-                          y2="12"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
+                          x1="4"
+                          y1="4"
+                          x2="20"
+                          y2="20"
+                          stroke="#EB7F97"
+                          strokeWidth="2.4"
                           strokeLinecap="round"
                         />
                       )}
                     </svg>
                   </button>
-
-                  {mode === 'studio' && memberMenuId === member.id && (
-                    <>
-                      <button
-                        type="button"
-                        aria-label="閉じる"
-                        onClick={() => setMemberMenuId(null)}
-                        className="fixed inset-0 z-40 cursor-default bg-transparent"
-                      />
-                      <div className="nc-modal-enter absolute left-3 top-[38px] z-50 min-w-[130px] rounded-[8px] border border-[#524468] bg-[#211A2C] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.55)]">
-                        <button
-                          type="button"
-                          data-action={`member-toggle-online-${member.id}`}
-                          onClick={() => {
-                            onSetMemberOnline(member, !member.online);
-                            setMemberMenuId(null);
-                          }}
-                          className="flex w-full cursor-pointer items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left text-[12px] font-medium text-[#EFEBF5] transition-colors hover:bg-[#473A5C]"
-                        >
-                          <span
-                            className={`h-2 w-2 rounded-full ${
-                              member.online ? 'bg-[#857A99]' : 'bg-[#55D8C1]'
-                            }`}
-                          />
-                          <span>{member.online ? t.setOfflineBtn : t.setOnlineBtn}</span>
-                        </button>
-                      </div>
-                    </>
-                  )}
+                  {renderStatusPopover(member)}
                 </div>
               ))}
             </div>
@@ -490,14 +644,15 @@ export function Sidebar({
 
           <button
             type="button"
-            data-action="toggle-offline-category"
+            data-action="offline-category"
             aria-expanded={offlineExpanded}
             onClick={onOfflineToggle}
-            className="flex w-full cursor-pointer items-center gap-1.5 px-4 pb-1.5 pt-2.5 text-left text-[11px] font-bold text-[#9A90A8] transition-colors hover:text-[#DCD7E5]"
+            className="mt-1 mb-1.5 flex w-full cursor-pointer items-center gap-1.5 px-3.5 text-left text-[11px] font-medium tracking-[0.02em] text-[#9E95B0] transition-colors hover:text-[#CFC8DC]"
           >
             <span
-              className="inline-block transition-transform duration-150"
-              style={{ transform: offlineExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+              className={`inline-block text-[10px] transition-transform duration-150 ${
+                offlineExpanded ? 'rotate-0' : '-rotate-90'
+              }`}
               aria-hidden="true"
             >
               &gt;
@@ -505,20 +660,42 @@ export function Sidebar({
             <span>オフライン</span>
           </button>
 
-          {offlineExpanded && (
-            <div className="flex flex-col gap-0.5 px-4 py-1.5 text-[12px] text-[#857A99]">
-              {members.filter((m) => !m.online).length === 0 ? (
-                <div className="px-2">オフラインのメンバーはいません</div>
-              ) : (
-                members
-                  .filter((m) => !m.online)
-                  .map((m) => (
-                    <div key={m.id} className="flex items-center gap-2 px-2 py-1">
-                      <NightcordAvatar type={m.avatar} size={20} showOnlineDot={true} isOnline={false} />
-                      <span className="truncate">{m.name}</span>
-                    </div>
-                  ))
-              )}
+          {offlineExpanded && offlineMembers.length > 0 && (
+            <div className="mb-3 flex flex-col gap-0.5">
+              {offlineMembers.map((member) => (
+                <div
+                  key={member.id}
+                  data-member-row={member.id}
+                  data-member-status={member.status}
+                  onPointerDown={(e) => startMemberLongPress(member.id, e.clientX, e.clientY)}
+                  onPointerMove={(e) => handleMemberPointerMove(e.clientX, e.clientY)}
+                  onPointerUp={clearLongPress}
+                  onPointerLeave={clearLongPress}
+                  onPointerCancel={clearLongPress}
+                  onContextMenu={(e) => {
+                    if (mode === 'studio') {
+                      e.preventDefault();
+                      window.getSelection?.()?.removeAllRanges();
+                      setMemberMenuId(member.id);
+                    }
+                  }}
+                  className="relative mx-1.5 flex h-[36px] touch-manipulation select-none items-center justify-between rounded-[6px] pl-4 pr-3"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5 py-1">
+                    <NightcordAvatar
+                      type={member.avatar}
+                      size={25}
+                      showOnlineDot={false}
+                      isOnline={false}
+                      className="opacity-50"
+                    />
+                    <span className="truncate text-[13px] font-medium text-[#8B819F]">
+                      {member.name}
+                    </span>
+                  </div>
+                  {renderStatusPopover(member)}
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -16,6 +16,7 @@ import type {
   Conversation,
   CustomMessageTime,
   FileMediaKind,
+  MemberPresenceStatus,
   NightcordActions,
   NightcordBackupPayload,
   PlaybackConfig,
@@ -63,7 +64,7 @@ import {
   invokeAction,
   parseNightcordBackup,
   resolveOutgoingTimestamp,
-  setMemberOnlineStatus,
+  setMemberPresenceStatus,
   toggleMemberMute,
   upsertCharacter,
 } from './utils/nightcordState';
@@ -109,10 +110,13 @@ export default function App({ actions }: AppProps) {
   const t = useMemo(() => getUiText(lang), [lang]);
 
   const [voiceExpanded, setVoiceExpanded] = useState(true);
-  const [offlineExpanded, setOfflineExpanded] = useState(false);
   const [members, setMembers] = useState<VoiceMember[]>(
     () => loadSavedMembers() ?? INITIAL_VOICE_MEMBERS
   );
+  const [offlineExpanded, setOfflineExpanded] = useState<boolean>(() => {
+    const saved = loadSavedMembers() ?? INITIAL_VOICE_MEMBERS;
+    return saved.some((m) => m.status === 'offline');
+  });
   const [inputValue, setInputValue] = useState('');
   const [formatActive, setFormatActive] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -567,16 +571,29 @@ export default function App({ actions }: AppProps) {
     }
   };
 
-  const handleSetMemberOnline = (member: VoiceMember, online: boolean) => {
-    const result = setMemberOnlineStatus(members, member.id, online);
+  const handleSetMemberStatus = (member: VoiceMember, status: MemberPresenceStatus) => {
+    const result = setMemberPresenceStatus(members, member.id, status);
     setMembers(result.members);
-    if (result.updated) {
-      showToast(
-        online
-          ? t.toastMemberOnline(result.updated.name)
-          : t.toastMemberOffline(result.updated.name)
-      );
+    if (status === 'offline') {
+      setOfflineExpanded(true);
+    } else if (status === 'voice') {
+      setVoiceExpanded(true);
     }
+    if (result.updated) {
+      if (status === 'online') {
+        showToast(t.toastMemberOnline(result.updated.name));
+      } else if (status === 'voice') {
+        showToast(t.toastMemberVoice(result.updated.name));
+      } else {
+        showToast(t.toastMemberOffline(result.updated.name));
+      }
+    }
+  };
+
+  const handleOpenTutorial = () => {
+    setServerMenuOpen(false);
+    setMobileSidebarOpen(false);
+    setShowOnboarding(true);
   };
 
   const handleChatHeaderClick = () => {
@@ -838,13 +855,14 @@ export default function App({ actions }: AppProps) {
           onVoiceToggle={handleVoiceToggle}
           onOfflineToggle={handleOfflineToggle}
           onMicToggle={handleMicToggle}
-          onSetMemberOnline={handleSetMemberOnline}
+          onSetMemberStatus={handleSetMemberStatus}
           onExportData={handleExportData}
           onTriggerImportData={() => importInputRef.current?.click()}
           onRequestClearCache={() => {
             setServerMenuOpen(false);
             setClearCacheOpen(true);
           }}
+          onOpenTutorial={handleOpenTutorial}
         />
         <ChatArea
           lang={lang}

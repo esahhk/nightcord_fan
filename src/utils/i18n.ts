@@ -125,6 +125,13 @@ export interface UiText {
   yearUnit: string;
   monthUnit: string;
   dayUnit: string;
+  statusOnlineBtn: string;
+  statusVoiceBtn: string;
+  statusOfflineBtn: string;
+  toastMemberVoice: (name: string) => string;
+  homepageLabel: string;
+  tutorialLabel: string;
+  githubLabel: string;
 }
 
 const JA_TEXT: UiText = {
@@ -260,6 +267,13 @@ const JA_TEXT: UiText = {
   yearUnit: '年',
   monthUnit: '月',
   dayUnit: '日',
+  statusOnlineBtn: 'オンライン',
+  statusVoiceBtn: 'ボイスチャット',
+  statusOfflineBtn: 'オフライン',
+  toastMemberVoice: (name) => `${name} をボイスチャットに移動しました`,
+  homepageLabel: '個人ページ',
+  tutorialLabel: 'ガイド',
+  githubLabel: 'GitHub',
 };
 
 const ZH_TEXT: UiText = {
@@ -331,8 +345,8 @@ const ZH_TEXT: UiText = {
   toastProfile: (name) => `${name} 的资料`,
   toastDownloading: (filename, sizeLabel) => `正在下载 ${filename} (${sizeLabel})...`,
   dataSectionTitle: '本地数据管理',
-  exportDataBtn: '导出本地文件',
-  importDataBtn: '导入本地文件',
+  exportDataBtn: '导出数据',
+  importDataBtn: '导入数据',
   clearCacheBtn: '一键清空本地缓存',
   clearModalTitle: '清空本地缓存',
   clearStep1Badge: '确认 1 / 2',
@@ -394,6 +408,13 @@ const ZH_TEXT: UiText = {
   yearUnit: '年',
   monthUnit: '月',
   dayUnit: '日',
+  statusOnlineBtn: '在线',
+  statusVoiceBtn: '语音聊天',
+  statusOfflineBtn: '离线',
+  toastMemberVoice: (name) => `已将 ${name} 设为语音聊天`,
+  homepageLabel: '个人主页',
+  tutorialLabel: '新手教程',
+  githubLabel: 'GitHub',
 };
 
 export function getUiText(lang: UiLanguage): UiText {
