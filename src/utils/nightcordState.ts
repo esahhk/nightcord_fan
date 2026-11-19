@@ -400,36 +400,48 @@ export function computeDisplayMessagesForPlayback(
   });
 }
 
-export const MAX_PLAYBACK_INTERVAL_MS = 40000;
+export const MIN_PLAYBACK_INTERVAL_MS = 500;
+export const MAX_PLAYBACK_INTERVAL_MS = 60000;
 
 export function computePlaybackDelayMs(
   messages: ChatMessage[],
   nextIndex: number,
   pacingMode: 'timeline' | 'even',
   evenIntervalSec: number = 2.5,
+  timelineSubMode: 'exact' | 'proportional' = 'proportional',
+  timelineScale: number = 60,
   baseNow: Date = new Date()
 ): number {
   if (pacingMode === 'even') {
     const safeSec = Number.isFinite(evenIntervalSec) ? evenIntervalSec : 2.5;
-    return Math.min(MAX_PLAYBACK_INTERVAL_MS, Math.max(500, Math.round(safeSec * 1000)));
+    return Math.min(
+      MAX_PLAYBACK_INTERVAL_MS,
+      Math.max(MIN_PLAYBACK_INTERVAL_MS, Math.round(safeSec * 1000))
+    );
   }
 
   if (nextIndex <= 0 || nextIndex >= messages.length) {
-    return 1200;
+    return 1000;
   }
 
   const prevDt = getMessageDateTime(messages[nextIndex - 1], baseNow);
   const nextDt = getMessageDateTime(messages[nextIndex], baseNow);
   if (!prevDt || !nextDt) {
-    return 2000;
+    return 1500;
   }
 
   const diffMin = Math.max(0, dateTimeToEpochMinutes(nextDt) - dateTimeToEpochMinutes(prevDt));
-  if (diffMin === 0) {
-    return 1200;
+
+  if (timelineSubMode === 'exact') {
+    if (diffMin === 0) {
+      return MIN_PLAYBACK_INTERVAL_MS;
+    }
+    return Math.max(MIN_PLAYBACK_INTERVAL_MS, diffMin * 60000);
   }
 
-  return Math.min(MAX_PLAYBACK_INTERVAL_MS, Math.max(1000, diffMin * 1000));
+  const safeScale = Number.isFinite(timelineScale) && timelineScale > 0 ? timelineScale : 60;
+  const scaledMs = Math.round((diffMin * 60000) / safeScale);
+  return Math.min(MAX_PLAYBACK_INTERVAL_MS, Math.max(MIN_PLAYBACK_INTERVAL_MS, scaledMs));
 }
 
 export function detectFileMediaKind(filename: string, mimeType: string = ''): FileMediaKind {

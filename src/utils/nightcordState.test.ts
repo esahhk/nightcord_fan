@@ -287,13 +287,20 @@ test('collectReferencedMediaIds and parseNightcordBackup handle valid and invali
   assert.equal(parseNightcordBackup('{"conversations":[]}'), null);
 });
 
-test('computePlaybackDelayMs respects timeline flow, even spacing, and 40s max cap', () => {
-  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 0, 'timeline'), 1200);
-  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 1, 'timeline'), 2000);
-  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 2, 'timeline'), MAX_PLAYBACK_INTERVAL_MS);
-  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 4, 'timeline'), 1000);
+test('computePlaybackDelayMs respects exact flow, proportional flow, fixed 0.5s-60s interval, and 0.5s floor', () => {
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 0, 'timeline'), 1000);
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 1, 'timeline', 2.5, 'proportional', 60), 2000);
+  assert.equal(
+    computePlaybackDelayMs(INITIAL_MESSAGES, 2, 'timeline', 2.5, 'proportional', 60),
+    MAX_PLAYBACK_INTERVAL_MS
+  );
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 4, 'timeline', 2.5, 'proportional', 60), 1000);
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 4, 'timeline', 2.5, 'proportional', 300), 500);
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 1, 'timeline', 2.5, 'exact'), 120000);
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 4, 'timeline', 2.5, 'exact'), 60000);
 
   assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 2, 'even', 3), 3000);
+  assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 2, 'even', 60), 60000);
   assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 2, 'even', 99), MAX_PLAYBACK_INTERVAL_MS);
   assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 2, 'even', 0.1), 500);
 });

@@ -132,6 +132,12 @@ export interface UiText {
   homepageLabel: string;
   tutorialLabel: string;
   githubLabel: string;
+  playbackTimelineModeLabel: string;
+  playbackTimelineExact: string;
+  playbackTimelineExactSub: string;
+  playbackTimelineProp: string;
+  playbackTimelinePropSub: string;
+  playbackSpeedLabel: (scale: number) => string;
 }
 
 const JA_TEXT: UiText = {
@@ -204,8 +210,8 @@ const JA_TEXT: UiText = {
   toastProfile: (name) => `${name} のプロフィール`,
   toastDownloading: (filename, sizeLabel) => `${filename} (${sizeLabel}) をダウンロード中...`,
   dataSectionTitle: 'ローカルデータ管理',
-  exportDataBtn: 'ファイルに書き出し',
-  importDataBtn: 'ファイルから読み込み',
+  exportDataBtn: '書出し',
+  importDataBtn: '読込み',
   clearCacheBtn: 'ローカルキャッシュを全消去',
   clearModalTitle: 'ローカルキャッシュの消去',
   clearStep1Badge: '確認 1 / 2',
@@ -231,18 +237,18 @@ const JA_TEXT: UiText = {
   playbackModalTitle: 'メッセージ自動再生',
   playbackModalSub: '没入モードでメッセージを1件ずつ順番に表示します。',
   playbackPacingLabel: '送信ペース',
-  playbackTimelineTitle: '送信時刻の流速に合わせる',
-  playbackTimelineSub: 'メッセージ間の時刻差に応じて間隔を調整（最大40秒）',
-  playbackEvenTitle: '等間隔で順番に送信',
-  playbackEvenSub: 'すべてのメッセージを一定の間隔で再生（最大40秒）',
-  playbackIntervalLabel: (sec) => `送信間隔：${sec}秒`,
+  playbackTimelineTitle: '送信時刻の流速で送信',
+  playbackTimelineSub: '完全実時間または等比例スピードで時間差を再現',
+  playbackEvenTitle: '固定時間間隔で送信',
+  playbackEvenSub: 'すべてのメッセージを一定の間隔で再生（0.5秒〜60秒）',
+  playbackIntervalLabel: (sec) => `固定送信間隔：${sec}秒`,
   playbackStartLabel: '開始位置',
   playbackStartEmpty: 'メッセージなし（最初から順番に表示）',
   playbackStartFromMsg: (index, username, timestamp, preview) =>
     `${index}件目から開始（${username}・${timestamp}）${preview}`,
   playbackNoMessages: '再生できるメッセージがありません。先にロール切替モードで作成してください。',
   playbackStartBtn: '開始',
-  playbackCapNote: '※ すべての送信間隔は最大40秒以内に制限されます。再生中に赤い点をもう一度押すと設定を開き直せます。',
+  playbackCapNote: '※ すべての送信間隔は最短0.5秒です。再生中に赤い点をもう一度押すと設定を開き直せます。',
   toastPlaybackDone: 'メッセージの自動再生が完了しました',
   playbackAnchorLabel: '日時の基準',
   playbackAnchorTodayTitle: '今日の日時に固定する',
@@ -274,6 +280,12 @@ const JA_TEXT: UiText = {
   homepageLabel: '個人ページ',
   tutorialLabel: 'ガイド',
   githubLabel: 'GitHub',
+  playbackTimelineModeLabel: '時間流速モード',
+  playbackTimelineExact: '完全に実時間流速',
+  playbackTimelineExactSub: '設定した分差をそのまま実時間で待機（最短 0.5 秒）',
+  playbackTimelineProp: '等比例スピード',
+  playbackTimelinePropSub: '時間差を倍率で圧縮して再生（0.5 秒〜1 分）',
+  playbackSpeedLabel: (scale) => `等比例倍率：${scale}×`,
 };
 
 const ZH_TEXT: UiText = {
@@ -345,8 +357,8 @@ const ZH_TEXT: UiText = {
   toastProfile: (name) => `${name} 的资料`,
   toastDownloading: (filename, sizeLabel) => `正在下载 ${filename} (${sizeLabel})...`,
   dataSectionTitle: '本地数据管理',
-  exportDataBtn: '导出数据',
-  importDataBtn: '导入数据',
+  exportDataBtn: '导出',
+  importDataBtn: '导入',
   clearCacheBtn: '一键清空本地缓存',
   clearModalTitle: '清空本地缓存',
   clearStep1Badge: '确认 1 / 2',
@@ -373,17 +385,17 @@ const ZH_TEXT: UiText = {
   playbackModalSub: '当前已自动切换为沉浸模式，将按设定节奏逐条展示消息。',
   playbackPacingLabel: '发送节奏',
   playbackTimelineTitle: '按发送时间流速发送',
-  playbackTimelineSub: '根据消息时间差自动映射间隔（单条间隔不超过 40 秒）',
-  playbackEvenTitle: '每条消息等比例时间发送',
-  playbackEvenSub: '所有消息按固定时间间隔依次发送（不超过 40 秒）',
-  playbackIntervalLabel: (sec) => `单条发送间隔：${sec} 秒`,
+  playbackTimelineSub: '支持完全按发送时间流速或按等比例速度推进',
+  playbackEvenTitle: '固定时间间隔发送',
+  playbackEvenSub: '所有消息按固定时间间隔依次发送（0.5 秒 – 60 秒）',
+  playbackIntervalLabel: (sec) => `固定发送间隔：${sec} 秒`,
   playbackStartLabel: '起始消息位置',
   playbackStartEmpty: '从没有消息开始（从头逐条发送）',
   playbackStartFromMsg: (index, username, timestamp, preview) =>
     `从第 ${index} 条开始（${username}・${timestamp}）${preview}`,
   playbackNoMessages: '当前对话暂无可播放的消息，请先在角色切换模式下添加消息。',
   playbackStartBtn: '开始',
-  playbackCapNote: '※ 每次发送间隔均严格不超过 40 秒。播放中再次点击红点可重新设置或取消。',
+  playbackCapNote: '※ 每次发送间隔均不少于 0.5 秒。播放中再次点击红点可重新设置或取消。',
   toastPlaybackDone: '消息逐条播放已完成',
   playbackAnchorLabel: '时间基准',
   playbackAnchorTodayTitle: '锚定在今日时间',
@@ -415,6 +427,12 @@ const ZH_TEXT: UiText = {
   homepageLabel: '个人主页',
   tutorialLabel: '新手教程',
   githubLabel: 'GitHub',
+  playbackTimelineModeLabel: '时间流速方式',
+  playbackTimelineExact: '完全按发送时间流速',
+  playbackTimelineExactSub: '严格按两条消息的真实时间差等待（最少 0.5 秒）',
+  playbackTimelineProp: '等比例速度',
+  playbackTimelinePropSub: '按倍率等比例缩放时间差（0.5 秒 – 1 分钟）',
+  playbackSpeedLabel: (scale) => `等比例倍率：${scale}×`,
 };
 
 export function getUiText(lang: UiLanguage): UiText {

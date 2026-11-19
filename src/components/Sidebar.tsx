@@ -231,17 +231,18 @@ export function Sidebar({
           {serverMenuOpen && (
             <div
               role="menu"
-              className="nc-modal-enter nc-scroll absolute left-2.5 top-[58px] z-40 max-h-[calc(100dvh-100px)] w-[256px] max-w-[calc(100vw-20px)] rounded-[12px] border border-[#46385C] bg-[#241C32] p-3.5 shadow-[0_18px_42px_rgba(0,0,0,0.62)]"
+              data-testid="server-dropdown"
+              className="nc-modal-enter nc-scroll absolute left-2 right-2 top-[56px] z-40 max-h-[calc(100dvh-96px)] rounded-[10px] border border-[#46385C] bg-[#241C32] p-3 shadow-[0_18px_42px_rgba(0,0,0,0.62)]"
             >
-              <div className="mb-2 flex items-center justify-between px-0.5">
-                <span className="text-[11px] font-medium tracking-[0.04em] text-[#9E93B3]">
+              <div className="mb-2 flex items-center justify-between gap-1 px-0.5">
+                <span className="truncate text-[11px] font-medium tracking-[0.04em] text-[#9E93B3]">
                   {t.convListTitle}
                 </span>
                 <button
                   type="button"
                   data-action="open-create-conv"
                   onClick={() => setCreateExpanded((prev) => !prev)}
-                  className="cursor-pointer rounded-[6px] bg-[#362B4A] px-2 py-0.5 text-[11px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#493B62] hover:text-white"
+                  className="shrink-0 cursor-pointer rounded-[6px] bg-[#362B4A] px-2 py-0.5 text-[10.5px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#493B62] hover:text-white"
                 >
                   {createExpanded ? t.cancel : `+ ${t.createConvTitle}`}
                 </button>

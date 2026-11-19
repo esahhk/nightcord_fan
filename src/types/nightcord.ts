@@ -81,8 +81,12 @@ export interface ChatMessage {
 
 export type PlaybackPacingMode = 'timeline' | 'even';
 
+export type PlaybackTimelineSubMode = 'exact' | 'proportional';
+
 export interface PlaybackConfig {
   pacingMode: PlaybackPacingMode;
+  timelineSubMode: PlaybackTimelineSubMode;
+  timelineScale: number;
   evenIntervalSec: number;
   startIndex: number;
   anchorToToday: boolean;

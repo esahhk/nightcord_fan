@@ -282,7 +282,9 @@ export default function App({ actions }: AppProps) {
       activeConversation.messages,
       playbackVisibleCount,
       playbackConfig.pacingMode,
-      playbackConfig.evenIntervalSec
+      playbackConfig.evenIntervalSec,
+      playbackConfig.timelineSubMode,
+      playbackConfig.timelineScale
     );
 
     playbackTimerRef.current = window.setTimeout(() => {
