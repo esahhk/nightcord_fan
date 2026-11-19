@@ -58,6 +58,13 @@ export function OnboardingModal({
       note: '',
       visual: 'immersive' as const,
     },
+    {
+      badge: t.stepBadges[4],
+      title: t.step5Title,
+      description: t.step5Desc,
+      note: '',
+      visual: 'playback' as const,
+    },
   ];
 
   const current = steps[stepIndex];
@@ -86,34 +93,48 @@ export function OnboardingModal({
         <div className="nc-scroll px-5 py-5">
           <div className="mb-4 flex min-h-[78px] items-center justify-center rounded-[8px] border border-[#453859] bg-[#3F3352] px-4 py-3">
             {current.visual === 'language' && (
-              <div className="grid w-full grid-cols-2 gap-2.5">
+              <div className="grid w-full grid-cols-3 gap-2">
                 <button
                   type="button"
                   data-action="onboarding-lang-zh"
                   aria-pressed={lang === 'zh'}
                   onClick={() => onSelectLanguage('zh')}
-                  className={`flex cursor-pointer flex-col items-center justify-center rounded-[8px] border px-3 py-2.5 transition-all ${
+                  className={`flex cursor-pointer flex-col items-center justify-center rounded-[8px] border px-2 py-2.5 transition-all ${
                     lang === 'zh'
                       ? 'border-[#64D2E6] bg-[#473A5C] text-white ring-1 ring-[#64D2E6]/60'
                       : 'border-[#524468] bg-[#2E243D] text-[#C2B8D3] hover:bg-[#362B47] hover:text-white'
                   }`}
                 >
-                  <span className="text-[14px] font-bold">中文</span>
-                  <span className="mt-0.5 text-[11px] text-[#B4A9C6]">简体中文引导</span>
+                  <span className="text-[13.5px] font-bold">中文</span>
+                  <span className="mt-0.5 text-[10.5px] text-[#B4A9C6]">简体中文</span>
                 </button>
                 <button
                   type="button"
                   data-action="onboarding-lang-ja"
                   aria-pressed={lang === 'ja'}
                   onClick={() => onSelectLanguage('ja')}
-                  className={`flex cursor-pointer flex-col items-center justify-center rounded-[8px] border px-3 py-2.5 transition-all ${
+                  className={`flex cursor-pointer flex-col items-center justify-center rounded-[8px] border px-2 py-2.5 transition-all ${
                     lang === 'ja'
                       ? 'border-[#64D2E6] bg-[#473A5C] text-white ring-1 ring-[#64D2E6]/60'
                       : 'border-[#524468] bg-[#2E243D] text-[#C2B8D3] hover:bg-[#362B47] hover:text-white'
                   }`}
                 >
-                  <span className="text-[14px] font-bold">日本語</span>
-                  <span className="mt-0.5 text-[11px] text-[#B4A9C6]">日本語ガイド</span>
+                  <span className="text-[13.5px] font-bold">日本語</span>
+                  <span className="mt-0.5 text-[10.5px] text-[#B4A9C6]">日本語</span>
+                </button>
+                <button
+                  type="button"
+                  data-action="onboarding-lang-en"
+                  aria-pressed={lang === 'en'}
+                  onClick={() => onSelectLanguage('en')}
+                  className={`flex cursor-pointer flex-col items-center justify-center rounded-[8px] border px-2 py-2.5 transition-all ${
+                    lang === 'en'
+                      ? 'border-[#64D2E6] bg-[#473A5C] text-white ring-1 ring-[#64D2E6]/60'
+                      : 'border-[#524468] bg-[#2E243D] text-[#C2B8D3] hover:bg-[#362B47] hover:text-white'
+                  }`}
+                >
+                  <span className="text-[13.5px] font-bold">English</span>
+                  <span className="mt-0.5 text-[10.5px] text-[#B4A9C6]">English UI</span>
                 </button>
               </div>
             )}
@@ -140,6 +161,16 @@ export function OnboardingModal({
                 <span className="h-3.5 w-3.5 rounded-full bg-[#EB7F97]/40" />
                 <span className="ml-2 text-[12px] font-semibold text-[#DCD7E5]">
                   {t.step4Label}
+                </span>
+              </div>
+            )}
+            {current.visual === 'playback' && (
+              <div className="flex items-center gap-3">
+                <span className="h-3.5 w-3.5 rounded-full bg-[#64D2E6]/40" />
+                <span className="h-3.5 w-3.5 rounded-full bg-[#F6CE71]/40" />
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#EB7F97] ring-4 ring-[#EB7F97]/25" />
+                <span className="ml-2 text-[12px] font-semibold text-[#FFD2DC]">
+                  {t.step5Label}
                 </span>
               </div>
             )}

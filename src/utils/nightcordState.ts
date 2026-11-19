@@ -35,7 +35,6 @@ export const INITIAL_MESSAGES: ChatMessage[] = [
     avatar: 'amia',
     timestamp: '昨日 16:13',
     text: 'ありがと！',
-    topClipped: true,
   },
   {
     id: 'msg-2',

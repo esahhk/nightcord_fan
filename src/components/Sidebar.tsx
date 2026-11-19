@@ -340,13 +340,16 @@ export function Sidebar({
               )}
 
               <div className="mt-3 space-y-2.5 rounded-[9px] border border-[#362B49] bg-[#2C223C]/80 p-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-[#A499B8]">{t.langLabel}</span>
-                  <div className="flex items-center rounded-[6px] bg-[#1E172A] p-0.5">
+                <div className="space-y-1.5">
+                  <span className="block text-[10.5px] font-medium text-[#A499B8]">
+                    {t.langLabel}
+                  </span>
+                  <div className="grid grid-cols-3 gap-0.5 rounded-[6px] bg-[#1E172A] p-0.5">
                     <button
                       type="button"
+                      data-action="lang-zh"
                       onClick={() => onSelectLanguage('zh')}
-                      className={`cursor-pointer rounded-[5px] px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                      className={`cursor-pointer whitespace-nowrap rounded-[5px] px-1.5 py-1 text-center text-[10.5px] font-medium transition-colors ${
                         lang === 'zh'
                           ? 'bg-[#4C3E65] text-white'
                           : 'text-[#9B90AD] hover:text-white'
@@ -356,14 +359,27 @@ export function Sidebar({
                     </button>
                     <button
                       type="button"
+                      data-action="lang-ja"
                       onClick={() => onSelectLanguage('ja')}
-                      className={`cursor-pointer rounded-[5px] px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                      className={`cursor-pointer whitespace-nowrap rounded-[5px] px-1.5 py-1 text-center text-[10.5px] font-medium transition-colors ${
                         lang === 'ja'
                           ? 'bg-[#4C3E65] text-white'
                           : 'text-[#9B90AD] hover:text-white'
                       }`}
                     >
                       日本語
+                    </button>
+                    <button
+                      type="button"
+                      data-action="lang-en"
+                      onClick={() => onSelectLanguage('en')}
+                      className={`cursor-pointer whitespace-nowrap rounded-[5px] px-1.5 py-1 text-center text-[10.5px] font-medium transition-colors ${
+                        lang === 'en'
+                          ? 'bg-[#4C3E65] text-white'
+                          : 'text-[#9B90AD] hover:text-white'
+                      }`}
+                    >
+                      EN
                     </button>
                   </div>
                 </div>

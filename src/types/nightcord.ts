@@ -2,7 +2,7 @@ export type AvatarType = 'k' | 'k-pink' | 'yuki' | 'enanan' | 'amia';
 
 export type AppMode = 'immersive' | 'studio';
 
-export type UiLanguage = 'ja' | 'zh';
+export type UiLanguage = 'ja' | 'zh' | 'en';
 
 export interface CharacterProfile {
   id: string;

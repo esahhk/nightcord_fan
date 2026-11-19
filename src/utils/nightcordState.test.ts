@@ -121,14 +121,22 @@ test('createOutgoingMessage and createFileMessage preserve sender and format Nig
   assert.equal(formatDuration(65), '1:05');
 });
 
-test('i18n dictionary provides distinct zh and ja control text', () => {
+test('i18n dictionary provides distinct zh, ja, and en control text with 5 onboarding steps', () => {
   const zh = getUiText('zh');
   const ja = getUiText('ja');
-  assert.equal(zh.stepBadges[0], '步骤 1 / 4');
-  assert.equal(ja.stepBadges[0], 'ステップ 1 / 4');
+  const en = getUiText('en');
+  assert.equal(zh.stepBadges.length, 5);
+  assert.equal(ja.stepBadges.length, 5);
+  assert.equal(en.stepBadges.length, 5);
+  assert.equal(zh.stepBadges[4], '步骤 5 / 5');
+  assert.equal(ja.stepBadges[4], 'ステップ 5 / 5');
+  assert.equal(en.stepBadges[4], 'Step 5 / 5');
   assert.equal(zh.editChar, '编辑');
   assert.equal(ja.editChar, '編集');
+  assert.equal(en.editChar, 'Edit');
   assert.equal(zh.emptyConvTitle('雑談'), '开始「雑談」的对话吧');
+  assert.equal(en.emptyConvTitle('雑談'), 'Start chatting in "雑談"');
+  assert.equal(Boolean(INITIAL_MESSAGES[0].topClipped), false);
 });
 
 test('toggleMemberMute, setMemberOnlineStatus, appendInputToken, and invokeAction work', () => {

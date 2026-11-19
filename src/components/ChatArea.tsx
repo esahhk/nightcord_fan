@@ -261,8 +261,8 @@ export function ChatArea({
                     }
                   }}
                   className={`relative flex touch-manipulation select-none items-start gap-[13px] rounded-[6px] transition-colors hover:bg-[#2E243D]/30 ${
-                    msg.topClipped ? '-mt-[11px]' : ''
-                  } ${shouldAnimate ? 'nc-msg-enter' : ''}`}
+                    shouldAnimate ? 'nc-msg-enter' : ''
+                  }`}
                 >
                   <div className="relative shrink-0">
                     <button

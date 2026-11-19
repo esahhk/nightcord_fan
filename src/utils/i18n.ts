@@ -2,7 +2,7 @@ import type { UiLanguage } from '../types/nightcord';
 
 export interface UiText {
   guideTitle: string;
-  stepBadges: [string, string, string, string];
+  stepBadges: [string, string, string, string, string];
   step1Title: string;
   step1Desc: string;
   step1Note: string;
@@ -14,6 +14,9 @@ export interface UiText {
   step4Title: string;
   step4Desc: string;
   step4Label: string;
+  step5Title: string;
+  step5Desc: string;
+  step5Label: string;
   skip: string;
   back: string;
   next: string;
@@ -142,7 +145,7 @@ export interface UiText {
 
 const JA_TEXT: UiText = {
   guideTitle: 'nightcord ガイド',
-  stepBadges: ['ステップ 1 / 4', 'ステップ 2 / 4', 'ステップ 3 / 4', 'ステップ 4 / 4'],
+  stepBadges: ['ステップ 1 / 5', 'ステップ 2 / 5', 'ステップ 3 / 5', 'ステップ 4 / 5', 'ステップ 5 / 5'],
   step1Title: 'ガイドと操作UIの言語を選択',
   step1Desc:
     'ガイドと編集メニューの表示言語を選択してください。選択はローカルに保存されます。',
@@ -150,15 +153,19 @@ const JA_TEXT: UiText = {
     '※ 初期状態は「没入モード（閲覧専用・メッセージ送信不可）」で起動します。キャラクター名や没入モードの画面テキストは日本語のまま保持されます。',
   step2Title: '会話を切り替え・新規作成',
   step2Desc:
-    '左上の「25時、ナイトコードで。▾」をクリックするとメニューが開きます。元の会話をテンプレートとして残したまま、新しい会話を追加・切り替えできます。',
-  step3Title: 'キャラ切替と画像・音声の送信',
+    '左上の「25時、ナイトコードで。▾」をクリックするとメニューが開きます。元の会話をテンプレートとして残したまま、新しい会話の追加・切替やローカルデータの書き出し／読み込みができます。',
+  step3Title: 'キャラ切替・メディア送信・状態変更',
   step3Desc:
-    '右上の青い点（1番目）を押すとロール切替モードになり、メッセージ送信が可能になります。キャラクターの名前・アイコン作成や、ファイル名表示／原図表示を選べる画像送信・ボイス送信（すべてローカル保存）が使えます。',
+    '右上の青い点（1番目）を押すとロール切替モードになり、メッセージ送信が可能になります。キャラ作成、画像／MP4／MP3送信、日時指定、メンバー長押しでのオンライン／通話／オフライン切替（すべてローカル保存）が使えます。',
   step3Label: 'ロール切替・送信可能',
   step4Title: '没入モード（閲覧専用）に切り替え',
   step4Desc:
-    '右上の黄色い点（2番目）を押すと編集ボタンがすべて隠れ、メッセージ送信も無効になった没入モードに戻ります。（赤い点は今後の連携用として予約されています）',
+    '右上の黄色い点（2番目）を押すと編集ボタンがすべて隠れ、メッセージ送信も無効になった没入モードに戻ります。',
   step4Label: '没入モード・送信不可',
+  step5Title: '自動再生モード（赤い点）',
+  step5Desc:
+    '右上の赤い点（3番目）を押すと自動で没入モードに切り替わり、メッセージを1件ずつ順番に再生できます。送信時刻の流速（完全実時間／等比例）や固定間隔（0.5秒〜60秒）、日時の基準や開始位置を自由に設定できます。',
+  step5Label: '自動再生モード',
   skip: 'スキップ',
   back: '戻る',
   next: '次へ',
@@ -290,22 +297,26 @@ const JA_TEXT: UiText = {
 
 const ZH_TEXT: UiText = {
   guideTitle: 'nightcord 使用引导',
-  stepBadges: ['步骤 1 / 4', '步骤 2 / 4', '步骤 3 / 4', '步骤 4 / 4'],
+  stepBadges: ['步骤 1 / 5', '步骤 2 / 5', '步骤 3 / 5', '步骤 4 / 5', '步骤 5 / 5'],
   step1Title: '选择引导与操作界面语言',
   step1Desc: '请先选择后续引导及编辑按钮的显示语言，选择后会自动保存在本地。',
   step1Note:
     '※ 进入后默认处于「沉浸模式（仅浏览，无法发送消息）」。角色名称及沉浸模式中的聊天界面文本均保持日文原版显示。',
   step2Title: '切换与新建对话',
   step2Desc:
-    '点击左上角的「25時、ナイトコードで。▾」即可展开菜单。原有对话会作为模板保留，你可以随时新建空白对话、复制模板或自由切换。',
-  step3Title: '切换角色与发送本地图片/语音',
+    '点击左上角的「25時、ナイトコードで。▾」即可展开菜单。原有对话会作为模板保留，你可以随时新建对话、导入/导出本地备份或重新打开新手教程。',
+  step3Title: '角色切换、媒体发送与状态管理',
   step3Desc:
-    '点击右上角第 1 个蓝色圆点进入角色切换模式后才能发送消息。可自定义角色名与头像，发图片时支持选择「仅显示文件名卡片（可修改文件名）」或「直接发原图」，所有内容仅保存在本地不上传。',
+    '点击右上角第 1 个蓝色圆点进入角色切换模式后才能发送消息。支持自定义角色、发送图片/MP4/MP3（可编辑文件名）、自定义发送日期时间、长按头像 @ 角色、长按消息删除以及长按左侧成员切换在线/语音聊天/离线状态。',
   step3Label: '角色切换・可发消息',
   step4Title: '切换为沉浸模式（禁止发送）',
   step4Desc:
-    '点击右上角第 2 个黄色圆点即可隐藏所有编辑按钮并禁止发送消息，回到纯净的沉浸模式。（第 3 个红点仅作为按钮预留，无额外效果）',
+    '点击右上角第 2 个黄色圆点即可隐藏所有编辑按钮并禁止发送消息，回到纯净的沉浸浏览模式。',
   step4Label: '沉浸模式・禁止发送',
+  step5Title: '消息自动播放模式（红色圆点）',
+  step5Desc:
+    '点击右上角第 3 个红色圆点后默认进入沉浸模式并弹出设置框，可按发送时间流速（完全真实流速或等比例倍率）或固定时间间隔（0.5 秒 – 60 秒）逐条自动发送消息，并可自由设定时间基准与起始位置。',
+  step5Label: '自动播放模式',
   skip: '跳过',
   back: '上一步',
   next: '下一步',
@@ -435,6 +446,167 @@ const ZH_TEXT: UiText = {
   playbackSpeedLabel: (scale) => `等比例倍率：${scale}×`,
 };
 
+const EN_TEXT: UiText = {
+  guideTitle: 'nightcord Guide',
+  stepBadges: ['Step 1 / 5', 'Step 2 / 5', 'Step 3 / 5', 'Step 4 / 5', 'Step 5 / 5'],
+  step1Title: 'Choose Guide & Control Language',
+  step1Desc:
+    'Select the language for this tutorial and editing controls. Your preference is saved locally.',
+  step1Note:
+    '* The app launches in Immersive Mode (read-only). Character names and the Immersive Mode chat interface stay in the original Japanese.',
+  step2Title: 'Switch & Create Conversations',
+  step2Desc:
+    'Click "25時、ナイトコードで。▾" in the top-left to switch or create conversations, export/import local backups, or reopen this tutorial anytime.',
+  step3Title: 'Role-Switch Mode & Local Media',
+  step3Desc:
+    'Click the 1st cyan dot (top-right) to enter Role-Switch Mode and send messages. Customize characters, upload local images/MP4/MP3 with editable filenames, set custom dates, long-press avatars to @mention, long-press messages to delete, or long-press members to toggle Online / Voice / Offline.',
+  step3Label: 'Role-Switch · Editable',
+  step4Title: 'Immersive Mode (Read-Only)',
+  step4Desc:
+    'Click the 2nd yellow dot (top-right) to hide all editing controls and lock message sending for a clean, distraction-free view.',
+  step4Label: 'Immersive · Read-Only',
+  step5Title: 'Auto-Playback Mode (Red Dot)',
+  step5Desc:
+    'Click the 3rd red dot (top-right) to enter Immersive Mode and replay messages one by one. Choose timeline flow (exact real-time or proportional speed) or a fixed interval (0.5s – 60s), plus date anchor mode and starting message.',
+  step5Label: 'Auto-Playback Mode',
+  skip: 'Skip',
+  back: 'Back',
+  next: 'Next',
+  start: 'Get Started',
+  convListTitle: 'Conversations',
+  templateBadge: 'Template',
+  createConvTitle: 'New Chat',
+  createConvPlaceholder: 'Chat name (e.g. Casual)',
+  copyTemplateLabel: 'Copy template messages',
+  createConvBtn: '+ Add Conversation',
+  langLabel: 'UI Language',
+  editChar: 'Edit',
+  addChar: '+ Add Role',
+  sendImage: 'Image',
+  recordVoice: 'Voice',
+  audioFile: 'Audio',
+  recording: 'Recording',
+  send: 'Send',
+  stopCancel: 'Cancel',
+  charNamePlaceholder: 'Character name',
+  chooseImage: 'Choose Image',
+  cancel: 'Cancel',
+  save: 'Save',
+  add: 'Add',
+  imageModalTitle: 'Image Send Options',
+  imageModeLabel: 'Display Style',
+  imageModeCard: 'File Card Only',
+  imageModeCardSub: 'Matches Nightcord card style with editable filename',
+  imageModeFull: 'Send Raw Image',
+  imageModeFullSub: 'Shows image preview directly in chat (tap to zoom)',
+  imageFilenameLabel: 'Filename (Editable)',
+  imageFilenamePlaceholder: 'e.g. rough_01.jpg',
+  emptyConvTitle: (title) => `Start chatting in "${title}"`,
+  emptyConvSub:
+    'Click the top-right cyan dot to switch into Role-Switch Mode and send messages or local media.',
+  studioInputPlaceholder: (name) => `Message as ${name}`,
+  toastStudioMode: 'Switched to Role-Switch Mode',
+  toastConvCreated: (title) => `Created conversation "${title}"`,
+  toastConvDeleted: 'Conversation deleted',
+  toastCharSaved: (name) => `Saved character "${name}"`,
+  toastImageSaved: 'Image saved locally and sent',
+  toastAudioSaved: 'Audio saved locally and sent',
+  toastVoiceSaved: 'Voice saved locally and sent',
+  toastMicUnsupported: 'Microphone unavailable; pick a local audio file instead',
+  toastMicDenied: 'Microphone permission denied; pick a local audio file instead',
+  toastBoldOn: 'Bold text enabled',
+  toastBoldOff: 'Bold text disabled',
+  toastMuted: (name) => `Muted ${name}`,
+  toastUnmuted: (name) => `Unmuted ${name}`,
+  toastProfile: (name) => `${name}'s profile`,
+  toastDownloading: (filename, sizeLabel) => `Downloading ${filename} (${sizeLabel})...`,
+  dataSectionTitle: 'Local Data',
+  exportDataBtn: 'Export',
+  importDataBtn: 'Import',
+  clearCacheBtn: 'Clear Local Cache',
+  clearModalTitle: 'Clear Local Cache',
+  clearStep1Badge: 'Confirm 1 / 2',
+  clearStep2Badge: 'Confirm 2 / 2',
+  clearStep1Heading: 'Clear all local cache data?',
+  clearStep1Desc:
+    'All created conversations, sent messages, custom characters, and locally saved media will be deleted and reset to the default template.',
+  clearStep1Next: 'Continue',
+  clearStep2Heading: 'Are you sure you want to delete everything?',
+  clearStep2Desc:
+    'This action cannot be undone. Export a backup first if you want to keep your conversations.',
+  clearStep2Confirm: 'Confirm & Clear',
+  toastExportSuccess: 'Exported local backup file',
+  toastImportSuccess: (count) => `Imported local backup (${count} conversations)`,
+  toastImportInvalid: 'Import failed: invalid backup file',
+  toastCacheCleared: 'Local cache cleared and template restored',
+  timeBtnLabel: 'Time',
+  timeCustomToggle: 'Custom Send Time',
+  timeMinHint: (minTs) => `Cannot be earlier than previous (${minTs})`,
+  timeAnyHint: 'Set any date & time freely',
+  timeEarlierError: (minTs) => `Time cannot be earlier than previous message (${minTs})`,
+  timeResetNow: 'Sync Now',
+  playbackModalTitle: 'Auto-Playback Setup',
+  playbackModalSub:
+    'Automatically switches to Immersive Mode and reveals messages one by one.',
+  playbackPacingLabel: 'Pacing Mode',
+  playbackTimelineTitle: 'Follow Message Timestamps',
+  playbackTimelineSub: 'Replay at exact real-time gaps or proportional speed',
+  playbackEvenTitle: 'Fixed Time Interval',
+  playbackEvenSub: 'Send every message at a fixed interval (0.5s – 60s)',
+  playbackIntervalLabel: (sec) => `Fixed interval: ${sec}s`,
+  playbackStartLabel: 'Starting Position',
+  playbackStartEmpty: 'Start from empty (replay all messages)',
+  playbackStartFromMsg: (index, username, timestamp, preview) =>
+    `Start from #${index} (${username} · ${timestamp}) ${preview}`,
+  playbackNoMessages: 'No messages in this conversation. Add messages in Role-Switch Mode first.',
+  playbackStartBtn: 'Start',
+  playbackCapNote:
+    '* Minimum interval is 0.5s. Click the red dot again while playing to reconfigure or stop.',
+  toastPlaybackDone: 'Auto-playback finished',
+  playbackAnchorLabel: 'Date Reference',
+  playbackAnchorTodayTitle: 'Anchor to Today',
+  playbackAnchorTodaySub: 'Same month shows "13日 23:13"; other month/year shows "2021年6月17日"',
+  playbackAnchorFlowTitle: 'Dynamic (Follow Playback)',
+  playbackAnchorFlowSub: 'Treats current playing message as "今日"; crossing midnight shifts older ones to "昨日"',
+  linksSectionTitle: 'Links & Contact',
+  reportIssueLabel: 'Report',
+  setOfflineBtn: 'Set Offline',
+  setOnlineBtn: 'Set Online',
+  toastMemberOnline: (name) => `${name} is now Online`,
+  toastMemberOffline: (name) => `${name} is now Offline`,
+  mentionTargetBtn: (name) => `@${name}`,
+  mentionPickerTitle: 'Mention a Character',
+  deleteMessageBtn: 'Delete Message',
+  toastMessageDeleted: 'Message deleted',
+  sendMp4: 'MP4',
+  sendMp3: 'MP3',
+  sendFile: 'File',
+  fileModalTitle: 'File Send Settings',
+  toastFileSaved: 'File saved locally and sent',
+  yearUnit: 'Y',
+  monthUnit: 'M',
+  dayUnit: 'D',
+  statusOnlineBtn: 'Online',
+  statusVoiceBtn: 'Voice Chat',
+  statusOfflineBtn: 'Offline',
+  toastMemberVoice: (name) => `${name} moved to Voice Chat`,
+  homepageLabel: 'Home',
+  tutorialLabel: 'Guide',
+  githubLabel: 'GitHub',
+  playbackTimelineModeLabel: 'Timeline Flow Mode',
+  playbackTimelineExact: 'Exact Real-Time Flow',
+  playbackTimelineExactSub: 'Wait the exact minute difference between messages (min 0.5s)',
+  playbackTimelineProp: 'Proportional Speed',
+  playbackTimelinePropSub: 'Scale message gaps proportionally (0.5s – 60s)',
+  playbackSpeedLabel: (scale) => `Speed scale: ${scale}×`,
+};
+
 export function getUiText(lang: UiLanguage): UiText {
-  return lang === 'zh' ? ZH_TEXT : JA_TEXT;
+  if (lang === 'zh') {
+    return ZH_TEXT;
+  }
+  if (lang === 'en') {
+    return EN_TEXT;
+  }
+  return JA_TEXT;
 }

@@ -14,7 +14,7 @@ const STORAGE_KEYS = {
   members: 'nightcord_members_v1',
   mode: 'nightcord_mode_v1',
   language: 'nightcord_lang_v1',
-  onboardingDone: 'nightcord_onboarding_done_v1',
+  onboardingDone: 'nightcord_onboarding_done_v2',
 } as const;
 
 const DB_NAME = 'nightcord_local_media_v1';
@@ -177,7 +177,7 @@ export function isOnboardingCompleted(): boolean {
   try {
     return localStorage.getItem(STORAGE_KEYS.onboardingDone) === '1';
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -191,7 +191,10 @@ export function markOnboardingCompleted(): void {
 export function loadSavedLanguage(): UiLanguage {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.language);
-    return raw === 'zh' ? 'zh' : 'ja';
+    if (raw === 'zh' || raw === 'en' || raw === 'ja') {
+      return raw;
+    }
+    return 'ja';
   } catch {
     return 'ja';
   }
@@ -236,6 +239,7 @@ export async function clearLocalCacheData(): Promise<void> {
     localStorage.removeItem(STORAGE_KEYS.characters);
     localStorage.removeItem(STORAGE_KEYS.activeCharacterId);
     localStorage.removeItem(STORAGE_KEYS.members);
+    localStorage.removeItem(STORAGE_KEYS.onboardingDone);
   } catch {
   }
   const db = await openMediaDb();
