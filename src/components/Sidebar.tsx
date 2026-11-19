@@ -133,7 +133,7 @@ export function Sidebar({
     return (
       <div
         role="menu"
-        className="nc-modal-enter absolute left-3 top-[38px] z-40 min-w-[144px] rounded-[9px] border border-[#524468] bg-[#211A2C] p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.62)]"
+        className="nc-modal-enter absolute left-3 top-[38px] z-50 min-w-[144px] rounded-[9px] border border-[#524468] bg-[#211A2C] p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.62)]"
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
       >
@@ -177,28 +177,38 @@ export function Sidebar({
         />
       )}
 
-      {serverMenuOpen && (
+      {(serverMenuOpen || memberMenuId) && (
         <div
           aria-hidden="true"
-          onClick={onCloseServerMenu}
-          className="fixed inset-0 z-30 bg-transparent"
-        />
-      )}
-
-      {memberMenuId && (
-        <div
-          aria-hidden="true"
-          onClick={() => setMemberMenuId(null)}
+          onClick={() => {
+            if (serverMenuOpen) {
+              onCloseServerMenu();
+            }
+            if (memberMenuId) {
+              setMemberMenuId(null);
+            }
+          }}
           className="fixed inset-0 z-30 bg-transparent"
         />
       )}
 
       <aside
-        className={`fixed bottom-0 left-0 top-[28px] z-30 flex w-[238px] max-w-[82vw] shrink-0 flex-col border-r border-[#241B30] bg-[#2E243D] transition-transform duration-200 md:static md:z-auto md:w-[228px] md:translate-x-0 ${
+        onClick={() => {
+          if (serverMenuOpen) {
+            onCloseServerMenu();
+          }
+          if (memberMenuId) {
+            setMemberMenuId(null);
+          }
+        }}
+        className={`fixed bottom-0 left-0 top-[28px] z-40 flex w-[238px] max-w-[82vw] shrink-0 flex-col border-r border-[#241B30] bg-[#2E243D] transition-transform duration-200 md:relative md:top-0 md:z-40 md:w-[228px] md:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="relative flex h-[54px] shrink-0 items-center border-b border-[#241B30] px-4">
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="relative flex h-[54px] shrink-0 items-center border-b border-[#241B30] px-4"
+        >
           <button
             type="button"
             data-action="server-menu"
@@ -232,7 +242,8 @@ export function Sidebar({
             <div
               role="menu"
               data-testid="server-dropdown"
-              className="nc-modal-enter nc-scroll absolute left-2 right-2 top-[56px] z-40 max-h-[calc(100dvh-96px)] rounded-[10px] border border-[#46385C] bg-[#241C32] p-3 shadow-[0_18px_42px_rgba(0,0,0,0.62)]"
+              onClick={(e) => e.stopPropagation()}
+              className="nc-modal-enter nc-scroll absolute left-2 right-2 top-[56px] z-50 max-h-[calc(100dvh-96px)] rounded-[10px] border border-[#46385C] bg-[#241C32] p-3 shadow-[0_18px_42px_rgba(0,0,0,0.62)]"
             >
               <div className="mb-2 flex items-center justify-between gap-1 px-0.5">
                 <span className="truncate text-[11px] font-medium tracking-[0.04em] text-[#9E93B3]">
