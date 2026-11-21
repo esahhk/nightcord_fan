@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import type {
   AvatarType,
@@ -89,6 +89,7 @@ export function RoleComposerBar({
   const minTimeLabel = lastMessageDateTime ? formatDateTimeBadge(lastMessageDateTime) : null;
 
   const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressTriggeredRef = useRef(false);
 
   const clearLongPress = () => {
     if (longPressTimerRef.current !== null) {
@@ -110,15 +111,33 @@ export function RoleComposerBar({
 
   const startCharLongPress = (charId: string, x: number, y: number) => {
     clearLongPress();
+    longPressTriggeredRef.current = false;
     pressOriginRef.current = { x, y };
     longPressTimerRef.current = window.setTimeout(() => {
       window.getSelection?.()?.removeAllRanges();
+      longPressTriggeredRef.current = true;
       setCharMenuId(charId);
       pressOriginRef.current = null;
     }, 450);
   };
 
+  useEffect(() => {
+    if (charMenuId === null && !timePanelOpen && editorMode === 'closed') {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setCharMenuId(null);
+        setTimePanelOpen(false);
+        setEditorMode('closed');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [charMenuId, timePanelOpen, editorMode]);
+
   const openEdit = () => {
+    setCharMenuId(null);
     setDraftName(activeCharacter.name);
     setDraftAvatarType(activeCharacter.avatarType);
     setDraftCustomMediaId(activeCharacter.customAvatarMediaId);
@@ -126,6 +145,7 @@ export function RoleComposerBar({
   };
 
   const openCreate = () => {
+    setCharMenuId(null);
     setDraftName('');
     setDraftAvatarType('k');
     setDraftCustomMediaId(undefined);
@@ -189,7 +209,13 @@ export function RoleComposerBar({
                     window.getSelection?.()?.removeAllRanges();
                     setCharMenuId(char.id);
                   }}
-                  onClick={() => onSelectCharacter(char)}
+                  onClick={() => {
+                    if (longPressTriggeredRef.current) {
+                      longPressTriggeredRef.current = false;
+                      return;
+                    }
+                    onSelectCharacter(char);
+                  }}
                   className={`flex shrink-0 cursor-pointer touch-manipulation select-none items-center gap-1.5 rounded-[6px] px-2 py-1 text-[12px] font-medium transition-colors ${
                     active
                       ? 'bg-[#473A5C] text-white ring-1 ring-[#64D2E6]/60'
@@ -279,7 +305,10 @@ export function RoleComposerBar({
             type="button"
             data-action="toggle-custom-time"
             aria-expanded={timePanelOpen}
-            onClick={() => setTimePanelOpen((prev) => !prev)}
+            onClick={() => {
+              setCharMenuId(null);
+              setTimePanelOpen((prev) => !prev);
+            }}
             className={`cursor-pointer rounded-[6px] border px-2 py-1 text-[11.5px] font-medium transition-colors ${
               isEarlierThanPrevious
                 ? 'border-[#EB7F97] bg-[#4B2538] text-[#FFD5DF]'

@@ -29,6 +29,12 @@ import {
   toggleMemberMute,
   upsertCharacter,
 } from './nightcordState';
+import {
+  NIGHTCORD_HTML_TEMPLATE,
+  NIGHTCORD_PALETTE_TOKENS,
+  NIGHTCORD_TSX_TEMPLATE,
+  isTemplateSubpageLocation,
+} from './nightcordTemplateCode';
 
 test('initial template conversation and voice members match reference', () => {
   const convs = createInitialConversations();
@@ -311,4 +317,26 @@ test('computePlaybackDelayMs respects exact flow, proportional flow, fixed 0.5s-
   assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 2, 'even', 60), 60000);
   assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 2, 'even', 99), MAX_PLAYBACK_INTERVAL_MS);
   assert.equal(computePlaybackDelayMs(INITIAL_MESSAGES, 2, 'even', 0.1), 500);
+});
+
+test('UI template subpage routing and standalone template exports are valid', () => {
+  assert.equal(
+    isTemplateSubpageLocation({ pathname: '/', search: '?view=template', hash: '' }),
+    true
+  );
+  assert.equal(
+    isTemplateSubpageLocation({ pathname: '/', search: '', hash: '#template' }),
+    true
+  );
+  assert.equal(
+    isTemplateSubpageLocation({ pathname: '/template', search: '', hash: '' }),
+    true
+  );
+  assert.equal(
+    isTemplateSubpageLocation({ pathname: '/', search: '?autostart=1', hash: '' }),
+    false
+  );
+  assert.ok(NIGHTCORD_PALETTE_TOKENS.length >= 8);
+  assert.ok(NIGHTCORD_TSX_TEMPLATE.includes('export function NightcordTemplate'));
+  assert.ok(NIGHTCORD_HTML_TEMPLATE.includes('25時、ナイトコードで。'));
 });

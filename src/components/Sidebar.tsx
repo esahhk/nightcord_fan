@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import type {
   AppMode,
@@ -37,6 +37,7 @@ interface SidebarProps {
   onTriggerImportData: () => void;
   onRequestClearCache: () => void;
   onOpenTutorial: () => void;
+  onOpenTemplatePage: () => void;
 }
 
 export function Sidebar({
@@ -66,6 +67,7 @@ export function Sidebar({
   onTriggerImportData,
   onRequestClearCache,
   onOpenTutorial,
+  onOpenTemplatePage,
 }: SidebarProps) {
   const t = getUiText(lang);
   const [newTitle, setNewTitle] = useState('');
@@ -78,6 +80,32 @@ export function Sidebar({
   const onlineMembers = members.filter((m) => m.status === 'online');
   const voiceMembers = members.filter((m) => m.status === 'voice');
   const offlineMembers = members.filter((m) => m.status === 'offline');
+
+  useEffect(() => {
+    if (mode !== 'studio') {
+      setMemberMenuId(null);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (!serverMenuOpen) {
+      setCreateExpanded(false);
+    }
+  }, [serverMenuOpen]);
+
+  useEffect(() => {
+    if (!memberMenuId && !createExpanded) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMemberMenuId(null);
+        setCreateExpanded(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [memberMenuId, createExpanded]);
 
   const clearLongPress = () => {
     if (longPressTimerRef.current !== null) {
@@ -288,7 +316,7 @@ export function Sidebar({
                       {!conv.isTemplate && (
                         <button
                           type="button"
-                          aria-label={`${conv.title}`}
+                          aria-label={`${t.deleteMessageBtn}: ${conv.title}`}
                           onClick={() => onDeleteConversation(conv.id)}
                           className="shrink-0 cursor-pointer rounded p-0.5 text-[#9B90AD] opacity-70 transition-colors hover:bg-[#4F3B5F] hover:text-[#EB7F97] hover:opacity-100"
                         >
@@ -531,6 +559,27 @@ export function Sidebar({
                   </span>
                 </button>
               </div>
+
+              <button
+                type="button"
+                data-action="open-ui-template"
+                onClick={onOpenTemplatePage}
+                className="mt-2 flex h-[32px] w-full cursor-pointer items-center justify-between rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-2.5 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:border-[#64D2E6]/60 hover:bg-[#3A2D50] hover:text-white"
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M8.5 8L4.5 12L8.5 16M15.5 8L19.5 12L15.5 16M13.5 6L10.5 18"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span className="truncate">{t.templatePageBtn}</span>
+                </span>
+                <span className="shrink-0 text-[11px] text-[#64D2E6]">→</span>
+              </button>
 
               <div className="mt-2.5 flex items-center justify-center gap-1.5 border-t border-[#342946] pt-2 text-[10.5px] text-[#8E83A3]">
                 <span>{t.reportIssueLabel}:</span>

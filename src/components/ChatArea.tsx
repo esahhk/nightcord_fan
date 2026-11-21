@@ -126,7 +126,22 @@ export function ChatArea({
     }
   }, [mode]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPreviewImage(null);
+        setPreviewVideo(null);
+        setMentionPickerOpen(false);
+        setAvatarMenuMsgId(null);
+        setDeleteMenuMsgId(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressTriggeredRef = useRef(false);
 
   const clearLongPress = () => {
     if (longPressTimerRef.current !== null) {
@@ -151,9 +166,11 @@ export function ChatArea({
       return;
     }
     clearLongPress();
+    longPressTriggeredRef.current = false;
     pressOriginRef.current = { x, y };
     longPressTimerRef.current = window.setTimeout(() => {
       window.getSelection?.()?.removeAllRanges();
+      longPressTriggeredRef.current = true;
       callback();
       pressOriginRef.current = null;
     }, 450);
@@ -205,7 +222,7 @@ export function ChatArea({
       <div
         ref={streamRef}
         data-testid="message-stream"
-        className="nc-scroll flex flex-1 flex-col gap-3.5 px-3.5 pb-4 sm:gap-[15px] sm:px-6"
+        className="nc-scroll flex flex-1 flex-col gap-3.5 px-3.5 pt-3.5 pb-4 sm:gap-[15px] sm:px-6 sm:pt-4"
       >
         {messages.length === 0 ? (
           isPlaying ? null : (
@@ -299,7 +316,13 @@ export function ChatArea({
                           setAvatarMenuMsgId(msg.id);
                         }
                       }}
-                      onClick={() => onAvatarClick(msg.memberId, msg.username)}
+                      onClick={() => {
+                        if (longPressTriggeredRef.current) {
+                          longPressTriggeredRef.current = false;
+                          return;
+                        }
+                        onAvatarClick(msg.memberId, msg.username);
+                      }}
                       className="shrink-0 cursor-pointer touch-manipulation select-none rounded-full bg-transparent p-0"
                     >
                       <CharacterAvatar

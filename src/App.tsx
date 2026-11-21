@@ -7,6 +7,7 @@ import { WorkChannelIcon } from './components/NightcordArt';
 import { OnboardingModal } from './components/OnboardingModal';
 import { PlaybackSetupModal } from './components/PlaybackSetupModal';
 import { Sidebar } from './components/Sidebar';
+import { UiTemplateSubpage } from './components/UiTemplateSubpage';
 import type {
   AppMode,
   AvatarType,
@@ -68,6 +69,7 @@ import {
   toggleMemberMute,
   upsertCharacter,
 } from './utils/nightcordState';
+import { isTemplateSubpageLocation } from './utils/nightcordTemplateCode';
 
 interface AppProps {
   actions?: Partial<NightcordActions>;
@@ -98,8 +100,17 @@ export default function App({ actions }: AppProps) {
   });
   const [mode, setMode] = useState<AppMode>('immersive');
   const [lang, setLang] = useState<UiLanguage>(() => loadSavedLanguage());
+  const [activeView, setActiveView] = useState<'app' | 'template'>(() => {
+    if (typeof window !== 'undefined' && isTemplateSubpageLocation(window.location)) {
+      return 'template';
+    }
+    return 'app';
+  });
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
+      if (isTemplateSubpageLocation(window.location)) {
+        return false;
+      }
       const params = new URLSearchParams(window.location.search);
       if (params.get('autostart') === '1') {
         return false;
@@ -176,6 +187,30 @@ export default function App({ actions }: AppProps) {
       ...getSuggestedCustomTime(activeConversation.messages),
     });
   }, [activeConversation.id, stopPlayback]);
+
+  useEffect(() => {
+    setCustomTime((prev) => {
+      if (prev.enabled) {
+        return prev;
+      }
+      return {
+        enabled: false,
+        ...getSuggestedCustomTime(activeConversation.messages),
+      };
+    });
+  }, [activeConversation.messages]);
+
+  useEffect(() => {
+    const syncViewFromLocation = () => {
+      setActiveView(isTemplateSubpageLocation(window.location) ? 'template' : 'app');
+    };
+    window.addEventListener('popstate', syncViewFromLocation);
+    window.addEventListener('hashchange', syncViewFromLocation);
+    return () => {
+      window.removeEventListener('popstate', syncViewFromLocation);
+      window.removeEventListener('hashchange', syncViewFromLocation);
+    };
+  }, []);
 
   useEffect(() => {
     saveConversations(conversations);
@@ -275,6 +310,7 @@ export default function App({ actions }: AppProps) {
     if (playbackVisibleCount >= total) {
       setPlaybackConfig(null);
       setPlaybackVisibleCount(null);
+      showToast(t.toastPlaybackDone);
       return;
     }
 
@@ -316,6 +352,8 @@ export default function App({ actions }: AppProps) {
         setServerMenuOpen(false);
         setMobileSidebarOpen(false);
         setPlaybackModalOpen(false);
+        setPendingUpload(null);
+        setClearCacheOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -416,11 +454,16 @@ export default function App({ actions }: AppProps) {
       return;
     }
     setConversations((prev) =>
-      prev.map((conv) =>
-        conv.id === activeConversation.id
-          ? { ...conv, messages: conv.messages.filter((m) => m.id !== messageId) }
-          : conv
-      )
+      prev.map((conv) => {
+        if (conv.id !== activeConversation.id) {
+          return conv;
+        }
+        const filtered = conv.messages.filter((m) => m.id !== messageId);
+        if (filtered.length > 0 && filtered[0].dividerBefore) {
+          filtered[0] = { ...filtered[0], dividerBefore: undefined };
+        }
+        return { ...conv, messages: filtered };
+      })
     );
     showToast(t.toastMessageDeleted);
   };
@@ -490,12 +533,20 @@ export default function App({ actions }: AppProps) {
         const blob = base64ToBlob(entry.dataBase64, entry.mimeType);
         await saveLocalMediaBlob(mediaId, blob);
       }
+      stopPlayback();
       setConversations(parsed.conversations);
       setCharacters(parsed.characters);
       setActiveConversationId(parsed.activeConversationId);
       setActiveCharacterId(parsed.activeCharacterId);
       setServerMenuOpen(false);
       setMobileSidebarOpen(false);
+      const nextActive =
+        parsed.conversations.find((c) => c.id === parsed.activeConversationId) ??
+        parsed.conversations[0];
+      setCustomTime({
+        enabled: false,
+        ...getSuggestedCustomTime(nextActive.messages),
+      });
       showToast(t.toastImportSuccess(parsed.conversations.length));
     } catch {
       showToast(t.toastImportInvalid);
@@ -503,6 +554,7 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleConfirmClearCache = async () => {
+    stopPlayback();
     await clearLocalCacheData();
     const initialConvs = createInitialConversations();
     setConversations(initialConvs);
@@ -596,6 +648,35 @@ export default function App({ actions }: AppProps) {
     setServerMenuOpen(false);
     setMobileSidebarOpen(false);
     setShowOnboarding(true);
+  };
+
+  const handleOpenTemplatePage = () => {
+    stopPlayback();
+    setServerMenuOpen(false);
+    setMobileSidebarOpen(false);
+    setActiveView('template');
+    try {
+      const url = new URL(window.location.href);
+      url.hash = '#template';
+      window.history.pushState(null, '', url.toString());
+    } catch {
+    }
+  };
+
+  const handleCloseTemplatePage = () => {
+    setActiveView('app');
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('view') === 'template') {
+        url.searchParams.delete('view');
+      }
+      if (url.pathname.replace(/\/+$/, '').toLowerCase() === '/template') {
+        url.pathname = '/';
+      }
+      url.hash = '';
+      window.history.pushState(null, '', url.toString());
+    } catch {
+    }
   };
 
   const handleChatHeaderClick = () => {
@@ -834,7 +915,15 @@ export default function App({ actions }: AppProps) {
         </div>
       </div>
 
-      <div className="relative flex min-h-0 flex-1">
+      {activeView === 'template' ? (
+        <UiTemplateSubpage
+          lang={lang}
+          onSelectLanguage={setLang}
+          onBack={handleCloseTemplatePage}
+          onNotify={showToast}
+        />
+      ) : (
+        <div className="relative flex min-h-0 flex-1">
         <Sidebar
           lang={lang}
           mode={mode}
@@ -865,6 +954,7 @@ export default function App({ actions }: AppProps) {
             setClearCacheOpen(true);
           }}
           onOpenTutorial={handleOpenTutorial}
+          onOpenTemplatePage={handleOpenTemplatePage}
         />
         <ChatArea
           lang={lang}
@@ -899,7 +989,8 @@ export default function App({ actions }: AppProps) {
           onChangeCustomTime={setCustomTime}
           onSyncCustomTimeNow={handleSyncCustomTimeNow}
         />
-      </div>
+        </div>
+      )}
 
       <PlaybackSetupModal
         open={playbackModalOpen}

@@ -142,6 +142,24 @@ export interface UiText {
   playbackTimelineProp: string;
   playbackTimelinePropSub: string;
   playbackSpeedLabel: (scale: number) => string;
+  videoTutorialTitle: string;
+  videoTutorialBtn: string;
+  templatePageBtn: string;
+  templatePageTitle: string;
+  templatePageSubtitle: string;
+  templateBackBtn: string;
+  templatePreviewTitle: string;
+  templatePreviewDesktop: string;
+  templatePreviewMobile: string;
+  templatePaletteTitle: string;
+  templateCodeTitle: string;
+  templateCopyCodeBtn: string;
+  templateCopiedBtn: string;
+  templateDownloadBtn: string;
+  templateArchitectureTitle: string;
+  templateArchitectureDesc: string;
+  templateLicenseNote: string;
+  templateCopiedColor: (hex: string) => string;
 }
 
 const JA_TEXT: UiText = {
@@ -200,7 +218,7 @@ const JA_TEXT: UiText = {
   imageFilenameLabel: 'ファイル名',
   imageFilenamePlaceholder: '例：ラフC.jpg',
   emptyConvTitle: (title) => `${title} の会話をはじめましょう`,
-  emptyConvSub: 'メッセージを送信するとローカルに保存されます',
+  emptyConvSub: '右上の青い点（1番目）でロール切替モードにするとメッセージを送信できます',
   studioInputPlaceholder: (name) => `${name} としてメッセージを送信`,
   toastStudioMode: 'ロール切替モードに切り替えました',
   toastConvCreated: (title) => `会話「${title}」を作成しました`,
@@ -295,6 +313,27 @@ const JA_TEXT: UiText = {
   playbackTimelineProp: '等比例スピード',
   playbackTimelinePropSub: '時間差を倍率で圧縮して再生（0.5 秒〜1 分）',
   playbackSpeedLabel: (scale) => `等比例倍率：${scale}×`,
+  videoTutorialTitle: 'Bilibili 動画チュートリアル',
+  videoTutorialBtn: '動画ガイドを見る',
+  templatePageBtn: 'UI テンプレート',
+  templatePageTitle: 'Nightcord 本体 UI オープンソーステンプレート',
+  templatePageSubtitle:
+    '現在の「25時、ナイトコードで。」本体 UI（タイトルバー・サイドバー・チャット画面・ファイルカード）を純粋な再利用テンプレートとして切り出しました。',
+  templateBackBtn: '本体に戻る',
+  templatePreviewTitle: '本体 UI ライブプレビュー',
+  templatePreviewDesktop: 'PC 表示',
+  templatePreviewMobile: 'スマホ幅',
+  templatePaletteTitle: 'カラーパレット（クリックでコピー）',
+  templateCodeTitle: 'そのまま使えるテンプレートコード',
+  templateCopyCodeBtn: 'コードをコピー',
+  templateCopiedBtn: 'コピーしました',
+  templateDownloadBtn: 'ファイルをダウンロード',
+  templateArchitectureTitle: 'コア構成と拡張ポイント',
+  templateArchitectureDesc:
+    '本体 UI は ウィンドウ上部バー（3色ドット）＋ サイドバー（サーバー切替・作業チャンネル・ボイスチャット／オフライン）＋ チャット領域（日付区切り・アバター・ファイルカード・入力欄）で構成されています。編集機能や自動再生が不要な場合は、以下の TSX または単一 HTML をそのままプロジェクトに組み込めます。',
+  templateLicenseNote:
+    'CC BY-NC-SA 4.0（オリジナルコード部分）／ キャラクターおよび Nightcord の著作権は SEGA に帰属します。',
+  templateCopiedColor: (hex) => `カラーコード ${hex} をコピーしました`,
 };
 
 const ZH_TEXT: UiText = {
@@ -352,7 +391,7 @@ const ZH_TEXT: UiText = {
   imageFilenameLabel: '文件名（可编辑）',
   imageFilenamePlaceholder: '例如：ラフC.jpg',
   emptyConvTitle: (title) => `开始「${title}」的对话吧`,
-  emptyConvSub: '发送的内容仅保存在本地浏览器中',
+  emptyConvSub: '点击右上角第 1 个蓝色圆点进入角色切换模式即可发送消息（仅本地保存）',
   studioInputPlaceholder: (name) => `以 ${name} 的身份发送消息`,
   toastStudioMode: '已切换到角色切换模式',
   toastConvCreated: (title) => `已创建对话「${title}」`,
@@ -447,6 +486,27 @@ const ZH_TEXT: UiText = {
   playbackTimelineProp: '等比例速度',
   playbackTimelinePropSub: '按倍率等比例缩放时间差（0.5 秒 – 1 分钟）',
   playbackSpeedLabel: (scale) => `等比例倍率：${scale}×`,
+  videoTutorialTitle: 'B站视频使用教程',
+  videoTutorialBtn: '前往观看教程',
+  templatePageBtn: '开源 UI 模板',
+  templatePageTitle: 'Nightcord 本体 UI 开源模板',
+  templatePageSubtitle:
+    '将当前 Nightcord（25時、ナイトコードで。）本体界面（顶部三点栏、左侧成员栏、聊天消息流、文件卡片与底部输入框）抽离为纯净、可直接复用的开源前端模板。',
+  templateBackBtn: '返回主应用',
+  templatePreviewTitle: 'Nightcord 本体 UI 实时预览',
+  templatePreviewDesktop: '桌面视图',
+  templatePreviewMobile: '移动端宽度',
+  templatePaletteTitle: 'Nightcord 配色规范（点击色值复制）',
+  templateCodeTitle: '开箱即用模板源码',
+  templateCopyCodeBtn: '复制代码',
+  templateCopiedBtn: '已复制',
+  templateDownloadBtn: '下载模板文件',
+  templateArchitectureTitle: 'UI 结构与开源复用说明',
+  templateArchitectureDesc:
+    '本体 UI 由「顶部窗口栏（#211A2C）」「左侧频道与语音成员栏（#2E243D）」「中间消息流与文件卡片（#3F3352）」以及「底部输入框（#332844）」四部分组成。若只需干净的 Nightcord 聊天界面壳子，可直接复制或下载下方 React + Tailwind TSX 组件或单文件纯 HTML 模板。',
+  templateLicenseNote:
+    '原创代码与 UI 模板采用 CC BY-NC-SA 4.0 协议开源；角色与 Nightcord 原作版权归 SEGA 所有。',
+  templateCopiedColor: (hex) => `已复制色值 ${hex}`,
 };
 
 const EN_TEXT: UiText = {
@@ -603,6 +663,27 @@ const EN_TEXT: UiText = {
   playbackTimelineProp: 'Proportional Speed',
   playbackTimelinePropSub: 'Scale message gaps proportionally (0.5s – 60s)',
   playbackSpeedLabel: (scale) => `Speed scale: ${scale}×`,
+  videoTutorialTitle: 'Bilibili Video Tutorial',
+  videoTutorialBtn: 'Watch Video',
+  templatePageBtn: 'UI Template',
+  templatePageTitle: 'Nightcord Core UI Open-Source Template',
+  templatePageSubtitle:
+    'A clean, standalone UI template extracted from this Nightcord app (window chrome, sidebar member list, chat stream, file cards, and composer bar) ready for reuse in open-source projects.',
+  templateBackBtn: 'Back to App',
+  templatePreviewTitle: 'Live Core UI Preview',
+  templatePreviewDesktop: 'Desktop',
+  templatePreviewMobile: 'Mobile Width',
+  templatePaletteTitle: 'Color Tokens (Click to Copy)',
+  templateCodeTitle: 'Ready-to-Use Template Source',
+  templateCopyCodeBtn: 'Copy Code',
+  templateCopiedBtn: 'Copied',
+  templateDownloadBtn: 'Download File',
+  templateArchitectureTitle: 'Structure & Reuse Guide',
+  templateArchitectureDesc:
+    'The core UI consists of four clean layers: top 3-dot bar (#211A2C), sidebar with channel & voice/offline lists (#2E243D), message stream with file cards (#3F3352), and bottom input bar (#332844). Grab either the React + Tailwind TSX component or the zero-dependency single-file HTML template below.',
+  templateLicenseNote:
+    'Original code & UI template licensed under CC BY-NC-SA 4.0; characters & Nightcord IP belong to SEGA.',
+  templateCopiedColor: (hex) => `Copied color ${hex}`,
 };
 
 export function getUiText(lang: UiLanguage): UiText {

@@ -184,6 +184,55 @@ export function OnboardingModal({
             <p className="mt-2 text-[11.5px] leading-[1.5] text-[#9A90A8]">{current.note}</p>
           )}
 
+          {current.visual === 'language' && (
+            <a
+              href="https://www.bilibili.com/video/BV1EgyWzfEtm"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-action="onboarding-bilibili-tutorial"
+              className="mt-3.5 flex items-center justify-between gap-2.5 rounded-[8px] border border-[#4E3F69] bg-[#362B47] px-3 py-2 text-[#EFEBF5] transition-colors hover:border-[#EB7F97]/70 hover:bg-[#413358]"
+            >
+              <span className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] bg-[#241B30] text-[#EB7F97]">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M7.5 4.2L10 6.8M16.5 4.2L14 6.8"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                    />
+                    <rect
+                      x="3.2"
+                      y="6.8"
+                      width="17.6"
+                      height="12.6"
+                      rx="3.2"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                    />
+                    <path
+                      d="M8.8 11.6V14.2M15.2 11.6V14.2"
+                      stroke="currentColor"
+                      strokeWidth="1.9"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </span>
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-[12px] font-bold text-white">
+                    {t.videoTutorialTitle}
+                  </span>
+                  <span className="truncate text-[10.5px] text-[#A89DBD]">
+                    bilibili.com/video/BV1EgyWzfEtm
+                  </span>
+                </span>
+              </span>
+              <span className="shrink-0 rounded-[5px] bg-[#241B30] px-2 py-1 text-[11px] font-medium text-[#FFD2DC]">
+                {t.videoTutorialBtn} →
+              </span>
+            </a>
+          )}
+
           <div className="mt-5 flex items-center justify-center gap-1.5">
             {steps.map((step, idx) => (
               <span

@@ -88,9 +88,9 @@
 }
 
 .nc-msg-enter {
-  animation: ncMsgEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: ncMsgEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .nc-modal-enter {
-  animation: ncModalEnter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: ncModalEnter 220ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }

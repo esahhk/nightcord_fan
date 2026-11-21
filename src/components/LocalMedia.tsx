@@ -14,14 +14,18 @@ export function useLocalMediaUrl(mediaId?: string): string | null {
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    setUrl(null);
     if (!mediaId) {
-      setUrl(null);
       return;
     }
     let active = true;
     let createdUrl: string | null = null;
     loadLocalMediaBlob(mediaId).then((blob) => {
-      if (!active || !blob) {
+      if (!active) {
+        return;
+      }
+      if (!blob) {
+        setUrl(null);
         return;
       }
       createdUrl = URL.createObjectURL(blob);
