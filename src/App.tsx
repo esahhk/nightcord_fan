@@ -59,13 +59,17 @@ import {
   createInitialConversations,
   createNewConversation,
   createOutgoingMessage,
+  deleteMessageAndRebuildDividers,
   formatNightcordFileMeta,
   getLastMessageDateTime,
   getSuggestedCustomTime,
   invokeAction,
   parseNightcordBackup,
+  removeCharacterAndMember,
   resolveOutgoingTimestamp,
   setMemberPresenceStatus,
+  syncMembersWithCharacters,
+  syncUpsertMemberFromCharacter,
   toggleMemberMute,
   upsertCharacter,
 } from './utils/nightcordState';
@@ -121,8 +125,11 @@ export default function App({ actions }: AppProps) {
   const t = useMemo(() => getUiText(lang), [lang]);
 
   const [voiceExpanded, setVoiceExpanded] = useState(true);
-  const [members, setMembers] = useState<VoiceMember[]>(
-    () => loadSavedMembers() ?? INITIAL_VOICE_MEMBERS
+  const [members, setMembers] = useState<VoiceMember[]>(() =>
+    syncMembersWithCharacters(
+      loadSavedMembers() ?? INITIAL_VOICE_MEMBERS,
+      loadSavedCharacters() ?? INITIAL_CHARACTERS
+    )
   );
   const [offlineExpanded, setOfflineExpanded] = useState<boolean>(() => {
     const saved = loadSavedMembers() ?? INITIAL_VOICE_MEMBERS;
@@ -333,7 +340,7 @@ export default function App({ actions }: AppProps) {
         playbackTimerRef.current = null;
       }
     };
-  }, [playbackConfig, playbackVisibleCount, activeConversation.messages]);
+  }, [playbackConfig, playbackVisibleCount, activeConversation.messages, showToast, t.toastPlaybackDone]);
 
   useEffect(() => {
     return () => {
@@ -373,7 +380,26 @@ export default function App({ actions }: AppProps) {
     setShowOnboarding(false);
   };
 
+  const handleCloseTemplatePage = useCallback(() => {
+    setActiveView('app');
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('view') === 'template') {
+        url.searchParams.delete('view');
+      }
+      if (url.pathname.replace(/\/+$/, '').toLowerCase() === '/template') {
+        url.pathname = '/';
+      }
+      url.hash = '';
+      window.history.pushState(null, '', url.toString());
+    } catch {
+    }
+  }, []);
+
   const handleSwitchStudioMode = () => {
+    if (activeView === 'template') {
+      handleCloseTemplatePage();
+    }
     stopPlayback();
     setPlaybackModalOpen(false);
     setMode('studio');
@@ -383,6 +409,9 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleSwitchImmersiveMode = () => {
+    if (activeView === 'template') {
+      handleCloseTemplatePage();
+    }
     stopPlayback();
     setPlaybackModalOpen(false);
     setPendingUpload(null);
@@ -393,6 +422,9 @@ export default function App({ actions }: AppProps) {
   };
 
   const handlePlaybackTrigger = () => {
+    if (activeView === 'template') {
+      handleCloseTemplatePage();
+    }
     stopPlayback();
     setPendingUpload(null);
     setMode('immersive');
@@ -454,23 +486,18 @@ export default function App({ actions }: AppProps) {
       return;
     }
     setConversations((prev) =>
-      prev.map((conv) => {
-        if (conv.id !== activeConversation.id) {
-          return conv;
-        }
-        const filtered = conv.messages.filter((m) => m.id !== messageId);
-        if (filtered.length > 0 && filtered[0].dividerBefore) {
-          filtered[0] = { ...filtered[0], dividerBefore: undefined };
-        }
-        return { ...conv, messages: filtered };
-      })
+      prev.map((conv) =>
+        conv.id === activeConversation.id
+          ? { ...conv, messages: deleteMessageAndRebuildDividers(conv.messages, messageId) }
+          : conv
+      )
     );
     showToast(t.toastMessageDeleted);
   };
 
   const handleExportData = async () => {
     try {
-      const mediaIds = collectReferencedMediaIds(conversations, characters);
+      const mediaIds = collectReferencedMediaIds(conversations, characters, members);
       const media: NightcordBackupPayload['media'] = {};
       for (const mediaId of mediaIds) {
         const blob = await loadLocalMediaBlob(mediaId);
@@ -488,6 +515,7 @@ export default function App({ actions }: AppProps) {
         exportedAt: new Date().toISOString(),
         conversations,
         characters,
+        members,
         activeConversationId: activeConversation.id,
         activeCharacterId: activeCharacter.id,
         media,
@@ -536,6 +564,7 @@ export default function App({ actions }: AppProps) {
       stopPlayback();
       setConversations(parsed.conversations);
       setCharacters(parsed.characters);
+      setMembers(parsed.members);
       setActiveConversationId(parsed.activeConversationId);
       setActiveCharacterId(parsed.activeCharacterId);
       setServerMenuOpen(false);
@@ -562,6 +591,9 @@ export default function App({ actions }: AppProps) {
     setCharacters(INITIAL_CHARACTERS);
     setActiveCharacterId(INITIAL_CHARACTERS[0].id);
     setMembers(INITIAL_VOICE_MEMBERS);
+    setVoiceExpanded(true);
+    setOfflineExpanded(false);
+    setFormatActive(false);
     setInputValue('');
     setClearCacheOpen(false);
     setServerMenuOpen(false);
@@ -644,6 +676,18 @@ export default function App({ actions }: AppProps) {
     }
   };
 
+  const handleRemoveCharacter = (member: VoiceMember) => {
+    const res = removeCharacterAndMember(characters, members, activeCharacterId, member.id);
+    if (!res.removed) {
+      showToast(t.toastCannotRemoveLastChar);
+      return;
+    }
+    setCharacters(res.characters);
+    setMembers(res.members);
+    setActiveCharacterId(res.activeCharacterId);
+    showToast(t.toastCharRemoved(member.name));
+  };
+
   const handleOpenTutorial = () => {
     setServerMenuOpen(false);
     setMobileSidebarOpen(false);
@@ -658,22 +702,6 @@ export default function App({ actions }: AppProps) {
     try {
       const url = new URL(window.location.href);
       url.hash = '#template';
-      window.history.pushState(null, '', url.toString());
-    } catch {
-    }
-  };
-
-  const handleCloseTemplatePage = () => {
-    setActiveView('app');
-    try {
-      const url = new URL(window.location.href);
-      if (url.searchParams.get('view') === 'template') {
-        url.searchParams.delete('view');
-      }
-      if (url.pathname.replace(/\/+$/, '').toLowerCase() === '/template') {
-        url.pathname = '/';
-      }
-      url.hash = '';
       window.history.pushState(null, '', url.toString());
     } catch {
     }
@@ -731,10 +759,12 @@ export default function App({ actions }: AppProps) {
     if (!res.saved) {
       return;
     }
+    const savedChar = res.saved;
     setCharacters(res.characters);
-    setActiveCharacterId(res.saved.id);
-    invokeAction(actionsRef.current, 'onCharacterSave', res.saved);
-    showToast(t.toastCharSaved(res.saved.name));
+    setMembers((prev) => syncUpsertMemberFromCharacter(prev, savedChar));
+    setActiveCharacterId(savedChar.id);
+    invokeAction(actionsRef.current, 'onCharacterSave', savedChar);
+    showToast(t.toastCharSaved(savedChar.name));
   };
 
   const openPendingUpload = (file: File | undefined, forcedKind?: FileMediaKind) => {
@@ -947,6 +977,8 @@ export default function App({ actions }: AppProps) {
           onOfflineToggle={handleOfflineToggle}
           onMicToggle={handleMicToggle}
           onSetMemberStatus={handleSetMemberStatus}
+          canRemoveCharacter={characters.length > 1 && members.length > 1}
+          onRemoveCharacter={handleRemoveCharacter}
           onExportData={handleExportData}
           onTriggerImportData={() => importInputRef.current?.click()}
           onRequestClearCache={() => {

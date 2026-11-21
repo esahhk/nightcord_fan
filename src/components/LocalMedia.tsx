@@ -253,6 +253,10 @@ export function LocalFileMediaCard({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingAudio, setPlayingAudio] = useState(false);
 
+  useEffect(() => {
+    setPlayingAudio(false);
+  }, [media.mediaId, url]);
+
   if (media.kind === 'image' && media.displayMode === 'image') {
     return (
       <LocalImageCard
@@ -361,6 +365,12 @@ export function LocalVoicePlayer({ media }: LocalVoicePlayerProps) {
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(media.durationSec || 0);
+
+  useEffect(() => {
+    setPlaying(false);
+    setCurrentTime(0);
+    setDuration(media.durationSec || 0);
+  }, [media.mediaId, media.durationSec, url]);
 
   const togglePlay = () => {
     const audio = audioRef.current;

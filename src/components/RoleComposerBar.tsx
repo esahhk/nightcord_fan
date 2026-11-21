@@ -122,6 +122,10 @@ export function RoleComposerBar({
   };
 
   useEffect(() => {
+    setEditorMode((prev) => (prev === 'edit' ? 'closed' : prev));
+  }, [activeCharacter.id]);
+
+  useEffect(() => {
     if (charMenuId === null && !timePanelOpen && editorMode === 'closed') {
       return;
     }

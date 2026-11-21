@@ -17,6 +17,7 @@ export interface VoiceMember {
   id: string;
   name: string;
   avatar: AvatarType;
+  customAvatarMediaId?: string;
   muted: boolean;
   online: boolean;
   status: MemberPresenceStatus;
@@ -110,6 +111,7 @@ export interface NightcordBackupPayload {
   exportedAt: string;
   conversations: Conversation[];
   characters: CharacterProfile[];
+  members?: VoiceMember[];
   activeConversationId?: string;
   activeCharacterId?: string;
   media: Record<string, NightcordBackupMediaEntry>;

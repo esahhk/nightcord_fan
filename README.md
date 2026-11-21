@@ -8,7 +8,7 @@
 
 一个非盈利的 **「25時、ナイトコードで。」（Nightcord）** 风格同人二次创作网页应用。既还原了经典的夜间聊天界面与成员语音列表，也内置了本地角色扮演创作、自定义发送时间、富媒体卡片以及沉浸式逐条自动播放功能，并额外提供了可独立复用的 **Nightcord 本体开源 UI 模板子页面**。
 
-> 视频教程（B站）：[https://www.bilibili.com/video/BV1EgyWzfEtm](https://www.bilibili.com/video/BV1EgyWzfEtm)
+> 视频教程：[B站（Bilibili）](https://www.bilibili.com/video/BV1EgyWzfEtm) ｜ [YouTube](https://www.youtube.com/watch?v=-9kCDzlmh4s)
 
 ### 核心功能一览
 
@@ -61,7 +61,7 @@ npm run build
 
 非営利の「25時、ナイトコードで。」（Nightcord）風ファンメイドWebアプリです。深夜作業通話チャンネルのUIを再現しつつ、ローカルでの会話作成、キャラクター切替、ファイルカード／動画／音声送信、日時指定、没入モードでの自動再生、さらに**オープンソース向けの純粋な Nightcord 本体 UI テンプレートサブページ**を備えています。
 
-> 動画チュートリアル（Bilibili）：[https://www.bilibili.com/video/BV1EgyWzfEtm](https://www.bilibili.com/video/BV1EgyWzfEtm)
+> 動画チュートリアル：[Bilibili](https://www.bilibili.com/video/BV1EgyWzfEtm) ｜ [YouTube](https://www.youtube.com/watch?v=-9kCDzlmh4s)
 
 ### 主な機能
 
@@ -105,7 +105,7 @@ npm run build
 
 A non-profit fan-made **"25-ji, Nightcord de."** web application recreating the late-night chat workspace with local roleplay authoring, custom timestamps, Nightcord-style file cards, step-by-step auto-playback, and a dedicated **Open-Source Core UI Template Subpage** for developers who want to reuse the pure Nightcord interface shell.
 
-> Bilibili Video Tutorial: [https://www.bilibili.com/video/BV1EgyWzfEtm](https://www.bilibili.com/video/BV1EgyWzfEtm)
+> Video Tutorials: [Bilibili](https://www.bilibili.com/video/BV1EgyWzfEtm) | [YouTube](https://www.youtube.com/watch?v=-9kCDzlmh4s)
 
 ### Key Features
 
@@ -164,5 +164,6 @@ npm run build
 - **Homepage / 个人主页 / 個人ページ**：[https://esahhk.xyz](https://esahhk.xyz)
 - **GitHub**：[https://github.com/esahhk/nightcord_fan](https://github.com/esahhk/nightcord_fan)
 - **Bilibili / B站主页**：[https://space.bilibili.com/2058030122](https://space.bilibili.com/2058030122)
-- **Video Tutorial / B站视频教程 / 動画ガイド**：[https://www.bilibili.com/video/BV1EgyWzfEtm](https://www.bilibili.com/video/BV1EgyWzfEtm)
+- **Video Tutorial (Bilibili) / B站视频教程 / 動画ガイド（Bilibili）**：[https://www.bilibili.com/video/BV1EgyWzfEtm](https://www.bilibili.com/video/BV1EgyWzfEtm)
+- **Video Tutorial (YouTube) / YouTube 视频教程 / 動画ガイド（YouTube）**：[https://www.youtube.com/watch?v=-9kCDzlmh4s](https://www.youtube.com/watch?v=-9kCDzlmh4s)
 - **Issue Report / 问题反馈 / お問い合わせ**：[esahhk@outlook.com](mailto:esahhk@outlook.com)

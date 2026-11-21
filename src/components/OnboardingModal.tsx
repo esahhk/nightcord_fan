@@ -185,52 +185,93 @@ export function OnboardingModal({
           )}
 
           {current.visual === 'language' && (
-            <a
-              href="https://www.bilibili.com/video/BV1EgyWzfEtm"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-action="onboarding-bilibili-tutorial"
-              className="mt-3.5 flex items-center justify-between gap-2.5 rounded-[8px] border border-[#4E3F69] bg-[#362B47] px-3 py-2 text-[#EFEBF5] transition-colors hover:border-[#EB7F97]/70 hover:bg-[#413358]"
-            >
-              <span className="flex min-w-0 items-center gap-2.5">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] bg-[#241B30] text-[#EB7F97]">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path
-                      d="M7.5 4.2L10 6.8M16.5 4.2L14 6.8"
-                      stroke="currentColor"
-                      strokeWidth="1.75"
-                      strokeLinecap="round"
-                    />
-                    <rect
-                      x="3.2"
-                      y="6.8"
-                      width="17.6"
-                      height="12.6"
-                      rx="3.2"
-                      stroke="currentColor"
-                      strokeWidth="1.75"
-                    />
-                    <path
-                      d="M8.8 11.6V14.2M15.2 11.6V14.2"
-                      stroke="currentColor"
-                      strokeWidth="1.9"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </span>
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-[12px] font-bold text-white">
-                    {t.videoTutorialTitle}
-                  </span>
-                  <span className="truncate text-[10.5px] text-[#A89DBD]">
-                    bilibili.com/video/BV1EgyWzfEtm
-                  </span>
-                </span>
+            <div className="mt-3.5 flex flex-col gap-1.5">
+              <span className="text-[11px] font-medium text-[#A89DBD]">
+                {t.videoTutorialSectionLabel}
               </span>
-              <span className="shrink-0 rounded-[5px] bg-[#241B30] px-2 py-1 text-[11px] font-medium text-[#FFD2DC]">
-                {t.videoTutorialBtn} →
-              </span>
-            </a>
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href="https://www.bilibili.com/video/BV1EgyWzfEtm"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-action="onboarding-bilibili-tutorial"
+                  className="flex flex-col justify-between gap-2 rounded-[8px] border border-[#4E3F69] bg-[#362B47] p-2.5 text-[#EFEBF5] transition-colors hover:border-[#EB7F97]/70 hover:bg-[#413358]"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] bg-[#241B30] text-[#EB7F97]">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path
+                          d="M7.5 4.2L10 6.8M16.5 4.2L14 6.8"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                          strokeLinecap="round"
+                        />
+                        <rect
+                          x="3.2"
+                          y="6.8"
+                          width="17.6"
+                          height="12.6"
+                          rx="3.2"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                        />
+                        <path
+                          d="M8.8 11.6V14.2M15.2 11.6V14.2"
+                          stroke="currentColor"
+                          strokeWidth="1.9"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </span>
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate text-[12px] font-bold text-white">
+                        {t.videoTutorialTitle}
+                      </span>
+                      <span className="truncate text-[10px] text-[#A89DBD]">Bilibili</span>
+                    </div>
+                  </div>
+                  <span className="inline-flex w-full items-center justify-between rounded-[5px] bg-[#241B30] px-2 py-1 text-[10.5px] font-medium text-[#FFD2DC]">
+                    <span className="truncate">{t.videoTutorialBtn}</span>
+                    <span aria-hidden="true">→</span>
+                  </span>
+                </a>
+
+                <a
+                  href="https://www.youtube.com/watch?v=-9kCDzlmh4s"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-action="onboarding-youtube-tutorial"
+                  className="flex flex-col justify-between gap-2 rounded-[8px] border border-[#4E3F69] bg-[#362B47] p-2.5 text-[#EFEBF5] transition-colors hover:border-[#FF7575]/70 hover:bg-[#413358]"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] bg-[#241B30] text-[#FF7575]">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <rect
+                          x="2.8"
+                          y="5.2"
+                          width="18.4"
+                          height="13.6"
+                          rx="4"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                        />
+                        <path d="M10.2 9.2L15.4 12L10.2 14.8V9.2Z" fill="currentColor" />
+                      </svg>
+                    </span>
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate text-[12px] font-bold text-white">
+                        {t.youtubeTutorialTitle}
+                      </span>
+                      <span className="truncate text-[10px] text-[#A89DBD]">YouTube</span>
+                    </div>
+                  </div>
+                  <span className="inline-flex w-full items-center justify-between rounded-[5px] bg-[#241B30] px-2 py-1 text-[10.5px] font-medium text-[#FFC9C9]">
+                    <span className="truncate">{t.videoTutorialBtn}</span>
+                    <span aria-hidden="true">→</span>
+                  </span>
+                </a>
+              </div>
+            </div>
           )}
 
           <div className="mt-5 flex items-center justify-center gap-1.5">

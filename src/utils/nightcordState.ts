@@ -399,6 +399,44 @@ export function computeDisplayMessagesForPlayback(
   });
 }
 
+export function deleteMessageAndRebuildDividers(
+  messages: ChatMessage[],
+  messageId: string,
+  baseNow: Date = new Date()
+): ChatMessage[] {
+  const filtered = messages.filter((m) => m.id !== messageId);
+  const refNow = dateToMessageDateTime(baseNow);
+  let prevDayKey: string | null = null;
+  return filtered.map((msg, idx) => {
+    const dt = getMessageDateTime(msg, baseNow);
+    if (!dt) {
+      return idx === 0 && msg.dividerBefore ? { ...msg, dividerBefore: undefined } : msg;
+    }
+    const dayKey = `${dt.year}-${dt.month}-${dt.day}`;
+    let dividerBefore: string | undefined;
+    if (prevDayKey !== null && prevDayKey !== dayKey) {
+      const diff = dayDiffBetween(dt, refNow);
+      if (diff === 0) {
+        dividerBefore = '今日';
+      } else if (diff === 1) {
+        dividerBefore = '昨日';
+      } else if (dt.year === refNow.year && dt.month === refNow.month) {
+        dividerBefore = `${dt.day}日`;
+      } else {
+        dividerBefore = `${dt.year}年${dt.month}月${dt.day}日`;
+      }
+    }
+    prevDayKey = dayKey;
+    if (msg.dividerBefore === dividerBefore) {
+      return msg;
+    }
+    return {
+      ...msg,
+      dividerBefore,
+    };
+  });
+}
+
 export const MIN_PLAYBACK_INTERVAL_MS = 500;
 export const MAX_PLAYBACK_INTERVAL_MS = 60000;
 
@@ -482,12 +520,18 @@ export function formatNightcordFileMeta(
 
 export function collectReferencedMediaIds(
   conversations: Conversation[],
-  characters: CharacterProfile[]
+  characters: CharacterProfile[],
+  members: VoiceMember[] = []
 ): string[] {
   const ids = new Set<string>();
   for (const char of characters) {
     if (char.customAvatarMediaId) {
       ids.add(char.customAvatarMediaId);
+    }
+  }
+  for (const member of members) {
+    if (member.customAvatarMediaId) {
+      ids.add(member.customAvatarMediaId);
     }
   }
   for (const conv of conversations) {
@@ -512,6 +556,7 @@ export function collectReferencedMediaIds(
 export function parseNightcordBackup(rawText: string): {
   conversations: Conversation[];
   characters: CharacterProfile[];
+  members: VoiceMember[];
   activeConversationId: string;
   activeCharacterId: string;
   media: Record<string, { mimeType: string; dataBase64: string }>;
@@ -594,6 +639,38 @@ export function parseNightcordBackup(rawText: string): {
       ? requestedCharId
       : characters[0].id;
 
+    const validMembers: VoiceMember[] = [];
+    if (Array.isArray(parsed.members)) {
+      for (const item of parsed.members) {
+        if (!item || typeof item !== 'object') {
+          continue;
+        }
+        const m = item as Record<string, unknown>;
+        if (typeof m.id === 'string' && m.id.trim() && typeof m.name === 'string' && m.name.trim()) {
+          const status: MemberPresenceStatus =
+            m.status === 'online' || m.status === 'voice' || m.status === 'offline'
+              ? m.status
+              : m.online === false
+                ? 'offline'
+                : 'voice';
+          validMembers.push({
+            id: m.id,
+            name: m.name,
+            avatar: (typeof m.avatar === 'string' ? m.avatar : 'k') as AvatarType,
+            customAvatarMediaId:
+              typeof m.customAvatarMediaId === 'string' ? m.customAvatarMediaId : undefined,
+            muted: Boolean(m.muted),
+            online: status !== 'offline',
+            status,
+          });
+        }
+      }
+    }
+    const members = syncMembersWithCharacters(
+      validMembers.length > 0 ? validMembers : INITIAL_VOICE_MEMBERS,
+      characters
+    );
+
     const media: Record<string, { mimeType: string; dataBase64: string }> = {};
     if (parsed.media && typeof parsed.media === 'object' && !Array.isArray(parsed.media)) {
       for (const [key, val] of Object.entries(parsed.media as Record<string, unknown>)) {
@@ -613,6 +690,7 @@ export function parseNightcordBackup(rawText: string): {
     return {
       conversations,
       characters,
+      members,
       activeConversationId,
       activeCharacterId,
       media,
@@ -774,6 +852,118 @@ export function upsertCharacter(
     customAvatarMediaId: draft.customAvatarMediaId,
   };
   return { characters: [...characters, created], saved: created };
+}
+
+function resolveMemberAvatarForCharacter(
+  char: CharacterProfile,
+  existingAvatar?: AvatarType
+): AvatarType {
+  if (char.id === 'k' && char.avatarType === 'k' && (!existingAvatar || existingAvatar === 'k-pink')) {
+    return 'k-pink';
+  }
+  return char.avatarType;
+}
+
+export function syncUpsertMemberFromCharacter(
+  members: VoiceMember[],
+  saved: CharacterProfile
+): VoiceMember[] {
+  const exists = members.some((m) => m.id === saved.id);
+  if (exists) {
+    return members.map((member) => {
+      if (member.id !== saved.id) {
+        return member;
+      }
+      return {
+        ...member,
+        name: saved.name,
+        avatar: resolveMemberAvatarForCharacter(saved, member.avatar),
+        customAvatarMediaId: saved.customAvatarMediaId,
+      };
+    });
+  }
+  return [
+    ...members,
+    {
+      id: saved.id,
+      name: saved.name,
+      avatar: saved.avatarType,
+      customAvatarMediaId: saved.customAvatarMediaId,
+      muted: false,
+      online: true,
+      status: 'online',
+    },
+  ];
+}
+
+export function syncMembersWithCharacters(
+  members: VoiceMember[],
+  characters: CharacterProfile[]
+): VoiceMember[] {
+  const charIds = new Set(characters.map((c) => c.id));
+  const charById = new Map(characters.map((c) => [c.id, c]));
+  const syncedExisting = members
+    .filter((m) => charIds.has(m.id))
+    .map((m) => {
+      const char = charById.get(m.id);
+      if (!char) {
+        return m;
+      }
+      return {
+        ...m,
+        name: char.name,
+        avatar: resolveMemberAvatarForCharacter(char, m.avatar),
+        customAvatarMediaId: char.customAvatarMediaId,
+      };
+    });
+  const existingIds = new Set(syncedExisting.map((m) => m.id));
+  const additions: VoiceMember[] = characters
+    .filter((c) => !existingIds.has(c.id))
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      avatar: resolveMemberAvatarForCharacter(c),
+      customAvatarMediaId: c.customAvatarMediaId,
+      muted: false,
+      online: true,
+      status: 'online',
+    }));
+  return [...syncedExisting, ...additions];
+}
+
+export function removeCharacterAndMember(
+  characters: CharacterProfile[],
+  members: VoiceMember[],
+  activeCharacterId: string,
+  targetId: string
+): {
+  removed: boolean;
+  characters: CharacterProfile[];
+  members: VoiceMember[];
+  activeCharacterId: string;
+} {
+  if (characters.length <= 1 || members.length <= 1) {
+    return { removed: false, characters, members, activeCharacterId };
+  }
+  const hasChar = characters.some((c) => c.id === targetId);
+  const hasMember = members.some((m) => m.id === targetId);
+  if (!hasChar && !hasMember) {
+    return { removed: false, characters, members, activeCharacterId };
+  }
+  const nextCharacters = characters.filter((c) => c.id !== targetId);
+  const nextMembers = members.filter((m) => m.id !== targetId);
+  if (nextCharacters.length === 0 || nextMembers.length === 0) {
+    return { removed: false, characters, members, activeCharacterId };
+  }
+  const nextActiveId = nextCharacters.some((c) => c.id === activeCharacterId)
+    ? activeCharacterId
+    : nextCharacters[0].id;
+  return {
+    removed: true,
+    characters: nextCharacters,
+    members: nextMembers,
+    activeCharacterId: nextActiveId,
+  };
 }
 
 export function toggleMemberMute(members: VoiceMember[], memberId: string): {

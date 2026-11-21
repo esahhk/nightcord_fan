@@ -16,6 +16,7 @@ import {
   createInitialConversations,
   createNewConversation,
   createOutgoingMessage,
+  deleteMessageAndRebuildDividers,
   detectFileMediaKind,
   extractFileType,
   formatDuration,
@@ -23,9 +24,12 @@ import {
   formatNightcordFileMeta,
   invokeAction,
   parseNightcordBackup,
+  removeCharacterAndMember,
   resolveOutgoingTimestamp,
   setMemberOnlineStatus,
   setMemberPresenceStatus,
+  syncMembersWithCharacters,
+  syncUpsertMemberFromCharacter,
   toggleMemberMute,
   upsertCharacter,
 } from './nightcordState';
@@ -142,6 +146,9 @@ test('i18n dictionary provides distinct zh, ja, and en control text with 5 onboa
   assert.equal(en.editChar, 'Edit');
   assert.equal(zh.emptyConvTitle('雑談'), '开始「雑談」的对话吧');
   assert.equal(en.emptyConvTitle('雑談'), 'Start chatting in "雑談"');
+  assert.ok(zh.youtubeTutorialTitle.includes('YouTube'));
+  assert.ok(ja.youtubeTutorialTitle.includes('YouTube'));
+  assert.ok(en.youtubeTutorialTitle.includes('YouTube'));
   assert.equal(Boolean(INITIAL_MESSAGES[0].topClipped), false);
 });
 
@@ -339,4 +346,96 @@ test('UI template subpage routing and standalone template exports are valid', ()
   assert.ok(NIGHTCORD_PALETTE_TOKENS.length >= 8);
   assert.ok(NIGHTCORD_TSX_TEMPLATE.includes('export function NightcordTemplate'));
   assert.ok(NIGHTCORD_HTML_TEMPLATE.includes('25時、ナイトコードで。'));
+});
+
+test('deleteMessageAndRebuildDividers keeps day dividers accurate after deletions', () => {
+  const baseNow = new Date(2026, 10, 21, 10, 0);
+  const sender = INITIAL_CHARACTERS[0];
+  const yesterdayMsg = createOutgoingMessage('yesterday', sender, baseNow, {
+    sentAt: { year: 2026, month: 11, day: 20, hour: 23, minute: 0 },
+    timestamp: '昨日 23:00',
+  })!;
+  const todayFirst = createOutgoingMessage('today 1', sender, baseNow, {
+    sentAt: { year: 2026, month: 11, day: 21, hour: 1, minute: 10 },
+    timestamp: '今日 1:10',
+    dividerBefore: '今日',
+  })!;
+  const todaySecond = createOutgoingMessage('today 2', sender, baseNow, {
+    sentAt: { year: 2026, month: 11, day: 21, hour: 2, minute: 20 },
+    timestamp: '今日 2:20',
+  })!;
+
+  const afterDeletingBoundary = deleteMessageAndRebuildDividers(
+    [yesterdayMsg, todayFirst, todaySecond],
+    todayFirst.id,
+    baseNow
+  );
+  assert.equal(afterDeletingBoundary.length, 2);
+  assert.equal(afterDeletingBoundary[0].dividerBefore, undefined);
+  assert.equal(afterDeletingBoundary[1].dividerBefore, '今日');
+
+  const afterDeletingYesterday = deleteMessageAndRebuildDividers(
+    afterDeletingBoundary,
+    yesterdayMsg.id,
+    baseNow
+  );
+  assert.equal(afterDeletingYesterday.length, 1);
+  assert.equal(afterDeletingYesterday[0].dividerBefore, undefined);
+});
+
+test('syncUpsertMemberFromCharacter, syncMembersWithCharacters, and removeCharacterAndMember keep sidebar in sync', () => {
+  const createdRes = upsertCharacter(INITIAL_CHARACTERS, {
+    name: 'ミク',
+    avatarType: 'amia',
+    customAvatarMediaId: 'av-miku',
+  });
+  assert.ok(createdRes.saved);
+
+  const syncedOnAdd = syncUpsertMemberFromCharacter(INITIAL_VOICE_MEMBERS, createdRes.saved);
+  assert.equal(syncedOnAdd.length, INITIAL_VOICE_MEMBERS.length + 1);
+  const addedMember = syncedOnAdd.find((m) => m.id === createdRes.saved!.id);
+  assert.ok(addedMember);
+  assert.equal(addedMember.name, 'ミク');
+  assert.equal(addedMember.status, 'online');
+  assert.equal(addedMember.customAvatarMediaId, 'av-miku');
+
+  const editedRes = upsertCharacter(createdRes.characters, {
+    id: createdRes.saved.id,
+    name: '初音ミク',
+    avatarType: 'yuki',
+    customAvatarMediaId: 'av-miku-2',
+  });
+  assert.ok(editedRes.saved);
+  const syncedOnEdit = syncUpsertMemberFromCharacter(syncedOnAdd, editedRes.saved);
+  assert.equal(syncedOnEdit.length, syncedOnAdd.length);
+  const editedMember = syncedOnEdit.find((m) => m.id === editedRes.saved!.id);
+  assert.equal(editedMember?.name, '初音ミク');
+  assert.equal(editedMember?.avatar, 'yuki');
+  assert.equal(editedMember?.customAvatarMediaId, 'av-miku-2');
+
+  const reconciled = syncMembersWithCharacters(INITIAL_VOICE_MEMBERS, editedRes.characters);
+  assert.equal(reconciled.length, INITIAL_VOICE_MEMBERS.length + 1);
+  assert.equal(reconciled.find((m) => m.id === 'k')?.avatar, 'k-pink');
+
+  const removedActive = removeCharacterAndMember(
+    editedRes.characters,
+    syncedOnEdit,
+    editedRes.saved.id,
+    editedRes.saved.id
+  );
+  assert.equal(removedActive.removed, true);
+  assert.equal(removedActive.characters.length, INITIAL_CHARACTERS.length);
+  assert.equal(removedActive.members.length, INITIAL_VOICE_MEMBERS.length);
+  assert.equal(removedActive.activeCharacterId, INITIAL_CHARACTERS[0].id);
+
+  const singleChar = [INITIAL_CHARACTERS[0]];
+  const singleMember = [INITIAL_VOICE_MEMBERS[0]];
+  const blocked = removeCharacterAndMember(
+    singleChar,
+    singleMember,
+    singleChar[0].id,
+    singleChar[0].id
+  );
+  assert.equal(blocked.removed, false);
+  assert.equal(blocked.characters.length, 1);
 });

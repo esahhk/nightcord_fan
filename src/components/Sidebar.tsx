@@ -8,7 +8,8 @@ import type {
   VoiceMember,
 } from '../types/nightcord';
 import { getUiText } from '../utils/i18n';
-import { NightcordAvatar, WorkChannelIcon } from './NightcordArt';
+import { CharacterAvatar } from './LocalMedia';
+import { WorkChannelIcon } from './NightcordArt';
 
 interface SidebarProps {
   lang: UiLanguage;
@@ -33,6 +34,8 @@ interface SidebarProps {
   onOfflineToggle: () => void;
   onMicToggle: (member: VoiceMember) => void;
   onSetMemberStatus: (member: VoiceMember, status: MemberPresenceStatus) => void;
+  canRemoveCharacter: boolean;
+  onRemoveCharacter: (member: VoiceMember) => void;
   onExportData: () => void;
   onTriggerImportData: () => void;
   onRequestClearCache: () => void;
@@ -63,6 +66,8 @@ export function Sidebar({
   onOfflineToggle,
   onMicToggle,
   onSetMemberStatus,
+  canRemoveCharacter,
+  onRemoveCharacter,
   onExportData,
   onTriggerImportData,
   onRequestClearCache,
@@ -74,8 +79,10 @@ export function Sidebar({
   const [fromTemplate, setFromTemplate] = useState(false);
   const [createExpanded, setCreateExpanded] = useState(false);
   const [memberMenuId, setMemberMenuId] = useState<string | null>(null);
+  const [memberMenuFlipUp, setMemberMenuFlipUp] = useState(false);
   const longPressTimerRef = useRef<number | null>(null);
   const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressTriggeredRef = useRef(false);
 
   const onlineMembers = members.filter((m) => m.status === 'online');
   const voiceMembers = members.filter((m) => m.status === 'voice');
@@ -125,15 +132,32 @@ export function Sidebar({
     }
   };
 
-  const startMemberLongPress = (memberId: string, x: number, y: number) => {
+  const openMemberMenu = (memberId: string, rowEl: HTMLElement | null) => {
+    if (rowEl) {
+      const rect = rowEl.getBoundingClientRect();
+      setMemberMenuFlipUp(rect.bottom + 185 > window.innerHeight);
+    } else {
+      setMemberMenuFlipUp(false);
+    }
+    setMemberMenuId(memberId);
+  };
+
+  const startMemberLongPress = (
+    memberId: string,
+    x: number,
+    y: number,
+    rowEl: HTMLElement | null
+  ) => {
     if (mode !== 'studio') {
       return;
     }
     clearLongPress();
+    longPressTriggeredRef.current = false;
     pressOriginRef.current = { x, y };
     longPressTimerRef.current = window.setTimeout(() => {
       window.getSelection?.()?.removeAllRanges();
-      setMemberMenuId(memberId);
+      longPressTriggeredRef.current = true;
+      openMemberMenu(memberId, rowEl);
       pressOriginRef.current = null;
     }, 450);
   };
@@ -161,7 +185,9 @@ export function Sidebar({
     return (
       <div
         role="menu"
-        className="nc-modal-enter absolute left-3 top-[38px] z-50 min-w-[144px] rounded-[9px] border border-[#524468] bg-[#211A2C] p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.62)]"
+        className={`nc-modal-enter absolute left-3 z-50 min-w-[148px] rounded-[9px] border border-[#524468] bg-[#211A2C] p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.62)] ${
+          memberMenuFlipUp ? 'bottom-[38px]' : 'top-[38px]'
+        }`}
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
       >
@@ -190,6 +216,24 @@ export function Sidebar({
             </button>
           );
         })}
+        <div className="my-1 h-px w-full bg-[#362B49]" />
+        <button
+          type="button"
+          data-action="remove-member-character"
+          aria-disabled={!canRemoveCharacter}
+          onClick={() => {
+            onRemoveCharacter(member);
+            setMemberMenuId(null);
+          }}
+          className={`flex w-full cursor-pointer items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left text-[12px] font-medium transition-colors ${
+            canRemoveCharacter
+              ? 'text-[#FFB6C7] hover:bg-[#4B2538] hover:text-white'
+              : 'text-[#8B7D9B] opacity-70 hover:bg-[#342946]'
+          }`}
+        >
+          <span className="h-2 w-2 rounded-full bg-[#EB7F97]" />
+          <span>{t.removeCharBtn}</span>
+        </button>
       </div>
     );
   };
@@ -222,6 +266,10 @@ export function Sidebar({
 
       <aside
         onClick={() => {
+          if (longPressTriggeredRef.current) {
+            longPressTriggeredRef.current = false;
+            return;
+          }
           if (serverMenuOpen) {
             onCloseServerMenu();
           }
@@ -594,7 +642,7 @@ export function Sidebar({
           )}
         </div>
 
-        <div className="nc-scroll flex flex-1 flex-col pt-3">
+        <div className="nc-scroll flex flex-1 flex-col pt-3 pb-16">
           <div className="px-2.5">
             <button
               type="button"
@@ -615,7 +663,9 @@ export function Sidebar({
                   key={member.id}
                   data-member-row={member.id}
                   data-member-status={member.status}
-                  onPointerDown={(e) => startMemberLongPress(member.id, e.clientX, e.clientY)}
+                  onPointerDown={(e) =>
+                    startMemberLongPress(member.id, e.clientX, e.clientY, e.currentTarget)
+                  }
                   onPointerMove={(e) => handleMemberPointerMove(e.clientX, e.clientY)}
                   onPointerUp={clearLongPress}
                   onPointerLeave={clearLongPress}
@@ -624,14 +674,17 @@ export function Sidebar({
                     if (mode === 'studio') {
                       e.preventDefault();
                       window.getSelection?.()?.removeAllRanges();
-                      setMemberMenuId(member.id);
+                      openMemberMenu(member.id, e.currentTarget);
                     }
                   }}
-                  className="relative mx-1.5 flex h-[36px] touch-manipulation select-none items-center justify-between rounded-[6px] pl-4 pr-3"
+                  className={`relative mx-1.5 flex h-[36px] touch-manipulation select-none items-center justify-between rounded-[6px] pl-4 pr-3 ${
+                    memberMenuId === member.id ? 'z-40' : ''
+                  }`}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2.5 py-1">
-                    <NightcordAvatar
-                      type={member.avatar}
+                    <CharacterAvatar
+                      avatarType={member.avatar}
+                      customAvatarMediaId={member.customAvatarMediaId}
                       size={25}
                       showOnlineDot={true}
                       isOnline={true}
@@ -671,7 +724,9 @@ export function Sidebar({
                   key={member.id}
                   data-member-row={member.id}
                   data-member-status={member.status}
-                  onPointerDown={(e) => startMemberLongPress(member.id, e.clientX, e.clientY)}
+                  onPointerDown={(e) =>
+                    startMemberLongPress(member.id, e.clientX, e.clientY, e.currentTarget)
+                  }
                   onPointerMove={(e) => handleMemberPointerMove(e.clientX, e.clientY)}
                   onPointerUp={clearLongPress}
                   onPointerLeave={clearLongPress}
@@ -680,14 +735,17 @@ export function Sidebar({
                     if (mode === 'studio') {
                       e.preventDefault();
                       window.getSelection?.()?.removeAllRanges();
-                      setMemberMenuId(member.id);
+                      openMemberMenu(member.id, e.currentTarget);
                     }
                   }}
-                  className="relative mx-1.5 flex h-[36px] touch-manipulation select-none items-center justify-between rounded-[6px] pl-4 pr-3"
+                  className={`relative mx-1.5 flex h-[36px] touch-manipulation select-none items-center justify-between rounded-[6px] pl-4 pr-3 ${
+                    memberMenuId === member.id ? 'z-40' : ''
+                  }`}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2.5 py-1">
-                    <NightcordAvatar
-                      type={member.avatar}
+                    <CharacterAvatar
+                      avatarType={member.avatar}
+                      customAvatarMediaId={member.customAvatarMediaId}
                       size={25}
                       showOnlineDot={true}
                       isOnline={true}
@@ -779,7 +837,9 @@ export function Sidebar({
                   key={member.id}
                   data-member-row={member.id}
                   data-member-status={member.status}
-                  onPointerDown={(e) => startMemberLongPress(member.id, e.clientX, e.clientY)}
+                  onPointerDown={(e) =>
+                    startMemberLongPress(member.id, e.clientX, e.clientY, e.currentTarget)
+                  }
                   onPointerMove={(e) => handleMemberPointerMove(e.clientX, e.clientY)}
                   onPointerUp={clearLongPress}
                   onPointerLeave={clearLongPress}
@@ -788,14 +848,17 @@ export function Sidebar({
                     if (mode === 'studio') {
                       e.preventDefault();
                       window.getSelection?.()?.removeAllRanges();
-                      setMemberMenuId(member.id);
+                      openMemberMenu(member.id, e.currentTarget);
                     }
                   }}
-                  className="relative mx-1.5 flex h-[36px] touch-manipulation select-none items-center justify-between rounded-[6px] pl-4 pr-3"
+                  className={`relative mx-1.5 flex h-[36px] touch-manipulation select-none items-center justify-between rounded-[6px] pl-4 pr-3 ${
+                    memberMenuId === member.id ? 'z-40' : ''
+                  }`}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2.5 py-1">
-                    <NightcordAvatar
-                      type={member.avatar}
+                    <CharacterAvatar
+                      avatarType={member.avatar}
+                      customAvatarMediaId={member.customAvatarMediaId}
                       size={25}
                       showOnlineDot={false}
                       isOnline={false}

@@ -132,6 +132,9 @@ export interface UiText {
   statusVoiceBtn: string;
   statusOfflineBtn: string;
   toastMemberVoice: (name: string) => string;
+  removeCharBtn: string;
+  toastCharRemoved: (name: string) => string;
+  toastCannotRemoveLastChar: string;
   homepageLabel: string;
   tutorialLabel: string;
   githubLabel: string;
@@ -142,7 +145,9 @@ export interface UiText {
   playbackTimelineProp: string;
   playbackTimelinePropSub: string;
   playbackSpeedLabel: (scale: number) => string;
+  videoTutorialSectionLabel: string;
   videoTutorialTitle: string;
+  youtubeTutorialTitle: string;
   videoTutorialBtn: string;
   templatePageBtn: string;
   templatePageTitle: string;
@@ -303,6 +308,9 @@ const JA_TEXT: UiText = {
   statusVoiceBtn: 'ボイスチャット',
   statusOfflineBtn: 'オフライン',
   toastMemberVoice: (name) => `${name} をボイスチャットに移動しました`,
+  removeCharBtn: 'キャラクターを削除',
+  toastCharRemoved: (name) => `キャラクター「${name}」を削除しました`,
+  toastCannotRemoveLastChar: '最低1人のキャラクターが必要です',
   homepageLabel: '個人ページ',
   tutorialLabel: 'ガイド',
   githubLabel: 'GitHub',
@@ -313,8 +321,10 @@ const JA_TEXT: UiText = {
   playbackTimelineProp: '等比例スピード',
   playbackTimelinePropSub: '時間差を倍率で圧縮して再生（0.5 秒〜1 分）',
   playbackSpeedLabel: (scale) => `等比例倍率：${scale}×`,
-  videoTutorialTitle: 'Bilibili 動画チュートリアル',
-  videoTutorialBtn: '動画ガイドを見る',
+  videoTutorialSectionLabel: '動画チュートリアル',
+  videoTutorialTitle: 'Bilibili 動画',
+  youtubeTutorialTitle: 'YouTube 動画',
+  videoTutorialBtn: '動画を見る',
   templatePageBtn: 'UI テンプレート',
   templatePageTitle: 'Nightcord 本体 UI オープンソーステンプレート',
   templatePageSubtitle:
@@ -476,6 +486,9 @@ const ZH_TEXT: UiText = {
   statusVoiceBtn: '语音聊天',
   statusOfflineBtn: '离线',
   toastMemberVoice: (name) => `已将 ${name} 设为语音聊天`,
+  removeCharBtn: '移除角色',
+  toastCharRemoved: (name) => `已移除角色「${name}」`,
+  toastCannotRemoveLastChar: '至少需要保留 1 个角色',
   homepageLabel: '个人主页',
   tutorialLabel: '新手教程',
   githubLabel: 'GitHub',
@@ -486,8 +499,10 @@ const ZH_TEXT: UiText = {
   playbackTimelineProp: '等比例速度',
   playbackTimelinePropSub: '按倍率等比例缩放时间差（0.5 秒 – 1 分钟）',
   playbackSpeedLabel: (scale) => `等比例倍率：${scale}×`,
-  videoTutorialTitle: 'B站视频使用教程',
-  videoTutorialBtn: '前往观看教程',
+  videoTutorialSectionLabel: '视频教程',
+  videoTutorialTitle: 'B站视频教程',
+  youtubeTutorialTitle: 'YouTube 教程',
+  videoTutorialBtn: '前往观看',
   templatePageBtn: '开源 UI 模板',
   templatePageTitle: 'Nightcord 本体 UI 开源模板',
   templatePageSubtitle:
@@ -653,6 +668,9 @@ const EN_TEXT: UiText = {
   statusVoiceBtn: 'Voice Chat',
   statusOfflineBtn: 'Offline',
   toastMemberVoice: (name) => `${name} moved to Voice Chat`,
+  removeCharBtn: 'Remove Character',
+  toastCharRemoved: (name) => `Removed character "${name}"`,
+  toastCannotRemoveLastChar: 'At least one character must remain',
   homepageLabel: 'Home',
   tutorialLabel: 'Guide',
   githubLabel: 'GitHub',
@@ -663,8 +681,10 @@ const EN_TEXT: UiText = {
   playbackTimelineProp: 'Proportional Speed',
   playbackTimelinePropSub: 'Scale message gaps proportionally (0.5s – 60s)',
   playbackSpeedLabel: (scale) => `Speed scale: ${scale}×`,
-  videoTutorialTitle: 'Bilibili Video Tutorial',
-  videoTutorialBtn: 'Watch Video',
+  videoTutorialSectionLabel: 'Video Tutorials',
+  videoTutorialTitle: 'Bilibili',
+  youtubeTutorialTitle: 'YouTube',
+  videoTutorialBtn: 'Watch',
   templatePageBtn: 'UI Template',
   templatePageTitle: 'Nightcord Core UI Open-Source Template',
   templatePageSubtitle:

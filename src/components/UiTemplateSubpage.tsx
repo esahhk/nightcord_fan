@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { UiLanguage } from '../types/nightcord';
 import { getUiText } from '../utils/i18n';
 import { INITIAL_MESSAGES, INITIAL_VOICE_MEMBERS } from '../utils/nightcordState';
@@ -26,6 +26,19 @@ export function UiTemplateSubpage({
   const [previewWidth, setPreviewWidth] = useState<'desktop' | 'mobile'>('desktop');
   const [codeTab, setCodeTab] = useState<'tsx' | 'html'>('tsx');
   const [copiedCode, setCopiedCode] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setCopiedCode(false);
+  }, [codeTab]);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   const activeSource = codeTab === 'tsx' ? NIGHTCORD_TSX_TEMPLATE : NIGHTCORD_HTML_TEMPLATE;
   const activeFilename =
@@ -58,7 +71,10 @@ export function UiTemplateSubpage({
     const ok = await copyText(activeSource);
     if (ok) {
       setCopiedCode(true);
-      window.setTimeout(() => setCopiedCode(false), 1800);
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = window.setTimeout(() => setCopiedCode(false), 1800);
     }
   };
 
@@ -87,15 +103,15 @@ export function UiTemplateSubpage({
       data-testid="ui-template-subpage"
       className="flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#231B30] text-[#EFEBF5]"
     >
-      <header className="flex h-[54px] shrink-0 items-center justify-between gap-3 border-b border-[#322745] bg-[#211A2C] px-3.5 sm:px-6">
-        <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+      <header className="flex h-[54px] shrink-0 items-center justify-between gap-2 border-b border-[#322745] bg-[#211A2C] px-2.5 sm:gap-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
             type="button"
             data-action="template-back"
             onClick={onBack}
-            className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-[#4D3F66] bg-[#2E243D] px-2.5 py-1.5 text-[12px] font-medium text-[#EFEBF5] transition-colors hover:border-[#64D2E6]/60 hover:bg-[#3B2E4E]"
+            className="flex shrink-0 cursor-pointer items-center gap-1 rounded-[7px] border border-[#4D3F66] bg-[#2E243D] px-2 py-1 text-[11.5px] font-medium text-[#EFEBF5] transition-colors hover:border-[#64D2E6]/60 hover:bg-[#3B2E4E] sm:gap-1.5 sm:px-2.5 sm:py-1.5 sm:text-[12px]"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path
                 d="M10 3.5L5.5 8L10 12.5"
                 stroke="currentColor"
@@ -106,21 +122,21 @@ export function UiTemplateSubpage({
             </svg>
             <span>{t.templateBackBtn}</span>
           </button>
-          <div className="flex min-w-0 items-center gap-2">
-            <WorkChannelIcon size={18} />
-            <h1 className="truncate text-[14px] font-bold text-white sm:text-[15.5px]">
+          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+            <WorkChannelIcon size={17} />
+            <h1 className="truncate text-[13px] font-bold text-white sm:text-[15.5px]">
               {t.templatePageTitle}
             </h1>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <div className="grid grid-cols-3 gap-0.5 rounded-[7px] border border-[#3C3052] bg-[#1A1324] p-0.5">
             <button
               type="button"
               data-action="template-lang-zh"
               onClick={() => onSelectLanguage('zh')}
-              className={`cursor-pointer rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors ${
+              className={`cursor-pointer rounded-[5px] px-1.5 py-1 text-[10.5px] font-medium transition-colors sm:px-2 sm:text-[11px] ${
                 lang === 'zh' ? 'bg-[#4C3E65] text-white' : 'text-[#9B90AD] hover:text-white'
               }`}
             >
@@ -130,7 +146,7 @@ export function UiTemplateSubpage({
               type="button"
               data-action="template-lang-ja"
               onClick={() => onSelectLanguage('ja')}
-              className={`cursor-pointer rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors ${
+              className={`cursor-pointer rounded-[5px] px-1.5 py-1 text-[10.5px] font-medium transition-colors sm:px-2 sm:text-[11px] ${
                 lang === 'ja' ? 'bg-[#4C3E65] text-white' : 'text-[#9B90AD] hover:text-white'
               }`}
             >
@@ -140,7 +156,7 @@ export function UiTemplateSubpage({
               type="button"
               data-action="template-lang-en"
               onClick={() => onSelectLanguage('en')}
-              className={`cursor-pointer rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors ${
+              className={`cursor-pointer rounded-[5px] px-1.5 py-1 text-[10.5px] font-medium transition-colors sm:px-2 sm:text-[11px] ${
                 lang === 'en' ? 'bg-[#4C3E65] text-white' : 'text-[#9B90AD] hover:text-white'
               }`}
             >
