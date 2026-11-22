@@ -7,10 +7,14 @@ import {
   INITIAL_VOICE_MEMBERS,
   MAX_PLAYBACK_INTERVAL_MS,
   TEMPLATE_CONVERSATION_ID,
+  addMemberStatusEvent,
   appendInputToken,
+  buildPlaybackTimeline,
   collectReferencedMediaIds,
   computeDisplayMessagesForPlayback,
   computePlaybackDelayMs,
+  computePlaybackStepDelayMs,
+  computePlaybackStepState,
   createFileMessage,
   createImageMessage,
   createInitialConversations,
@@ -22,9 +26,13 @@ import {
   formatDuration,
   formatJapaneseTime,
   formatNightcordFileMeta,
+  getInitialPlaybackCursor,
+  getSuggestedStatusEventTime,
+  hydrateLegacyMessagesSentAt,
   invokeAction,
   parseNightcordBackup,
   removeCharacterAndMember,
+  removeMemberStatusEvent,
   resolveOutgoingTimestamp,
   setMemberOnlineStatus,
   setMemberPresenceStatus,
@@ -216,7 +224,7 @@ test('custom date-time validation prevents earlier dates and supports 2000-3000 
   );
   assert.equal(futureYear.ok, true);
   if (futureYear.ok) {
-    assert.equal(futureYear.timestamp, '2999年12月31日');
+    assert.equal(futureYear.timestamp, '2999年12月31日 23:59');
   }
 
   const yesterdayOnly = INITIAL_MESSAGES.slice(0, 7);
@@ -232,12 +240,12 @@ test('custom date-time validation prevents earlier dates and supports 2000-3000 
   }
 });
 
-test('computeDisplayMessagesForPlayback handles anchored-to-today and unanchored day rollover', () => {
+test('computeDisplayMessagesForPlayback handles anchored-to-today and unanchored day rollover with message time preserved', () => {
   const baseNow = new Date(2026, 5, 18, 12, 0);
   const sender = INITIAL_CHARACTERS[0];
   const m1 = createOutgoingMessage('old year', sender, baseNow, {
     sentAt: { year: 2021, month: 6, day: 17, hour: 15, minute: 30 },
-    timestamp: '2021年6月17日',
+    timestamp: '2021年6月17日 15:30',
   })!;
   const m2 = createOutgoingMessage('same month', sender, baseNow, {
     sentAt: { year: 2026, month: 6, day: 13, hour: 23, minute: 13 },
@@ -249,17 +257,21 @@ test('computeDisplayMessagesForPlayback handles anchored-to-today and unanchored
   })!;
 
   const anchored = computeDisplayMessagesForPlayback([m1, m2, m3], true, baseNow);
-  assert.equal(anchored[0].timestamp, '2021年6月17日');
+  assert.equal(anchored[0].timestamp, '2021年6月17日 15:30');
   assert.equal(anchored[1].timestamp, '13日 23:13');
+  assert.equal(anchored[1].dividerBefore, '13日');
   assert.equal(anchored[2].timestamp, '14日 0:05');
+  assert.equal(anchored[2].dividerBefore, '14日');
 
   const unanchoredStep2 = computeDisplayMessagesForPlayback([m1, m2], false, baseNow);
-  assert.equal(unanchoredStep2[0].timestamp, '2021年6月17日');
+  assert.equal(unanchoredStep2[0].timestamp, '2021年6月17日 15:30');
   assert.equal(unanchoredStep2[1].timestamp, '今日 23:13');
+  assert.equal(unanchoredStep2[1].dividerBefore, '今日');
 
   const unanchoredStep3 = computeDisplayMessagesForPlayback([m1, m2, m3], false, baseNow);
-  assert.equal(unanchoredStep3[0].timestamp, '2021年6月17日');
+  assert.equal(unanchoredStep3[0].timestamp, '2021年6月17日 15:30');
   assert.equal(unanchoredStep3[1].timestamp, '昨日 23:13');
+  assert.equal(unanchoredStep3[1].dividerBefore, '昨日');
   assert.equal(unanchoredStep3[2].timestamp, '今日 0:05');
   assert.equal(unanchoredStep3[2].dividerBefore, '今日');
 });
@@ -439,3 +451,86 @@ test('syncUpsertMemberFromCharacter, syncMembersWithCharacters, and removeCharac
   assert.equal(blocked.removed, false);
   assert.equal(blocked.characters.length, 1);
 });
+
+test('timed member status events merge chronologically with messages and respect includeStatusEvents', () => {
+  const baseNow = new Date(2026, 10, 22, 9, 0);
+  const hydrated = hydrateLegacyMessagesSentAt(INITIAL_MESSAGES, baseNow);
+  assert.ok(hydrated.every((m) => Boolean(m.sentAt)));
+  assert.equal(hydrated[2].sentAt?.hour, 20);
+  assert.equal(hydrated[2].sentAt?.minute, 36);
+
+  const ev1Res = addMemberStatusEvent(
+    [],
+    'enanan',
+    'offline',
+    { year: 2026, month: 11, day: 21, hour: 20, minute: 37 },
+    baseNow
+  );
+  const ev2Res = addMemberStatusEvent(
+    ev1Res.events,
+    'enanan',
+    'voice',
+    { year: 2026, month: 11, day: 22, hour: 1, minute: 35 },
+    baseNow
+  );
+  assert.equal(ev2Res.events.length, 2);
+
+  const suggested = getSuggestedStatusEventTime(hydrated, ev2Res.events, baseNow);
+  assert.equal(suggested.day, 22);
+
+  const mergedSteps = buildPlaybackTimeline(hydrated, ev2Res.events, true, baseNow);
+  assert.equal(mergedSteps.length, hydrated.length + 2);
+  assert.equal(mergedSteps[3].kind, 'status');
+  if (mergedSteps[3].kind === 'status') {
+    assert.equal(mergedSteps[3].event.memberId, 'enanan');
+    assert.equal(mergedSteps[3].event.status, 'offline');
+  }
+  assert.equal(mergedSteps[8].kind, 'status');
+  if (mergedSteps[8].kind === 'status') {
+    assert.equal(mergedSteps[8].event.status, 'voice');
+  }
+
+  const stateAfterOffline = computePlaybackStepState(
+    mergedSteps,
+    4,
+    hydrated,
+    INITIAL_VOICE_MEMBERS,
+    true,
+    baseNow
+  );
+  assert.equal(stateAfterOffline.messages.length, 3);
+  assert.equal(
+    stateAfterOffline.members.find((m) => m.id === 'enanan')?.status,
+    'offline'
+  );
+  assert.equal(stateAfterOffline.hasOfflineTransition, true);
+
+  const stateAfterComeback = computePlaybackStepState(
+    mergedSteps,
+    9,
+    hydrated,
+    INITIAL_VOICE_MEMBERS,
+    true,
+    baseNow
+  );
+  assert.equal(stateAfterComeback.messages.length, 7);
+  assert.equal(
+    stateAfterComeback.members.find((m) => m.id === 'enanan')?.status,
+    'voice'
+  );
+
+  const startFromMsg4 = getInitialPlaybackCursor(mergedSteps, 3);
+  assert.equal(startFromMsg4, 3);
+
+  const delayToOffline = computePlaybackStepDelayMs(mergedSteps, 3, 'timeline', 2.5, 'exact');
+  assert.equal(delayToOffline, 60000);
+
+  const messagesOnlySteps = buildPlaybackTimeline(hydrated, ev2Res.events, false, baseNow);
+  assert.equal(messagesOnlySteps.length, hydrated.length);
+  assert.ok(messagesOnlySteps.every((s) => s.kind === 'message'));
+
+  const remaining = removeMemberStatusEvent(ev2Res.events, ev1Res.created.id);
+  assert.equal(remaining.length, 1);
+  assert.equal(remaining[0].status, 'voice');
+});
+

@@ -23,6 +23,13 @@ export interface VoiceMember {
   status: MemberPresenceStatus;
 }
 
+export interface MemberStatusEvent {
+  id: string;
+  memberId: string;
+  status: MemberPresenceStatus;
+  sentAt: MessageDateTime;
+}
+
 export interface ChatAttachment {
   id: string;
   filename: string;
@@ -91,6 +98,7 @@ export interface PlaybackConfig {
   evenIntervalSec: number;
   startIndex: number;
   anchorToToday: boolean;
+  includeStatusEvents: boolean;
 }
 
 export interface CustomMessageTime {
@@ -122,6 +130,7 @@ export interface Conversation {
   title: string;
   isTemplate?: boolean;
   messages: ChatMessage[];
+  statusEvents?: MemberStatusEvent[];
 }
 
 export interface NightcordActions {

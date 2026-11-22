@@ -246,7 +246,7 @@ export function ChatArea({
                     }`}
                   >
                     <div className="h-px flex-1 bg-[#504266]" />
-                    <span className="text-[11px] font-medium text-[#9A90A8]">
+                    <span className="shrink-0 whitespace-nowrap text-[11px] font-medium text-[#9A90A8]">
                       {msg.dividerBefore}
                     </span>
                     <div className="h-px flex-1 bg-[#504266]" />
@@ -361,7 +361,7 @@ export function ChatArea({
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <div className="mb-0.5 flex items-baseline gap-2">
+                    <div className="mb-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                       <button
                         type="button"
                         data-action={`message-author-${msg.id}`}
@@ -370,7 +370,7 @@ export function ChatArea({
                       >
                         {msg.username}
                       </button>
-                      <span className="text-[10.5px] font-normal text-[#9A90A8]">
+                      <span className="shrink-0 whitespace-nowrap text-[10.5px] font-normal text-[#9A90A8]">
                         {msg.timestamp}
                       </span>
                     </div>

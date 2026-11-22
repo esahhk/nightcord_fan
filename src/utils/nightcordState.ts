@@ -8,6 +8,7 @@ import type {
   Conversation,
   FileMediaKind,
   MemberPresenceStatus,
+  MemberStatusEvent,
   MessageDateTime,
   NightcordActions,
   VoiceMember,
@@ -179,7 +180,7 @@ export function formatTimestampRelativeToRef(
   if (dt.year === ref.year && dt.month === ref.month) {
     return `${dt.day}日 ${dt.hour}:${mm}`;
   }
-  return `${dt.year}年${dt.month}月${dt.day}日`;
+  return `${dt.year}年${dt.month}月${dt.day}日 ${dt.hour}:${mm}`;
 }
 
 export function formatDateTimeBadge(dt: MessageDateTime): string {
@@ -261,6 +262,60 @@ export function getMessageDateTime(
     return msg.sentAt;
   }
   return parseLegacyJapaneseTimestamp(msg.timestamp, baseNow);
+}
+
+export function hydrateLegacyMessagesSentAt(
+  messages: ChatMessage[],
+  baseNow: Date = new Date()
+): ChatMessage[] {
+  let hasMissing = false;
+  for (const m of messages) {
+    if (!m.sentAt) {
+      hasMissing = true;
+      break;
+    }
+  }
+  if (!hasMissing) {
+    return messages;
+  }
+
+  let anchorMs = baseNow.getTime();
+  const nextKnownSentAt: (MessageDateTime | null)[] = new Array(messages.length).fill(null);
+  let lastSeen: MessageDateTime | null = null;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i].sentAt) {
+      lastSeen = messages[i].sentAt!;
+    }
+    nextKnownSentAt[i] = lastSeen;
+  }
+
+  return messages.map((msg, idx) => {
+    if (msg.sentAt) {
+      return msg;
+    }
+    const following = nextKnownSentAt[idx];
+    let effectiveNow = new Date(anchorMs);
+    if (following) {
+      const followingDate = new Date(
+        following.year,
+        following.month - 1,
+        following.day,
+        following.hour,
+        following.minute
+      );
+      if (followingDate.getTime() < effectiveNow.getTime()) {
+        effectiveNow = followingDate;
+      }
+    }
+    const resolved = parseLegacyJapaneseTimestamp(msg.timestamp, effectiveNow);
+    if (!resolved) {
+      return msg;
+    }
+    return {
+      ...msg,
+      sentAt: resolved,
+    };
+  });
 }
 
 export function getLastMessageDateTime(
@@ -481,6 +536,217 @@ export function computePlaybackDelayMs(
   return Math.min(MAX_PLAYBACK_INTERVAL_MS, Math.max(MIN_PLAYBACK_INTERVAL_MS, scaledMs));
 }
 
+export type PlaybackStep =
+  | {
+      kind: 'message';
+      messageIndex: number;
+      dt: MessageDateTime | null;
+    }
+  | {
+      kind: 'status';
+      event: MemberStatusEvent;
+      dt: MessageDateTime;
+    };
+
+export function sortStatusEvents(events: MemberStatusEvent[]): MemberStatusEvent[] {
+  return [...events].sort(
+    (a, b) => dateTimeToEpochMinutes(a.sentAt) - dateTimeToEpochMinutes(b.sentAt)
+  );
+}
+
+export function addMemberStatusEvent(
+  events: MemberStatusEvent[],
+  memberId: string,
+  status: MemberPresenceStatus,
+  sentAt: MessageDateTime,
+  now: Date = new Date()
+): { events: MemberStatusEvent[]; created: MemberStatusEvent } {
+  const created: MemberStatusEvent = {
+    id: `stat-${now.getTime()}-${Math.random().toString(36).slice(2, 6)}`,
+    memberId,
+    status,
+    sentAt,
+  };
+  return {
+    events: sortStatusEvents([...events, created]),
+    created,
+  };
+}
+
+export function removeMemberStatusEvent(
+  events: MemberStatusEvent[],
+  eventId: string
+): MemberStatusEvent[] {
+  return events.filter((ev) => ev.id !== eventId);
+}
+
+export function getSuggestedStatusEventTime(
+  messages: ChatMessage[],
+  statusEvents: MemberStatusEvent[] = [],
+  now: Date = new Date()
+): { year: number; month: number; day: number; time: string } {
+  const base = getSuggestedCustomTime(messages, now);
+  const baseEpoch = dateTimeToEpochMinutes({
+    year: base.year,
+    month: base.month,
+    day: base.day,
+    hour: Number(base.time.split(':')[0] ?? 0),
+    minute: Number(base.time.split(':')[1] ?? 0),
+  });
+  let chosenDt: MessageDateTime | null = null;
+  let chosenEpoch = baseEpoch;
+  for (const ev of statusEvents) {
+    const ep = dateTimeToEpochMinutes(ev.sentAt);
+    if (ep > chosenEpoch) {
+      chosenEpoch = ep;
+      chosenDt = ev.sentAt;
+    }
+  }
+  if (!chosenDt) {
+    return base;
+  }
+  return {
+    year: chosenDt.year,
+    month: chosenDt.month,
+    day: chosenDt.day,
+    time: `${String(chosenDt.hour).padStart(2, '0')}:${String(chosenDt.minute).padStart(2, '0')}`,
+  };
+}
+
+export function buildPlaybackTimeline(
+  messages: ChatMessage[],
+  statusEvents: MemberStatusEvent[] = [],
+  includeStatusEvents: boolean = true,
+  baseNow: Date = new Date()
+): PlaybackStep[] {
+  const sortedEvents = includeStatusEvents ? sortStatusEvents(statusEvents) : [];
+  const steps: PlaybackStep[] = [];
+  let eventIdx = 0;
+
+  for (let i = 0; i < messages.length; i += 1) {
+    const msgDt = getMessageDateTime(messages[i], baseNow);
+    const msgEpoch = msgDt ? dateTimeToEpochMinutes(msgDt) : null;
+    while (
+      msgEpoch !== null &&
+      eventIdx < sortedEvents.length &&
+      dateTimeToEpochMinutes(sortedEvents[eventIdx].sentAt) < msgEpoch
+    ) {
+      const ev = sortedEvents[eventIdx];
+      steps.push({ kind: 'status', event: ev, dt: ev.sentAt });
+      eventIdx += 1;
+    }
+    steps.push({ kind: 'message', messageIndex: i, dt: msgDt });
+  }
+
+  while (eventIdx < sortedEvents.length) {
+    const ev = sortedEvents[eventIdx];
+    steps.push({ kind: 'status', event: ev, dt: ev.sentAt });
+    eventIdx += 1;
+  }
+
+  return steps;
+}
+
+export function getInitialPlaybackCursor(
+  steps: PlaybackStep[],
+  startMessageIndex: number
+): number {
+  if (startMessageIndex <= 0 || steps.length === 0) {
+    return 0;
+  }
+  const targetPrevMsgIdx = startMessageIndex - 1;
+  for (let i = 0; i < steps.length; i += 1) {
+    const step = steps[i];
+    if (step.kind === 'message' && step.messageIndex === targetPrevMsgIdx) {
+      return i + 1;
+    }
+  }
+  return 0;
+}
+
+export function computePlaybackStepState(
+  steps: PlaybackStep[],
+  cursor: number,
+  allMessages: ChatMessage[],
+  baselineMembers: VoiceMember[],
+  anchorToToday: boolean,
+  baseNow: Date = new Date()
+): {
+  messages: ChatMessage[];
+  members: VoiceMember[];
+  hasVoiceTransition: boolean;
+  hasOfflineTransition: boolean;
+} {
+  const clampedCursor = Math.max(0, Math.min(cursor, steps.length));
+  let visibleMsgCount = 0;
+  let nextMembers = baselineMembers;
+  let hasVoiceTransition = false;
+  let hasOfflineTransition = false;
+
+  for (let i = 0; i < clampedCursor; i += 1) {
+    const step = steps[i];
+    if (step.kind === 'message') {
+      visibleMsgCount += 1;
+    } else {
+      const res = setMemberPresenceStatus(nextMembers, step.event.memberId, step.event.status);
+      nextMembers = res.members;
+      if (step.event.status === 'voice') {
+        hasVoiceTransition = true;
+      } else if (step.event.status === 'offline') {
+        hasOfflineTransition = true;
+      }
+    }
+  }
+
+  const slicedMessages = allMessages.slice(0, visibleMsgCount);
+  return {
+    messages: computeDisplayMessagesForPlayback(slicedMessages, anchorToToday, baseNow),
+    members: nextMembers,
+    hasVoiceTransition,
+    hasOfflineTransition,
+  };
+}
+
+export function computePlaybackStepDelayMs(
+  steps: PlaybackStep[],
+  nextCursor: number,
+  pacingMode: 'timeline' | 'even',
+  evenIntervalSec: number = 2.5,
+  timelineSubMode: 'exact' | 'proportional' = 'proportional',
+  timelineScale: number = 60
+): number {
+  if (pacingMode === 'even') {
+    const safeSec = Number.isFinite(evenIntervalSec) ? evenIntervalSec : 2.5;
+    return Math.min(
+      MAX_PLAYBACK_INTERVAL_MS,
+      Math.max(MIN_PLAYBACK_INTERVAL_MS, Math.round(safeSec * 1000))
+    );
+  }
+
+  if (nextCursor <= 0 || nextCursor >= steps.length) {
+    return 1000;
+  }
+
+  const prevDt = steps[nextCursor - 1].dt;
+  const nextDt = steps[nextCursor].dt;
+  if (!prevDt || !nextDt) {
+    return 1500;
+  }
+
+  const diffMin = Math.max(0, dateTimeToEpochMinutes(nextDt) - dateTimeToEpochMinutes(prevDt));
+
+  if (timelineSubMode === 'exact') {
+    if (diffMin === 0) {
+      return MIN_PLAYBACK_INTERVAL_MS;
+    }
+    return Math.max(MIN_PLAYBACK_INTERVAL_MS, diffMin * 60000);
+  }
+
+  const safeScale = Number.isFinite(timelineScale) && timelineScale > 0 ? timelineScale : 60;
+  const scaledMs = Math.round((diffMin * 60000) / safeScale);
+  return Math.min(MAX_PLAYBACK_INTERVAL_MS, Math.max(MIN_PLAYBACK_INTERVAL_MS, scaledMs));
+}
+
 export function detectFileMediaKind(filename: string, mimeType: string = ''): FileMediaKind {
   const lowerName = filename.toLowerCase();
   const lowerMime = mimeType.toLowerCase();
@@ -583,11 +849,46 @@ export function parseNightcordBackup(rawText: string): {
         conv.title.trim() &&
         Array.isArray(conv.messages)
       ) {
+        const parsedEvents: MemberStatusEvent[] = [];
+        if (Array.isArray(conv.statusEvents)) {
+          for (const evItem of conv.statusEvents) {
+            if (!evItem || typeof evItem !== 'object') {
+              continue;
+            }
+            const ev = evItem as Record<string, unknown>;
+            const dt = ev.sentAt as Record<string, unknown> | undefined;
+            if (
+              typeof ev.id === 'string' &&
+              typeof ev.memberId === 'string' &&
+              (ev.status === 'online' || ev.status === 'voice' || ev.status === 'offline') &&
+              dt &&
+              typeof dt.year === 'number' &&
+              typeof dt.month === 'number' &&
+              typeof dt.day === 'number' &&
+              typeof dt.hour === 'number' &&
+              typeof dt.minute === 'number'
+            ) {
+              parsedEvents.push({
+                id: ev.id,
+                memberId: ev.memberId,
+                status: ev.status,
+                sentAt: {
+                  year: dt.year,
+                  month: dt.month,
+                  day: dt.day,
+                  hour: dt.hour,
+                  minute: dt.minute,
+                },
+              });
+            }
+          }
+        }
         validConversations.push({
           id: conv.id,
           title: conv.title,
           isTemplate: Boolean(conv.isTemplate),
           messages: conv.messages as ChatMessage[],
+          statusEvents: parsedEvents.length > 0 ? parsedEvents : undefined,
         });
       }
     }

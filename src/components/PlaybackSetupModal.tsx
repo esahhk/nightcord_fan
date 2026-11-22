@@ -1,19 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type {
   ChatMessage,
+  MemberPresenceStatus,
+  MemberStatusEvent,
   PlaybackConfig,
   PlaybackPacingMode,
   PlaybackTimelineSubMode,
   UiLanguage,
+  VoiceMember,
 } from '../types/nightcord';
 import { getUiText } from '../utils/i18n';
+import { computeDisplayMessagesForPlayback, formatDateTimeBadge } from '../utils/nightcordState';
 import { WorkChannelIcon } from './NightcordArt';
 
 interface PlaybackSetupModalProps {
   open: boolean;
   lang: UiLanguage;
   messages: ChatMessage[];
+  statusEvents: MemberStatusEvent[];
+  members: VoiceMember[];
+  onDeleteStatusEvent: (eventId: string) => void;
+  onClearStatusEvents: () => void;
   onCancel: () => void;
   onStart: (config: PlaybackConfig) => void;
 }
@@ -44,6 +52,10 @@ export function PlaybackSetupModal({
   open,
   lang,
   messages,
+  statusEvents,
+  members,
+  onDeleteStatusEvent,
+  onClearStatusEvents,
   onCancel,
   onStart,
 }: PlaybackSetupModalProps) {
@@ -54,10 +66,18 @@ export function PlaybackSetupModal({
   const [evenIntervalSec, setEvenIntervalSec] = useState<number>(2.5);
   const [startIndex, setStartIndex] = useState<number>(0);
   const [anchorToToday, setAnchorToToday] = useState<boolean>(true);
+  const [includeStatusEvents, setIncludeStatusEvents] = useState<boolean>(true);
+  const [showStatusList, setShowStatusList] = useState<boolean>(false);
+
+  const formattedMessages = useMemo(
+    () => computeDisplayMessagesForPlayback(messages, true),
+    [messages]
+  );
 
   useEffect(() => {
     if (open) {
       setStartIndex((prev) => (prev < messages.length ? prev : 0));
+      setShowStatusList(false);
     }
   }, [open, messages.length]);
 
@@ -67,10 +87,22 @@ export function PlaybackSetupModal({
 
   const t = getUiText(lang);
   const hasMessages = messages.length > 0;
+  const canStart = hasMessages || (includeStatusEvents && statusEvents.length > 0);
+  const memberNameById = new Map(members.map((m) => [m.id, m.name]));
+
+  const getStatusLabel = (status: MemberPresenceStatus): string => {
+    if (status === 'online') {
+      return t.statusOnlineBtn;
+    }
+    if (status === 'voice') {
+      return t.statusVoiceBtn;
+    }
+    return t.statusOfflineBtn;
+  };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!hasMessages) {
+    if (!canStart) {
       return;
     }
     onStart({
@@ -78,8 +110,11 @@ export function PlaybackSetupModal({
       timelineSubMode,
       timelineScale,
       evenIntervalSec: Math.min(60, Math.max(0.5, evenIntervalSec)),
-      startIndex: Math.min(Math.max(0, startIndex), Math.max(0, messages.length - 1)),
+      startIndex: hasMessages
+        ? Math.min(Math.max(0, startIndex), Math.max(0, messages.length - 1))
+        : 0,
       anchorToToday,
+      includeStatusEvents,
     });
   };
 
@@ -109,7 +144,7 @@ export function PlaybackSetupModal({
         <div className="nc-scroll flex flex-col gap-4 p-4">
           <p className="text-[12.5px] leading-[1.55] text-[#C2B8D3]">{t.playbackModalSub}</p>
 
-          {!hasMessages ? (
+          {!hasMessages && statusEvents.length === 0 ? (
             <div className="rounded-[8px] border border-[#524468] bg-[#362B47] px-3.5 py-3 text-[12.5px] text-[#FFD5DF]">
               {t.playbackNoMessages}
             </div>
@@ -284,36 +319,127 @@ export function PlaybackSetupModal({
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="playback-start-select"
-                  className="text-[11.5px] font-bold text-[#9A90A8]"
-                >
-                  {t.playbackStartLabel}
-                </label>
-                <select
-                  id="playback-start-select"
-                  data-action="playback-start-select"
-                  value={startIndex}
-                  onChange={(e) => setStartIndex(Number(e.target.value))}
-                  className="w-full cursor-pointer rounded-[6px] border border-[#453859] bg-[#332844] px-3 py-2 text-[12.5px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
-                >
-                  <option value={0}>{t.playbackStartEmpty}</option>
-                  {messages.slice(1).map((msg, offset) => {
-                    const idx = offset + 1;
-                    return (
-                      <option key={msg.id} value={idx}>
-                        {t.playbackStartFromMsg(
-                          idx + 1,
-                          msg.username,
-                          msg.timestamp,
-                          getMessagePreview(msg)
-                        )}
-                      </option>
-                    );
-                  })}
-                </select>
+              <div className="flex flex-col gap-2">
+                <span className="text-[11.5px] font-bold text-[#9A90A8]">
+                  {t.playbackStatusSyncLabel}
+                </span>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    data-action="playback-status-sync-on"
+                    aria-pressed={includeStatusEvents}
+                    onClick={() => setIncludeStatusEvents(true)}
+                    className={`flex cursor-pointer flex-col items-start rounded-[8px] border p-2.5 text-left transition-colors ${
+                      includeStatusEvents
+                        ? 'border-[#64D2E6] bg-[#473A5C] text-white'
+                        : 'border-[#524468] bg-[#362B47] text-[#DCD7E5] hover:bg-[#3F3352]'
+                    }`}
+                  >
+                    <span className="text-[12.5px] font-bold">{t.playbackStatusSyncOnTitle}</span>
+                    <span className="mt-1 text-[11px] leading-[1.4] text-[#B4A9C6]">
+                      {t.playbackStatusSyncOnSub(statusEvents.length)}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-action="playback-status-sync-off"
+                    aria-pressed={!includeStatusEvents}
+                    onClick={() => setIncludeStatusEvents(false)}
+                    className={`flex cursor-pointer flex-col items-start rounded-[8px] border p-2.5 text-left transition-colors ${
+                      !includeStatusEvents
+                        ? 'border-[#64D2E6] bg-[#473A5C] text-white'
+                        : 'border-[#524468] bg-[#362B47] text-[#DCD7E5] hover:bg-[#3F3352]'
+                    }`}
+                  >
+                    <span className="text-[12.5px] font-bold">{t.playbackStatusSyncOffTitle}</span>
+                    <span className="mt-1 text-[11px] leading-[1.4] text-[#B4A9C6]">
+                      {t.playbackStatusSyncOffSub}
+                    </span>
+                  </button>
+                </div>
+
+                {statusEvents.length > 0 && (
+                  <div className="rounded-[8px] border border-[#453859] bg-[#261D33] px-2.5 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        data-action="playback-toggle-status-list"
+                        onClick={() => setShowStatusList((prev) => !prev)}
+                        className="cursor-pointer text-[11px] font-medium text-[#64D2E6] hover:underline"
+                      >
+                        {t.playbackStatusEventsManage(statusEvents.length)}
+                      </button>
+                      <button
+                        type="button"
+                        data-action="playback-clear-status-events"
+                        onClick={onClearStatusEvents}
+                        className="cursor-pointer text-[11px] text-[#EB7F97] hover:underline"
+                      >
+                        {t.playbackClearStatusEventsBtn}
+                      </button>
+                    </div>
+                    {showStatusList && (
+                      <div className="mt-2 flex max-h-[120px] flex-col gap-1 overflow-y-auto nc-scroll">
+                        {statusEvents.map((ev) => (
+                          <div
+                            key={ev.id}
+                            className="flex items-center justify-between gap-2 rounded-[5px] bg-[#2E243D] px-2 py-1 text-[11px] text-[#DCD7E5]"
+                          >
+                            <span className="truncate">
+                              {formatDateTimeBadge(ev.sentAt)} ·{' '}
+                              {memberNameById.get(ev.memberId) ?? ev.memberId} →{' '}
+                              {getStatusLabel(ev.status)}
+                            </span>
+                            <button
+                              type="button"
+                              data-action={`playback-delete-status-event-${ev.id}`}
+                              aria-label={t.cancel}
+                              onClick={() => onDeleteStatusEvent(ev.id)}
+                              className="shrink-0 cursor-pointer px-1 text-[#9A90A8] hover:text-[#FF9EB3]"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
+
+              {hasMessages && (
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor="playback-start-select"
+                    className="text-[11.5px] font-bold text-[#9A90A8]"
+                  >
+                    {t.playbackStartLabel}
+                  </label>
+                  <select
+                    id="playback-start-select"
+                    data-action="playback-start-select"
+                    value={startIndex}
+                    onChange={(e) => setStartIndex(Number(e.target.value))}
+                    className="w-full cursor-pointer rounded-[6px] border border-[#453859] bg-[#332844] px-3 py-2 text-[12.5px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+                  >
+                    <option value={0}>{t.playbackStartEmpty}</option>
+                    {formattedMessages.slice(1).map((msg, offset) => {
+                      const idx = offset + 1;
+                      return (
+                        <option key={msg.id} value={idx}>
+                          {t.playbackStartFromMsg(
+                            idx + 1,
+                            msg.username,
+                            msg.timestamp,
+                            getMessagePreview(msg)
+                          )}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
 
               <p className="text-[11px] leading-[1.5] text-[#9A90A8]">{t.playbackCapNote}</p>
             </>
@@ -332,9 +458,9 @@ export function PlaybackSetupModal({
           <button
             type="submit"
             data-action="playback-start"
-            disabled={!hasMessages}
+            disabled={!canStart}
             className={`rounded-[6px] px-4 py-1.5 text-[12.5px] font-bold transition-colors ${
-              hasMessages
+              canStart
                 ? 'cursor-pointer bg-[#EB7F97] text-[#211A2C] hover:brightness-110'
                 : 'cursor-not-allowed bg-[#453859] text-[#857A99]'
             }`}

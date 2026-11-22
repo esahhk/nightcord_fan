@@ -165,6 +165,21 @@ export interface UiText {
   templateArchitectureDesc: string;
   templateLicenseNote: string;
   templateCopiedColor: (hex: string) => string;
+  statusAddTimeToggle: string;
+  statusAddTimeHint: string;
+  statusTimeInvalid: string;
+  statusTimeSyncBtn: string;
+  statusScheduledListLabel: (count: number) => string;
+  toastStatusEventAdded: (name: string, statusLabel: string, timeLabel: string) => string;
+  toastStatusEventRemoved: string;
+  toastStatusEventsCleared: string;
+  playbackStatusSyncLabel: string;
+  playbackStatusSyncOnTitle: string;
+  playbackStatusSyncOnSub: (count: number) => string;
+  playbackStatusSyncOffTitle: string;
+  playbackStatusSyncOffSub: string;
+  playbackStatusEventsManage: (count: number) => string;
+  playbackClearStatusEventsBtn: string;
 }
 
 const JA_TEXT: UiText = {
@@ -283,7 +298,7 @@ const JA_TEXT: UiText = {
   toastPlaybackDone: 'メッセージの自動再生が完了しました',
   playbackAnchorLabel: '日時の基準',
   playbackAnchorTodayTitle: '今日の日時に固定する',
-  playbackAnchorTodaySub: '同月の過去は「13日 23:13」、別月・別年は「2021年6月17日」表示',
+  playbackAnchorTodaySub: '同月の過去は「13日 23:13」、別月・別年は「2021年6月17日 15:30」表示',
   playbackAnchorFlowTitle: '再生中のメッセージ日時を基準',
   playbackAnchorFlowSub: '開始メッセージを「今日」とし、24時を過ぎると前日が「昨日」に変化',
   linksSectionTitle: 'リンク・お問い合わせ',
@@ -344,6 +359,25 @@ const JA_TEXT: UiText = {
   templateLicenseNote:
     'CC BY-NC-SA 4.0（オリジナルコード部分）／ キャラクターおよび Nightcord の著作権は SEGA に帰属します。',
   templateCopiedColor: (hex) => `カラーコード ${hex} をコピーしました`,
+  statusAddTimeToggle: '状態切替に時間を設定',
+  statusAddTimeHint: '画面には表示せず、自動再生時にチャットと同期して切り替えます。',
+  statusTimeInvalid: '正しい時刻（HH:MM）を入力してください',
+  statusTimeSyncBtn: '最新時刻',
+  statusScheduledListLabel: (count) => `予約済みの切替（${count}件）`,
+  toastStatusEventAdded: (name, statusLabel, timeLabel) =>
+    `${name} の「${statusLabel}」切替を ${timeLabel} に予約しました（自動再生時に反映）`,
+  toastStatusEventRemoved: '予約済みの状態切替を削除しました',
+  toastStatusEventsCleared: 'この会話の状態切替予約をすべて消去しました',
+  playbackStatusSyncLabel: '左メンバーの状態連動',
+  playbackStatusSyncOnTitle: 'オンライン／オフライン切替も再生',
+  playbackStatusSyncOnSub: (count) =>
+    count > 0
+      ? `予約済みの ${count} 件の切替を右側メッセージと同時再生`
+      : '左メンバー長押しで予約した時刻に合わせて状態を同期切替',
+  playbackStatusSyncOffTitle: '右側のメッセージのみ再生',
+  playbackStatusSyncOffSub: '左メンバー欄の状態は現在のまま固定して再生',
+  playbackStatusEventsManage: (count) => `予約済みの状態切替を確認（${count}件）`,
+  playbackClearStatusEventsBtn: 'すべて削除',
 };
 
 const ZH_TEXT: UiText = {
@@ -461,7 +495,7 @@ const ZH_TEXT: UiText = {
   toastPlaybackDone: '消息逐条播放已完成',
   playbackAnchorLabel: '时间基准',
   playbackAnchorTodayTitle: '锚定在今日时间',
-  playbackAnchorTodaySub: '同月之前显示「13日 23:13」，跨月/跨年显示「2021年6月17日」',
+  playbackAnchorTodaySub: '同月之前显示「13日 23:13」，跨月/跨年显示「2021年6月17日 15:30」',
   playbackAnchorFlowTitle: '不锚定（随播放时间推进）',
   playbackAnchorFlowSub: '以播放消息的时间为「今日」，跨过 24 点后之前的消息自动变为「昨日」',
   linksSectionTitle: '相关链接与反馈',
@@ -522,6 +556,25 @@ const ZH_TEXT: UiText = {
   templateLicenseNote:
     '原创代码与 UI 模板采用 CC BY-NC-SA 4.0 协议开源；角色与 Nightcord 原作版权归 SEGA 所有。',
   templateCopiedColor: (hex) => `已复制色值 ${hex}`,
+  statusAddTimeToggle: '为状态切换添加时间',
+  statusAddTimeHint: '不会直接显示在界面中，自动播放时按该时间与右侧消息同步切换。',
+  statusTimeInvalid: '请输入有效时间（HH:MM）',
+  statusTimeSyncBtn: '同步时间',
+  statusScheduledListLabel: (count) => `已添加的定时切换（${count}）`,
+  toastStatusEventAdded: (name, statusLabel, timeLabel) =>
+    `已记录 ${name} 在 ${timeLabel} 切换为「${statusLabel}」（自动播放时同步生效）`,
+  toastStatusEventRemoved: '已删除该定时状态切换',
+  toastStatusEventsCleared: '已清空当前对话的所有状态切换记录',
+  playbackStatusSyncLabel: '左侧角色上下线同步',
+  playbackStatusSyncOnTitle: '播放角色上下线状态',
+  playbackStatusSyncOnSub: (count) =>
+    count > 0
+      ? `按设定时间与右侧消息同步切换（已记录 ${count} 条）`
+      : '若长按左侧角色记录了切换时间，播放时会同步切换状态',
+  playbackStatusSyncOffTitle: '仅播放右侧消息',
+  playbackStatusSyncOffSub: '保持左侧角色栏当前状态不变，只逐条展示聊天消息',
+  playbackStatusEventsManage: (count) => `管理已记录的状态切换（${count} 条）`,
+  playbackClearStatusEventsBtn: '全部清空',
 };
 
 const EN_TEXT: UiText = {
@@ -643,7 +696,7 @@ const EN_TEXT: UiText = {
   toastPlaybackDone: 'Auto-playback finished',
   playbackAnchorLabel: 'Date Reference',
   playbackAnchorTodayTitle: 'Anchor to Today',
-  playbackAnchorTodaySub: 'Same month shows "13日 23:13"; other month/year shows "2021年6月17日"',
+  playbackAnchorTodaySub: 'Same month shows "13日 23:13"; other month/year shows "2021年6月17日 15:30"',
   playbackAnchorFlowTitle: 'Dynamic (Follow Playback)',
   playbackAnchorFlowSub: 'Treats current playing message as "今日"; crossing midnight shifts older ones to "昨日"',
   linksSectionTitle: 'Links & Contact',
@@ -704,6 +757,25 @@ const EN_TEXT: UiText = {
   templateLicenseNote:
     'Original code & UI template licensed under CC BY-NC-SA 4.0; characters & Nightcord IP belong to SEGA.',
   templateCopiedColor: (hex) => `Copied color ${hex}`,
+  statusAddTimeToggle: 'Add time to status switch',
+  statusAddTimeHint: 'Hidden from view; replays in sync with chat messages during auto-playback.',
+  statusTimeInvalid: 'Enter a valid time (HH:MM)',
+  statusTimeSyncBtn: 'Sync Time',
+  statusScheduledListLabel: (count) => `Scheduled switches (${count})`,
+  toastStatusEventAdded: (name, statusLabel, timeLabel) =>
+    `Scheduled ${name} -> "${statusLabel}" at ${timeLabel} (plays during auto-playback)`,
+  toastStatusEventRemoved: 'Removed scheduled status switch',
+  toastStatusEventsCleared: 'Cleared all scheduled status switches for this chat',
+  playbackStatusSyncLabel: 'Sidebar Member Status Sync',
+  playbackStatusSyncOnTitle: 'Play Member Status Switches',
+  playbackStatusSyncOnSub: (count) =>
+    count > 0
+      ? `Replay ${count} recorded sidebar switch(es) alongside chat messages`
+      : 'Sync Online / Voice / Offline switches scheduled on sidebar members',
+  playbackStatusSyncOffTitle: 'Messages Only',
+  playbackStatusSyncOffSub: 'Keep sidebar member statuses fixed while replaying chat messages',
+  playbackStatusEventsManage: (count) => `Manage scheduled switches (${count})`,
+  playbackClearStatusEventsBtn: 'Clear All',
 };
 
 export function getUiText(lang: UiLanguage): UiText {

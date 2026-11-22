@@ -1,15 +1,25 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import type {
   AppMode,
   Conversation,
   MemberPresenceStatus,
+  MemberStatusEvent,
+  MessageDateTime,
   UiLanguage,
   VoiceMember,
 } from '../types/nightcord';
 import { getUiText } from '../utils/i18n';
+import {
+  formatDateTimeBadge,
+  getDaysInMonth,
+  parseCustomDateTimeInput,
+} from '../utils/nightcordState';
 import { CharacterAvatar } from './LocalMedia';
 import { WorkChannelIcon } from './NightcordArt';
+
+const STATUS_YEARS: number[] = Array.from({ length: 1001 }, (_, idx) => 2000 + idx);
+const STATUS_MONTHS: number[] = Array.from({ length: 12 }, (_, idx) => idx + 1);
 
 interface SidebarProps {
   lang: UiLanguage;
@@ -22,6 +32,8 @@ interface SidebarProps {
   members: VoiceMember[];
   mobileOpen: boolean;
   serverMenuOpen: boolean;
+  suggestedStatusTime: { year: number; month: number; day: number; time: string };
+  activeStatusEvents: MemberStatusEvent[];
   onSelectLanguage: (lang: UiLanguage) => void;
   onCloseMobile: () => void;
   onToggleServerMenu: () => void;
@@ -34,6 +46,12 @@ interface SidebarProps {
   onOfflineToggle: () => void;
   onMicToggle: (member: VoiceMember) => void;
   onSetMemberStatus: (member: VoiceMember, status: MemberPresenceStatus) => void;
+  onScheduleMemberStatus: (
+    member: VoiceMember,
+    status: MemberPresenceStatus,
+    sentAt: MessageDateTime
+  ) => void;
+  onDeleteStatusEvent: (eventId: string) => void;
   canRemoveCharacter: boolean;
   onRemoveCharacter: (member: VoiceMember) => void;
   onExportData: () => void;
@@ -54,6 +72,8 @@ export function Sidebar({
   members,
   mobileOpen,
   serverMenuOpen,
+  suggestedStatusTime,
+  activeStatusEvents,
   onSelectLanguage,
   onCloseMobile,
   onToggleServerMenu,
@@ -66,6 +86,8 @@ export function Sidebar({
   onOfflineToggle,
   onMicToggle,
   onSetMemberStatus,
+  onScheduleMemberStatus,
+  onDeleteStatusEvent,
   canRemoveCharacter,
   onRemoveCharacter,
   onExportData,
@@ -80,6 +102,13 @@ export function Sidebar({
   const [createExpanded, setCreateExpanded] = useState(false);
   const [memberMenuId, setMemberMenuId] = useState<string | null>(null);
   const [memberMenuFlipUp, setMemberMenuFlipUp] = useState(false);
+  const [statusTimeEnabled, setStatusTimeEnabled] = useState(false);
+  const [statusTimeYear, setStatusTimeYear] = useState(suggestedStatusTime.year);
+  const [statusTimeMonth, setStatusTimeMonth] = useState(suggestedStatusTime.month);
+  const [statusTimeDay, setStatusTimeDay] = useState(suggestedStatusTime.day);
+  const [statusTimeClock, setStatusTimeClock] = useState(suggestedStatusTime.time);
+  const [statusTimeError, setStatusTimeError] = useState<string | null>(null);
+  const activeMemberRowRef = useRef<HTMLElement | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
   const longPressTriggeredRef = useRef(false);
@@ -88,9 +117,16 @@ export function Sidebar({
   const voiceMembers = members.filter((m) => m.status === 'voice');
   const offlineMembers = members.filter((m) => m.status === 'offline');
 
+  const statusDaysList = useMemo(
+    () => Array.from({ length: getDaysInMonth(statusTimeYear, statusTimeMonth) }, (_, i) => i + 1),
+    [statusTimeYear, statusTimeMonth]
+  );
+
   useEffect(() => {
     if (mode !== 'studio') {
       setMemberMenuId(null);
+      setStatusTimeEnabled(false);
+      setStatusTimeError(null);
     }
   }, [mode]);
 
@@ -132,13 +168,25 @@ export function Sidebar({
     }
   };
 
-  const openMemberMenu = (memberId: string, rowEl: HTMLElement | null) => {
-    if (rowEl) {
-      const rect = rowEl.getBoundingClientRect();
-      setMemberMenuFlipUp(rect.bottom + 185 > window.innerHeight);
-    } else {
-      setMemberMenuFlipUp(false);
+  const computeFlipUp = (rowEl: HTMLElement | null, expanded: boolean): boolean => {
+    if (!rowEl) {
+      return false;
     }
+    const rect = rowEl.getBoundingClientRect();
+    const neededHeight = expanded ? 340 : 210;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    return spaceBelow < neededHeight && spaceAbove > spaceBelow;
+  };
+
+  const openMemberMenu = (memberId: string, rowEl: HTMLElement | null) => {
+    activeMemberRowRef.current = rowEl;
+    setStatusTimeYear(suggestedStatusTime.year);
+    setStatusTimeMonth(suggestedStatusTime.month);
+    setStatusTimeDay(suggestedStatusTime.day);
+    setStatusTimeClock(suggestedStatusTime.time);
+    setStatusTimeError(null);
+    setMemberMenuFlipUp(computeFlipUp(rowEl, statusTimeEnabled));
     setMemberMenuId(memberId);
   };
 
@@ -173,6 +221,24 @@ export function Sidebar({
     setCreateExpanded(false);
   };
 
+  const updateStatusYearOrMonth = (nextYear: number, nextMonth: number) => {
+    const maxDay = getDaysInMonth(nextYear, nextMonth);
+    setStatusTimeYear(nextYear);
+    setStatusTimeMonth(nextMonth);
+    setStatusTimeDay((prev) => Math.min(prev, maxDay));
+    setStatusTimeError(null);
+  };
+
+  const getStatusLabel = (status: MemberPresenceStatus): string => {
+    if (status === 'online') {
+      return t.statusOnlineBtn;
+    }
+    if (status === 'voice') {
+      return t.statusVoiceBtn;
+    }
+    return t.statusOfflineBtn;
+  };
+
   const renderStatusPopover = (member: VoiceMember) => {
     if (mode !== 'studio' || memberMenuId !== member.id) {
       return null;
@@ -182,23 +248,41 @@ export function Sidebar({
       { value: 'voice', label: t.statusVoiceBtn, dotClass: 'bg-[#64D2E6]' },
       { value: 'offline', label: t.statusOfflineBtn, dotClass: 'bg-[#857A99]' },
     ];
+    const memberEvents = activeStatusEvents.filter((ev) => ev.memberId === member.id);
+
     return (
       <div
         role="menu"
-        className={`nc-modal-enter absolute left-3 z-50 min-w-[148px] rounded-[9px] border border-[#524468] bg-[#211A2C] p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.62)] ${
+        className={`nc-modal-enter nc-scroll absolute left-1.5 z-50 max-h-[min(68dvh,360px)] w-[216px] overflow-y-auto rounded-[9px] border border-[#524468] bg-[#211A2C] p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.68)] ${
           memberMenuFlipUp ? 'bottom-[38px]' : 'top-[38px]'
         }`}
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
       >
         {options.map((opt) => {
-          const isCurrent = member.status === opt.value;
+          const isCurrent = member.status === opt.value && !statusTimeEnabled;
           return (
             <button
               key={opt.value}
               type="button"
               data-action={`set-member-status-${opt.value}`}
               onClick={() => {
+                if (statusTimeEnabled) {
+                  const parsed = parseCustomDateTimeInput({
+                    year: statusTimeYear,
+                    month: statusTimeMonth,
+                    day: statusTimeDay,
+                    time: statusTimeClock,
+                  });
+                  if (!parsed) {
+                    setStatusTimeError(t.statusTimeInvalid);
+                    return;
+                  }
+                  onScheduleMemberStatus(member, opt.value, parsed);
+                  setStatusTimeError(null);
+                  setMemberMenuId(null);
+                  return;
+                }
                 onSetMemberStatus(member, opt.value);
                 setMemberMenuId(null);
               }}
@@ -216,6 +300,135 @@ export function Sidebar({
             </button>
           );
         })}
+
+        <div className="my-1 h-px w-full bg-[#362B49]" />
+
+        <div className="rounded-[6px] px-1 py-1">
+          <label className="flex cursor-pointer items-start gap-2 px-1.5 py-0.5 text-[11.5px] font-medium text-[#DCD7E5] hover:text-white">
+            <input
+              type="checkbox"
+              data-action="toggle-member-status-time"
+              checked={statusTimeEnabled}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setStatusTimeEnabled(next);
+                setStatusTimeError(null);
+                setMemberMenuFlipUp(computeFlipUp(activeMemberRowRef.current, next));
+              }}
+              className="mt-0.5 shrink-0 accent-[#64D2E6]"
+            />
+            <span className="leading-[1.35]">{t.statusAddTimeToggle}</span>
+          </label>
+
+          {statusTimeEnabled && (
+            <div className="mt-1.5 flex flex-col gap-1.5 rounded-[6px] border border-[#3E3254] bg-[#292038] p-2">
+              <p className="text-[10px] leading-[1.35] text-[#A499B8]">{t.statusAddTimeHint}</p>
+              <div className="grid grid-cols-[1.3fr_0.9fr_0.8fr] gap-1">
+                <select
+                  data-action="member-status-year"
+                  aria-label={t.yearUnit}
+                  value={statusTimeYear}
+                  onChange={(e) => updateStatusYearOrMonth(Number(e.target.value), statusTimeMonth)}
+                  className="cursor-pointer rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1 py-0.5 text-[10.5px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+                >
+                  {STATUS_YEARS.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  data-action="member-status-month"
+                  aria-label={t.monthUnit}
+                  value={statusTimeMonth}
+                  onChange={(e) => updateStatusYearOrMonth(statusTimeYear, Number(e.target.value))}
+                  className="cursor-pointer rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1 py-0.5 text-[10.5px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+                >
+                  {STATUS_MONTHS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                      {t.monthUnit}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  data-action="member-status-day"
+                  aria-label={t.dayUnit}
+                  value={statusTimeDay}
+                  onChange={(e) => {
+                    setStatusTimeDay(Number(e.target.value));
+                    setStatusTimeError(null);
+                  }}
+                  className="cursor-pointer rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1 py-0.5 text-[10.5px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+                >
+                  {statusDaysList.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                      {t.dayUnit}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-1">
+                <input
+                  type="time"
+                  data-action="member-status-time-input"
+                  aria-label={t.statusAddTimeToggle}
+                  value={statusTimeClock}
+                  onChange={(e) => {
+                    setStatusTimeClock(e.target.value);
+                    setStatusTimeError(null);
+                  }}
+                  className="min-w-0 flex-1 rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1.5 py-0.5 text-[11px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+                />
+                <button
+                  type="button"
+                  data-action="member-status-time-sync"
+                  onClick={() => {
+                    setStatusTimeYear(suggestedStatusTime.year);
+                    setStatusTimeMonth(suggestedStatusTime.month);
+                    setStatusTimeDay(suggestedStatusTime.day);
+                    setStatusTimeClock(suggestedStatusTime.time);
+                    setStatusTimeError(null);
+                  }}
+                  className="shrink-0 cursor-pointer rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1.5 py-0.5 text-[10px] text-[#C2B8D3] hover:bg-[#473A5C] hover:text-white"
+                >
+                  {t.statusTimeSyncBtn}
+                </button>
+              </div>
+              {statusTimeError && (
+                <div className="text-[10px] font-medium text-[#FF9EB3]">{statusTimeError}</div>
+              )}
+              {memberEvents.length > 0 && (
+                <div className="mt-0.5 flex flex-col gap-1 border-t border-[#3B2F50] pt-1.5">
+                  <span className="text-[10px] font-medium text-[#9B90AD]">
+                    {t.statusScheduledListLabel(memberEvents.length)}
+                  </span>
+                  {memberEvents.map((ev) => (
+                    <div
+                      key={ev.id}
+                      className="flex items-center justify-between gap-1 rounded-[4px] bg-[#211A2C] px-1.5 py-1 text-[10px] text-[#DCD7E5]"
+                    >
+                      <span className="truncate">
+                        {formatDateTimeBadge(ev.sentAt)} · {getStatusLabel(ev.status)}
+                      </span>
+                      <button
+                        type="button"
+                        data-action={`delete-status-event-${ev.id}`}
+                        aria-label={t.cancel}
+                        onClick={() => onDeleteStatusEvent(ev.id)}
+                        className="shrink-0 cursor-pointer px-1 text-[#9B90AD] hover:text-[#FF9EB3]"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="my-1 h-px w-full bg-[#362B49]" />
         <button
           type="button"

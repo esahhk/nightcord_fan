@@ -18,6 +18,7 @@ import type {
   CustomMessageTime,
   FileMediaKind,
   MemberPresenceStatus,
+  MessageDateTime,
   NightcordActions,
   NightcordBackupPayload,
   PlaybackConfig,
@@ -51,21 +52,29 @@ import {
   INITIAL_CHARACTERS,
   INITIAL_VOICE_MEMBERS,
   TEMPLATE_CONVERSATION_ID,
+  addMemberStatusEvent,
   appendInputToken,
+  buildPlaybackTimeline,
   collectReferencedMediaIds,
   computeDisplayMessagesForPlayback,
-  computePlaybackDelayMs,
+  computePlaybackStepDelayMs,
+  computePlaybackStepState,
   createFileMessage,
   createInitialConversations,
   createNewConversation,
   createOutgoingMessage,
   deleteMessageAndRebuildDividers,
+  formatDateTimeBadge,
   formatNightcordFileMeta,
+  getInitialPlaybackCursor,
   getLastMessageDateTime,
   getSuggestedCustomTime,
+  getSuggestedStatusEventTime,
+  hydrateLegacyMessagesSentAt,
   invokeAction,
   parseNightcordBackup,
   removeCharacterAndMember,
+  removeMemberStatusEvent,
   resolveOutgoingTimestamp,
   setMemberPresenceStatus,
   syncMembersWithCharacters,
@@ -146,7 +155,9 @@ export default function App({ actions }: AppProps) {
   const [clearCacheOpen, setClearCacheOpen] = useState(false);
   const [playbackModalOpen, setPlaybackModalOpen] = useState(false);
   const [playbackConfig, setPlaybackConfig] = useState<PlaybackConfig | null>(null);
-  const [playbackVisibleCount, setPlaybackVisibleCount] = useState<number | null>(null);
+  const [playbackCursor, setPlaybackCursor] = useState<number | null>(null);
+  const [playbackBaseNow, setPlaybackBaseNow] = useState<Date | null>(null);
+  const [clockNow, setClockNow] = useState<Date>(() => new Date());
   const [toastText, setToastText] = useState<string | null>(null);
 
   const actionsRef = useRef<Partial<NightcordActions>>(actions ?? {});
@@ -173,6 +184,16 @@ export default function App({ actions }: AppProps) {
     [activeConversation.messages]
   );
 
+  const suggestedStatusTime = useMemo(
+    () =>
+      getSuggestedStatusEventTime(
+        activeConversation.messages,
+        activeConversation.statusEvents ?? [],
+        clockNow
+      ),
+    [activeConversation.messages, activeConversation.statusEvents, clockNow]
+  );
+
   const [customTime, setCustomTime] = useState<CustomMessageTime>(() => ({
     enabled: false,
     ...getSuggestedCustomTime(activeConversation.messages),
@@ -184,7 +205,13 @@ export default function App({ actions }: AppProps) {
       playbackTimerRef.current = null;
     }
     setPlaybackConfig(null);
-    setPlaybackVisibleCount(null);
+    setPlaybackCursor(null);
+    setPlaybackBaseNow(null);
+  }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setClockNow(new Date()), 60000);
+    return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -265,10 +292,14 @@ export default function App({ actions }: AppProps) {
 
   const appendMessageToActive = useCallback(
     (msg: ChatMessage) => {
+      const now = new Date();
       setConversations((prev) =>
         prev.map((conv) =>
           conv.id === activeConversation.id
-            ? { ...conv, messages: [...conv.messages, msg] }
+            ? {
+                ...conv,
+                messages: [...hydrateLegacyMessagesSentAt(conv.messages, now), msg],
+              }
             : conv
         )
       );
@@ -309,21 +340,46 @@ export default function App({ actions }: AppProps) {
     };
   }, [pushMessage, showToast]);
 
+  const playbackTimeline = useMemo(() => {
+    if (!playbackConfig) {
+      return [];
+    }
+    return buildPlaybackTimeline(
+      activeConversation.messages,
+      activeConversation.statusEvents ?? [],
+      playbackConfig.includeStatusEvents,
+      playbackBaseNow ?? clockNow
+    );
+  }, [
+    playbackConfig,
+    activeConversation.messages,
+    activeConversation.statusEvents,
+    playbackBaseNow,
+    clockNow,
+  ]);
+
   useEffect(() => {
-    if (!playbackConfig || playbackVisibleCount === null) {
+    if (!playbackConfig || playbackCursor === null) {
       return;
     }
-    const total = activeConversation.messages.length;
-    if (playbackVisibleCount >= total) {
-      setPlaybackConfig(null);
-      setPlaybackVisibleCount(null);
-      showToast(t.toastPlaybackDone);
-      return;
+    if (playbackCursor >= playbackTimeline.length) {
+      playbackTimerRef.current = window.setTimeout(() => {
+        setPlaybackConfig(null);
+        setPlaybackCursor(null);
+        setPlaybackBaseNow(null);
+        showToast(t.toastPlaybackDone);
+      }, 450);
+      return () => {
+        if (playbackTimerRef.current !== null) {
+          window.clearTimeout(playbackTimerRef.current);
+          playbackTimerRef.current = null;
+        }
+      };
     }
 
-    const delayMs = computePlaybackDelayMs(
-      activeConversation.messages,
-      playbackVisibleCount,
+    const delayMs = computePlaybackStepDelayMs(
+      playbackTimeline,
+      playbackCursor,
       playbackConfig.pacingMode,
       playbackConfig.evenIntervalSec,
       playbackConfig.timelineSubMode,
@@ -331,7 +387,7 @@ export default function App({ actions }: AppProps) {
     );
 
     playbackTimerRef.current = window.setTimeout(() => {
-      setPlaybackVisibleCount((prev) => (prev === null ? null : prev + 1));
+      setPlaybackCursor((prev) => (prev === null ? null : prev + 1));
     }, delayMs);
 
     return () => {
@@ -340,7 +396,7 @@ export default function App({ actions }: AppProps) {
         playbackTimerRef.current = null;
       }
     };
-  }, [playbackConfig, playbackVisibleCount, activeConversation.messages, showToast, t.toastPlaybackDone]);
+  }, [playbackConfig, playbackCursor, playbackTimeline, showToast, t.toastPlaybackDone]);
 
   useEffect(() => {
     return () => {
@@ -367,13 +423,43 @@ export default function App({ actions }: AppProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const displayedMessages = useMemo(() => {
-    if (playbackVisibleCount !== null && playbackConfig) {
-      const sliced = activeConversation.messages.slice(0, playbackVisibleCount);
-      return computeDisplayMessagesForPlayback(sliced, playbackConfig.anchorToToday);
+  const playbackStepState = useMemo(() => {
+    if (playbackCursor !== null && playbackConfig) {
+      return computePlaybackStepState(
+        playbackTimeline,
+        playbackCursor,
+        activeConversation.messages,
+        members,
+        playbackConfig.anchorToToday,
+        playbackBaseNow ?? clockNow
+      );
     }
-    return activeConversation.messages;
-  }, [activeConversation.messages, playbackVisibleCount, playbackConfig]);
+    return {
+      messages: computeDisplayMessagesForPlayback(activeConversation.messages, true, clockNow),
+      members,
+      hasVoiceTransition: false,
+      hasOfflineTransition: false,
+    };
+  }, [
+    playbackCursor,
+    playbackConfig,
+    playbackTimeline,
+    activeConversation.messages,
+    members,
+    playbackBaseNow,
+    clockNow,
+  ]);
+
+  const displayedMessages = playbackStepState.messages;
+  const displayedMembers = playbackStepState.members;
+  const effectiveVoiceExpanded =
+    playbackConfig !== null && playbackConfig.includeStatusEvents
+      ? voiceExpanded || playbackStepState.hasVoiceTransition
+      : voiceExpanded;
+  const effectiveOfflineExpanded =
+    playbackConfig !== null && playbackConfig.includeStatusEvents
+      ? offlineExpanded || playbackStepState.hasOfflineTransition
+      : offlineExpanded;
 
   const handleCompleteOnboarding = () => {
     markOnboardingCompleted();
@@ -436,10 +522,19 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleStartPlayback = (config: PlaybackConfig) => {
+    const now = new Date();
+    const timeline = buildPlaybackTimeline(
+      activeConversation.messages,
+      activeConversation.statusEvents ?? [],
+      config.includeStatusEvents,
+      now
+    );
+    const initialCursor = getInitialPlaybackCursor(timeline, config.startIndex);
     setMode('immersive');
     setPlaybackModalOpen(false);
+    setPlaybackBaseNow(now);
     setPlaybackConfig(config);
-    setPlaybackVisibleCount(config.startIndex);
+    setPlaybackCursor(initialCursor);
   };
 
   const handleToggleServerMenu = () => {
@@ -676,6 +771,64 @@ export default function App({ actions }: AppProps) {
     }
   };
 
+  const handleScheduleMemberStatus = (
+    member: VoiceMember,
+    status: MemberPresenceStatus,
+    sentAt: MessageDateTime
+  ) => {
+    const now = new Date();
+    setConversations((prev) =>
+      prev.map((conv) => {
+        if (conv.id !== activeConversation.id) {
+          return conv;
+        }
+        const hydratedMessages = hydrateLegacyMessagesSentAt(conv.messages, now);
+        const { events } = addMemberStatusEvent(
+          conv.statusEvents ?? [],
+          member.id,
+          status,
+          sentAt,
+          now
+        );
+        return {
+          ...conv,
+          messages: hydratedMessages,
+          statusEvents: events,
+        };
+      })
+    );
+    const statusLabel =
+      status === 'online'
+        ? t.statusOnlineBtn
+        : status === 'voice'
+          ? t.statusVoiceBtn
+          : t.statusOfflineBtn;
+    showToast(t.toastStatusEventAdded(member.name, statusLabel, formatDateTimeBadge(sentAt)));
+  };
+
+  const handleDeleteStatusEvent = (eventId: string) => {
+    setConversations((prev) =>
+      prev.map((conv) =>
+        conv.id === activeConversation.id
+          ? {
+              ...conv,
+              statusEvents: removeMemberStatusEvent(conv.statusEvents ?? [], eventId),
+            }
+          : conv
+      )
+    );
+    showToast(t.toastStatusEventRemoved);
+  };
+
+  const handleClearStatusEvents = () => {
+    setConversations((prev) =>
+      prev.map((conv) =>
+        conv.id === activeConversation.id ? { ...conv, statusEvents: [] } : conv
+      )
+    );
+    showToast(t.toastStatusEventsCleared);
+  };
+
   const handleRemoveCharacter = (member: VoiceMember) => {
     const res = removeCharacterAndMember(characters, members, activeCharacterId, member.id);
     if (!res.removed) {
@@ -685,6 +838,16 @@ export default function App({ actions }: AppProps) {
     setCharacters(res.characters);
     setMembers(res.members);
     setActiveCharacterId(res.activeCharacterId);
+    setConversations((prev) =>
+      prev.map((conv) =>
+        conv.statusEvents?.some((ev) => ev.memberId === member.id)
+          ? {
+              ...conv,
+              statusEvents: conv.statusEvents.filter((ev) => ev.memberId !== member.id),
+            }
+          : conv
+      )
+    );
     showToast(t.toastCharRemoved(member.name));
   };
 
@@ -960,11 +1123,13 @@ export default function App({ actions }: AppProps) {
           conversations={conversations}
           activeConversationId={activeConversation.id}
           activeChannelTitle={activeConversation.title}
-          voiceExpanded={voiceExpanded}
-          offlineExpanded={offlineExpanded}
-          members={members}
+          voiceExpanded={effectiveVoiceExpanded}
+          offlineExpanded={effectiveOfflineExpanded}
+          members={displayedMembers}
           mobileOpen={mobileSidebarOpen}
           serverMenuOpen={serverMenuOpen}
+          suggestedStatusTime={suggestedStatusTime}
+          activeStatusEvents={activeConversation.statusEvents ?? []}
           onSelectLanguage={setLang}
           onCloseMobile={() => handleSetMobileSidebar(false)}
           onToggleServerMenu={handleToggleServerMenu}
@@ -977,6 +1142,8 @@ export default function App({ actions }: AppProps) {
           onOfflineToggle={handleOfflineToggle}
           onMicToggle={handleMicToggle}
           onSetMemberStatus={handleSetMemberStatus}
+          onScheduleMemberStatus={handleScheduleMemberStatus}
+          onDeleteStatusEvent={handleDeleteStatusEvent}
           canRemoveCharacter={characters.length > 1 && members.length > 1}
           onRemoveCharacter={handleRemoveCharacter}
           onExportData={handleExportData}
@@ -1028,6 +1195,10 @@ export default function App({ actions }: AppProps) {
         open={playbackModalOpen}
         lang={lang}
         messages={activeConversation.messages}
+        statusEvents={activeConversation.statusEvents ?? []}
+        members={members}
+        onDeleteStatusEvent={handleDeleteStatusEvent}
+        onClearStatusEvents={handleClearStatusEvents}
         onCancel={() => setPlaybackModalOpen(false)}
         onStart={handleStartPlayback}
       />
