@@ -537,3 +537,38 @@ test('timed member status events merge chronologically with messages and respect
   assert.equal(remaining[0].status, 'voice');
 });
 
+test('Cloudflare Workers wrangler.jsonc and public/_redirects have valid SPA config with no redirect loops', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const rootDir = path.resolve(import.meta.dirname, '../..');
+
+  const wranglerRaw = fs.readFileSync(path.join(rootDir, 'wrangler.jsonc'), 'utf-8');
+  const wranglerConfig = JSON.parse(wranglerRaw) as {
+    assets?: { directory?: string; not_found_handling?: string };
+  };
+  assert.equal(wranglerConfig.assets?.directory, './dist');
+  assert.equal(wranglerConfig.assets?.not_found_handling, 'single-page-application');
+
+  const redirectsRaw = fs.readFileSync(path.join(rootDir, 'public/_redirects'), 'utf-8');
+  const rules = redirectsRaw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'))
+    .map((line) => line.split(/\s+/));
+
+  assert.ok(rules.length > 0);
+  const sources = new Set<string>();
+  for (const parts of rules) {
+    const [source, destination] = parts;
+    assert.ok(source && destination);
+    assert.notEqual(source, '/*');
+    assert.notEqual(source, destination);
+    assert.notEqual(destination, '/index.html');
+    sources.add(source);
+  }
+  for (const [, destination] of rules) {
+    assert.equal(sources.has(destination), false);
+  }
+});
+
+

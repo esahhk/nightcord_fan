@@ -1,1 +1,4 @@
-/* /index.html 200
+/template/ /template 301
+/ui-template /template 301
+/ai/ /ai 301
+/ai-chat /ai 301

@@ -54,7 +54,7 @@ npm run dev
 npm run build
 ```
 
-> **Cloudflare Workers 部署说明**：本项目为纯静态前端应用（无代理后端），`dist` 目录可直接通过 Cloudflare Workers Static Assets / Pages 托管。如自建自定义兼容接口需注意目标 API 须允许浏览器跨域请求（CORS）。
+> **Cloudflare Workers 部署说明**：本项目为纯静态前端应用（无代理后端），仓库根目录已配置 `wrangler.jsonc`（`assets.directory: "./dist"` 与 `"not_found_handling": "single-page-application"`）用于 SPA 路由回退，搭配无循环的 `public/_redirects` 规则即可直接通过 Cloudflare Workers Static Assets 托管。如自建自定义兼容接口需注意目标 API 须允许浏览器跨域请求（CORS）。
 
 主要核心文件说明：
 
@@ -116,7 +116,7 @@ npm run dev
 npm run build
 ```
 
-> 純粋な静的ビルド（`dist/`）として Cloudflare Workers（Static Assets）へそのままデプロイ可能です。カスタムAPIエンドポイント利用時は対象サーバー側の CORS 許可設定をご確認ください。
+> `wrangler.jsonc`（`assets.not_found_handling: "single-page-application"`）とループのない `public/_redirects` により、`dist/` をそのまま Cloudflare Workers（Static Assets）へデプロイできます。カスタムAPIエンドポイント利用時は対象サーバー側の CORS 許可設定をご確認ください。
 
 ---
 
@@ -166,7 +166,7 @@ npm run dev
 npm run build
 ```
 
-> Designed as a pure static bundle (`dist/`) for Cloudflare Workers Static Assets with zero server proxies or secrets. When using custom third-party endpoints, ensure the upstream API supports browser CORS requests.
+> Configured via `wrangler.jsonc` (`assets.directory: "./dist"`, `not_found_handling: "single-page-application"`) and loop-free `public/_redirects` rules for Cloudflare Workers Static Assets with zero server proxies or secrets. When using custom third-party endpoints, ensure the upstream API supports browser CORS requests.
 
 ---
 
