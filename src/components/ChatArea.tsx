@@ -57,6 +57,13 @@ interface ChatAreaProps {
   onSyncCustomTimeNow: () => void;
   isPlaying?: boolean;
   animatedFromIndex?: number | null;
+  aiMode?: boolean;
+  aiGeneratingName?: string | null;
+  aiReadyCount?: number;
+  onEditMessage?: (messageId: string, nextText: string) => void;
+  onRegenerateMessage?: (messageId: string) => void;
+  onOpenAiGlobalSettings?: () => void;
+  onOpenAiGuide?: () => void;
 }
 
 export function ChatArea({
@@ -91,8 +98,16 @@ export function ChatArea({
   onSyncCustomTimeNow,
   isPlaying = false,
   animatedFromIndex = null,
+  aiMode = false,
+  aiGeneratingName = null,
+  aiReadyCount = 0,
+  onEditMessage,
+  onRegenerateMessage,
+  onOpenAiGlobalSettings,
+  onOpenAiGuide,
 }: ChatAreaProps) {
   const t = getUiText(lang);
+  const canCompose = mode === 'studio' || aiMode;
   const streamRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const prevCountRef = useRef(messages.length);
@@ -103,6 +118,8 @@ export function ChatArea({
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
   const [avatarMenuMsgId, setAvatarMenuMsgId] = useState<string | null>(null);
   const [deleteMenuMsgId, setDeleteMenuMsgId] = useState<string | null>(null);
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState('');
 
   useEffect(() => {
     if (messages.length > prevCountRef.current && streamRef.current) {
@@ -119,12 +136,13 @@ export function ChatArea({
   }, [messages.length, isPlaying]);
 
   useEffect(() => {
-    if (mode !== 'studio') {
+    if (!canCompose) {
       setMentionPickerOpen(false);
       setAvatarMenuMsgId(null);
       setDeleteMenuMsgId(null);
+      setEditingMsgId(null);
     }
-  }, [mode]);
+  }, [canCompose]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -134,6 +152,7 @@ export function ChatArea({
         setMentionPickerOpen(false);
         setAvatarMenuMsgId(null);
         setDeleteMenuMsgId(null);
+        setEditingMsgId(null);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -162,7 +181,7 @@ export function ChatArea({
   };
 
   const startLongPress = (callback: () => void, x: number, y: number) => {
-    if (mode !== 'studio') {
+    if (!canCompose) {
       return;
     }
     clearLongPress();
@@ -226,12 +245,50 @@ export function ChatArea({
       >
         {messages.length === 0 ? (
           isPlaying ? null : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center text-[#9A90A8]">
+            <div className="flex flex-1 flex-col items-center justify-center gap-2.5 py-12 text-center text-[#9A90A8]">
               <WorkChannelIcon size={34} />
               <div className="text-[13.5px] font-semibold text-[#DCD7E5]">
-                {t.emptyConvTitle(channelTitle)}
+                {aiMode ? t.aiEmptyTitle(channelTitle) : t.emptyConvTitle(channelTitle)}
               </div>
-              <div className="text-[12px]">{t.emptyConvSub}</div>
+              <div className="max-w-[430px] px-4 text-[12px] leading-[1.55]">
+                {aiMode ? t.aiEmptySub : t.emptyConvSub}
+              </div>
+              {aiMode && (
+                <div className="mt-1.5 flex flex-col items-center gap-2.5 px-4">
+                  <span
+                    className={`rounded-[6px] px-2.5 py-0.5 text-[11px] font-medium ${
+                      aiReadyCount > 0
+                        ? 'bg-[#55D8C1]/15 text-[#55D8C1]'
+                        : 'bg-[#2E243D] text-[#BEB5D0]'
+                    }`}
+                  >
+                    {t.aiEmptyReadySummary(aiReadyCount, characters.length)}
+                  </span>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {onOpenAiGlobalSettings && (
+                      <button
+                        type="button"
+                        data-action="ai-empty-open-global"
+                        onClick={onOpenAiGlobalSettings}
+                        className="flex h-[32px] cursor-pointer items-center gap-1.5 rounded-[7px] border border-[#64D2E6]/50 bg-[#2E243D] px-3 text-[12px] font-semibold text-[#EFEBF5] transition-colors hover:border-[#64D2E6] hover:bg-[#3A2D50] hover:text-white"
+                      >
+                        <span className="h-2 w-2 rounded-full bg-[#64D2E6]" />
+                        <span>{t.aiOpenGlobalQuickBtn}</span>
+                      </button>
+                    )}
+                    {onOpenAiGuide && (
+                      <button
+                        type="button"
+                        data-action="ai-empty-open-guide"
+                        onClick={onOpenAiGuide}
+                        className="flex h-[32px] cursor-pointer items-center gap-1.5 rounded-[7px] border border-[#524468] bg-[#2E243D] px-3 text-[12px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#3A2D50] hover:text-white"
+                      >
+                        <span>{t.aiOpenGuideBtn}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )
         ) : (
@@ -270,7 +327,7 @@ export function ChatArea({
                   onPointerLeave={clearLongPress}
                   onPointerCancel={clearLongPress}
                   onContextMenu={(e) => {
-                    if (mode === 'studio') {
+                    if (canCompose) {
                       e.preventDefault();
                       window.getSelection?.()?.removeAllRanges();
                       setAvatarMenuMsgId(null);
@@ -288,6 +345,9 @@ export function ChatArea({
                       aria-label={`${msg.username}のプロフィール`}
                       onPointerDown={(e) => {
                         e.stopPropagation();
+                        if (msg.memberId === '__user__') {
+                          return;
+                        }
                         startLongPress(
                           () => {
                             setDeleteMenuMsgId(null);
@@ -308,7 +368,7 @@ export function ChatArea({
                       onPointerLeave={clearLongPress}
                       onPointerCancel={clearLongPress}
                       onContextMenu={(e) => {
-                        if (mode === 'studio') {
+                        if (canCompose && msg.memberId !== '__user__') {
                           e.preventDefault();
                           e.stopPropagation();
                           window.getSelection?.()?.removeAllRanges();
@@ -332,7 +392,7 @@ export function ChatArea({
                       />
                     </button>
 
-                    {mode === 'studio' && avatarMenuMsgId === msg.id && (
+                    {canCompose && avatarMenuMsgId === msg.id && (
                       <>
                         <button
                           type="button"
@@ -462,18 +522,72 @@ export function ChatArea({
                       </div>
                     )}
 
-                    {msg.text && (
+                    {editingMsgId === msg.id ? (
                       <div
-                        className={`break-words text-[13.5px] leading-[1.44] font-normal text-[#E2DCEB] ${
-                          msg.fileMedia || msg.imageMedia || msg.attachments?.length ? 'mt-2' : ''
-                        }`}
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        className="mt-1 flex flex-col gap-1.5 rounded-[7px] border border-[#524468] bg-[#2D233E] p-2"
                       >
-                        {msg.text}
+                        <textarea
+                          autoFocus
+                          data-action={`edit-message-input-${msg.id}`}
+                          value={editingDraft}
+                          onChange={(e) => setEditingDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                              e.stopPropagation();
+                              setEditingMsgId(null);
+                              return;
+                            }
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              if (editingDraft.trim() && onEditMessage) {
+                                onEditMessage(msg.id, editingDraft);
+                              }
+                              setEditingMsgId(null);
+                            }
+                          }}
+                          rows={2}
+                          className="nc-scroll w-full resize-y rounded-[5px] border border-[#4D3F66] bg-[#1E1729] px-2.5 py-1.5 text-[13px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+                        />
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            data-action={`edit-message-cancel-${msg.id}`}
+                            onClick={() => setEditingMsgId(null)}
+                            className="cursor-pointer rounded-[5px] bg-[#362B4A] px-2.5 py-1 text-[11px] font-medium text-[#CFC7DD] hover:bg-[#493B62]"
+                          >
+                            {t.cancel}
+                          </button>
+                          <button
+                            type="button"
+                            data-action={`edit-message-save-${msg.id}`}
+                            onClick={() => {
+                              if (editingDraft.trim() && onEditMessage) {
+                                onEditMessage(msg.id, editingDraft);
+                              }
+                              setEditingMsgId(null);
+                            }}
+                            className="cursor-pointer rounded-[5px] bg-[#52436B] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#645283]"
+                          >
+                            {t.saveEditBtn}
+                          </button>
+                        </div>
                       </div>
+                    ) : (
+                      msg.text && (
+                        <div
+                          className={`break-words text-[13.5px] leading-[1.44] font-normal text-[#E2DCEB] ${
+                            msg.fileMedia || msg.imageMedia || msg.attachments?.length ? 'mt-2' : ''
+                          }`}
+                        >
+                          {msg.text}
+                        </div>
+                      )
                     )}
                   </div>
 
-                  {mode === 'studio' && deleteMenuMsgId === msg.id && (
+                  {canCompose && deleteMenuMsgId === msg.id && (
                     <>
                       <button
                         type="button"
@@ -484,7 +598,39 @@ export function ChatArea({
                         }}
                         className="fixed inset-0 z-40 cursor-default bg-transparent"
                       />
-                      <div className="nc-modal-enter absolute right-2 top-1 z-50 min-w-[116px] rounded-[8px] border border-[#524468] bg-[#211A2C] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.55)]">
+                      <div className="nc-modal-enter absolute right-2 top-1 z-50 min-w-[126px] rounded-[8px] border border-[#524468] bg-[#211A2C] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.55)]">
+                        {aiMode && onRegenerateMessage && (
+                          <button
+                            type="button"
+                            disabled={Boolean(aiGeneratingName)}
+                            data-action={`regenerate-message-${msg.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRegenerateMessage(msg.id);
+                              setDeleteMenuMsgId(null);
+                            }}
+                            className="w-full cursor-pointer rounded-[6px] px-2.5 py-1.5 text-left text-[12px] font-medium text-[#64D2E6] transition-colors hover:bg-[#342947] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            {t.regenerateMessageBtn}
+                          </button>
+                        )}
+                        {aiMode &&
+                          onEditMessage &&
+                          (typeof msg.text === 'string' && msg.text.length > 0) && (
+                            <button
+                              type="button"
+                              data-action={`edit-message-${msg.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingMsgId(msg.id);
+                                setEditingDraft(msg.text ?? '');
+                                setDeleteMenuMsgId(null);
+                              }}
+                              className="w-full cursor-pointer rounded-[6px] px-2.5 py-1.5 text-left text-[12px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#342947] hover:text-white"
+                            >
+                              {t.editMessageBtn}
+                            </button>
+                          )}
                         <button
                           type="button"
                           data-action={`delete-message-${msg.id}`}
@@ -505,13 +651,23 @@ export function ChatArea({
             );
           })
         )}
+
+        {aiMode && aiGeneratingName && (
+          <div
+            data-testid="ai-generating-indicator"
+            className="nc-msg-enter flex items-center gap-2 px-1 py-1 text-[12px] text-[#B8AED0]"
+          >
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#64D2E6]" />
+            <span>{t.aiGeneratingStatus(aiGeneratingName)}</span>
+          </div>
+        )}
       </div>
 
       <div
         className="relative shrink-0 px-3 pt-1.5 sm:px-5 sm:pb-4 sm:pt-1"
         style={{ paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}
       >
-        {mode === 'studio' && (
+        {mode === 'studio' && !aiMode && (
           <RoleComposerBar
             lang={lang}
             characters={characters}
@@ -529,7 +685,7 @@ export function ChatArea({
           />
         )}
 
-        {mode === 'studio' && mentionPickerOpen && (
+        {canCompose && mentionPickerOpen && (
           <>
             <button
               type="button"
@@ -570,40 +726,42 @@ export function ChatArea({
           <input
             ref={inputRef}
             type="text"
-            value={mode === 'immersive' ? '' : inputValue}
-            readOnly={mode === 'immersive'}
+            value={canCompose ? inputValue : ''}
+            readOnly={!canCompose}
             onChange={(event) => {
-              if (mode === 'studio') {
+              if (canCompose) {
                 onInputChange(event.target.value);
               }
             }}
             aria-label="メッセージを送信"
-            aria-readonly={mode === 'immersive'}
+            aria-readonly={!canCompose}
             placeholder={
-              mode === 'studio'
-                ? t.studioInputPlaceholder(activeCharacter.name)
-                : 'メッセージを送信'
+              aiMode
+                ? 'メッセージを送信'
+                : mode === 'studio'
+                  ? t.studioInputPlaceholder(activeCharacter.name)
+                  : 'メッセージを送信'
             }
             autoComplete="off"
             className={`min-w-0 flex-1 border-none bg-transparent text-[16px] text-[#EFEBF5] outline-none placeholder:text-[#857A99] sm:text-[13px] ${
-              formatActive && mode === 'studio' ? 'font-bold' : 'font-normal'
-            } ${mode === 'immersive' ? 'cursor-default select-none' : ''}`}
+              formatActive && canCompose ? 'font-bold' : 'font-normal'
+            } ${!canCompose ? 'cursor-default select-none' : ''}`}
           />
           <div className="flex shrink-0 select-none items-center gap-3 sm:gap-3.5">
             <button
               type="button"
               data-action="input-mention"
               aria-label="メンション"
-              aria-expanded={mode === 'studio' && mentionPickerOpen}
+              aria-expanded={canCompose && mentionPickerOpen}
               title="メンション"
               onClick={() => {
-                if (mode === 'studio') {
+                if (canCompose) {
                   setMentionPickerOpen((prev) => !prev);
                 }
               }}
               className={`flex items-center justify-center bg-transparent p-0 text-[13.5px] font-semibold transition-colors ${
-                mode === 'studio' && mentionPickerOpen ? 'text-[#64D2E6]' : 'text-[#9A90A8]'
-              } ${mode === 'studio' ? 'cursor-pointer hover:text-white' : 'cursor-default'}`}
+                canCompose && mentionPickerOpen ? 'text-[#64D2E6]' : 'text-[#9A90A8]'
+              } ${canCompose ? 'cursor-pointer hover:text-white' : 'cursor-default'}`}
             >
               @
             </button>
@@ -611,12 +769,12 @@ export function ChatArea({
               type="button"
               data-action="input-format"
               aria-label="書式"
-              aria-pressed={formatActive && mode === 'studio'}
+              aria-pressed={formatActive && canCompose}
               title="書式"
               onClick={onFormatClick}
               className={`flex items-center justify-center bg-transparent p-0 text-[13.5px] font-semibold transition-colors ${
-                formatActive && mode === 'studio' ? 'text-white' : 'text-[#9A90A8]'
-              } ${mode === 'studio' ? 'cursor-pointer hover:text-white' : 'cursor-default'}`}
+                formatActive && canCompose ? 'text-white' : 'text-[#9A90A8]'
+              } ${canCompose ? 'cursor-pointer hover:text-white' : 'cursor-default'}`}
             >
               Aa
             </button>
@@ -627,7 +785,7 @@ export function ChatArea({
               title="絵文字"
               onClick={handleEmoji}
               className={`flex items-center justify-center bg-transparent p-0 text-[#E2DCEB] transition-colors ${
-                mode === 'studio' ? 'cursor-pointer hover:text-white' : 'cursor-default'
+                canCompose ? 'cursor-pointer hover:text-white' : 'cursor-default'
               }`}
             >
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -649,7 +807,7 @@ export function ChatArea({
               title="ファイルを添付"
               onClick={onAttachClick}
               className={`flex items-center justify-center bg-transparent p-0 text-[#B4A9C6] transition-colors ${
-                mode === 'studio' ? 'cursor-pointer hover:text-white' : 'cursor-default'
+                mode === 'studio' && !aiMode ? 'cursor-pointer hover:text-white' : 'cursor-default'
               }`}
             >
               <svg width="15" height="16" viewBox="0 0 16 18" fill="none" aria-hidden="true">

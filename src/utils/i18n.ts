@@ -2,7 +2,7 @@ import type { UiLanguage } from '../types/nightcord';
 
 export interface UiText {
   guideTitle: string;
-  stepBadges: [string, string, string, string, string];
+  stepBadges: [string, string, string, string, string, string];
   step1Title: string;
   step1Desc: string;
   step1Note: string;
@@ -17,6 +17,9 @@ export interface UiText {
   step5Title: string;
   step5Desc: string;
   step5Label: string;
+  step6Title: string;
+  step6Desc: string;
+  step6Label: string;
   skip: string;
   back: string;
   next: string;
@@ -180,22 +183,97 @@ export interface UiText {
   playbackStatusSyncOffSub: string;
   playbackStatusEventsManage: (count: number) => string;
   playbackClearStatusEventsBtn: string;
+  aiModeBtn: string;
+  aiModeBackBtn: string;
+  aiModeActiveBadge: string;
+  aiCharSettingsBtn: string;
+  aiReadyBadge: string;
+  aiUnconfiguredBadge: string;
+  aiCharModalTitle: (name: string) => string;
+  aiProtocolLabel: string;
+  aiProtocolOpenai: string;
+  aiProtocolGemini: string;
+  aiProtocolAnthropic: string;
+  aiBaseUrlLabel: string;
+  aiBaseUrlHint: string;
+  aiResetDefaultUrl: string;
+  aiApiKeyLabel: string;
+  aiApiKeyPlaceholder: string;
+  aiLocalOnlyNote: string;
+  aiUsingGlobalKeyBadge: string;
+  aiModelLabel: string;
+  aiFetchModelsBtn: string;
+  aiFetchingModels: string;
+  aiFetchModelsOk: (count: number) => string;
+  aiFetchModelsFail: string;
+  aiCustomModelPlaceholder: string;
+  aiPromptLabel: string;
+  aiPromptPlaceholder: string;
+  toastAiCharSaved: (name: string) => string;
+  aiGlobalModalTitle: string;
+  aiGlobalModalSub: string;
+  aiGlobalApiToggle: string;
+  aiGlobalApiDesc: string;
+  aiFollowUpToggle: string;
+  aiFollowUpDesc: string;
+  aiFollowUpProbLabel: (prob: number) => string;
+  aiUserIdentityTitle: string;
+  aiUserNamePlaceholder: string;
+  aiCharPromptSectionTitle: string;
+  aiCharPromptSectionDesc: string;
+  aiConfiguredCharsCount: (ready: number, total: number) => string;
+  toastAiGlobalSaved: string;
+  aiEmptyTitle: (title: string) => string;
+  aiEmptySub: string;
+  aiEmptyReadySummary: (ready: number, total: number) => string;
+  aiOpenGlobalQuickBtn: string;
+  aiOpenGuideBtn: string;
+  aiOwnKeyBadge: string;
+  aiNoKeyStatusBadge: string;
+  aiGeneratingStatus: (name: string) => string;
+  aiToastBusy: string;
+  aiToastNoConfiguredChar: string;
+  aiToastTargetMissingKey: (name: string) => string;
+  aiToastRequestFailed: (name: string, reason: string) => string;
+  aiGuideTitle: string;
+  aiGuideBadges: [string, string, string, string];
+  aiGuideStep1Title: string;
+  aiGuideStep1Desc: string;
+  aiGuideStep1Note: string;
+  aiGuideStep2Title: string;
+  aiGuideStep2Desc: string;
+  aiGuideStep3Title: string;
+  aiGuideStep3Desc: string;
+  aiGuideStep4Title: string;
+  aiGuideStep4Desc: string;
+  aiGuideOpenConfigBtn: string;
+  editMessageBtn: string;
+  regenerateMessageBtn: string;
+  saveEditBtn: string;
+  toastMessageUpdated: string;
 }
 
 const JA_TEXT: UiText = {
   guideTitle: 'nightcord ガイド',
-  stepBadges: ['ステップ 1 / 5', 'ステップ 2 / 5', 'ステップ 3 / 5', 'ステップ 4 / 5', 'ステップ 5 / 5'],
+  stepBadges: [
+    'ステップ 1 / 6',
+    'ステップ 2 / 6',
+    'ステップ 3 / 6',
+    'ステップ 4 / 6',
+    'ステップ 5 / 6',
+    'ステップ 6 / 6',
+  ],
   step1Title: 'ガイドと操作UIの言語を選択',
   step1Desc:
     'ガイドと編集メニューの表示言語を選択してください。選択はローカルに保存されます。',
   step1Note:
     '※ 初期状態は「没入モード（閲覧専用・メッセージ送信不可）」で起動します。キャラクター名や没入モードの画面テキストは日本語のまま保持されます。',
-  step2Title: '会話を切り替え・新規作成',
+  step2Title: '会話切替・AIモード・UIテンプレート',
   step2Desc:
-    '左上の「25時、ナイトコードで。▾」をクリックするとメニューが開きます。元の会話をテンプレートとして残したまま、新しい会話の追加・切替やローカルデータの書き出し／読み込みができます。',
-  step3Title: 'キャラ切替・メディア送信・状態変更',
+    '左上の「25時、ナイトコードで。▾」から会話の切替／新規作成、AIチャットモードへの移動、UIテンプレートの閲覧、ローカルデータの書き出し／読み込みができます。',
+  step3Title: 'キャラ切替・メディア送信・状態予約',
   step3Desc:
-    '右上の青い点（1番目）を押すとロール切替モードになり、メッセージ送信が可能になります。キャラ作成、画像／MP4／MP3送信、日時指定、メンバー長押しでのオンライン／通話／オフライン切替（すべてローカル保存）が使えます。',
+    '右上の青い点（1番目）を押すとロール切替モードになり、メッセージ送信が可能になります。キャラ追加・画像/MP4/MP3送信・日時指定・メンバー長押しでの状態変更や「状態切替に時間を設定」が使えます。',
   step3Label: 'ロール切替・送信可能',
   step4Title: '没入モード（閲覧専用）に切り替え',
   step4Desc:
@@ -203,8 +281,12 @@ const JA_TEXT: UiText = {
   step4Label: '没入モード・送信不可',
   step5Title: '自動再生モード（赤い点）',
   step5Desc:
-    '右上の赤い点（3番目）を押すと自動で没入モードに切り替わり、メッセージを1件ずつ順番に再生できます。送信時刻の流速（完全実時間／等比例）や固定間隔（0.5秒〜60秒）、日時の基準や開始位置を自由に設定できます。',
+    '右上の赤い点（3番目）を押すと自動で没入モードに切り替わり、メッセージやメンバーのオンライン切替を1件ずつ順番に再生できます。流速や固定間隔（0.5秒〜60秒）、日時基準を設定できます。',
   step5Label: '自動再生モード',
+  step6Title: 'AIチャットモード（完全ローカル直連）',
+  step6Desc:
+    'メニューの「AIチャットモード」に入ると、没入モードのまま自分が直接送信してAIキャラと会話できます。左メンバー長押しまたは右上の青い点でAPI Keyやプロンプトを設定すると返信し、@キャラ名で指名、メッセージ長押しで編集・再生成ができます。',
+  step6Label: 'AIチャットモード',
   skip: 'スキップ',
   back: '戻る',
   next: '次へ',
@@ -378,21 +460,93 @@ const JA_TEXT: UiText = {
   playbackStatusSyncOffSub: '左メンバー欄の状態は現在のまま固定して再生',
   playbackStatusEventsManage: (count) => `予約済みの状態切替を確認（${count}件）`,
   playbackClearStatusEventsBtn: 'すべて削除',
+  aiModeBtn: 'AIチャットモード',
+  aiModeBackBtn: '通常モードに戻る',
+  aiModeActiveBadge: 'AI実行中',
+  aiCharSettingsBtn: 'AIチャット設定',
+  aiReadyBadge: '設定済み',
+  aiUnconfiguredBadge: 'Key未設定',
+  aiCharModalTitle: (name) => `${name} のAIチャット設定`,
+  aiProtocolLabel: 'AIプロトコル',
+  aiProtocolOpenai: 'OpenAI 互換（汎用デフォルト）',
+  aiProtocolGemini: 'Google Gemini API',
+  aiProtocolAnthropic: 'Anthropic Claude API',
+  aiBaseUrlLabel: 'リンク先 URL（未変更時はデフォルト使用）',
+  aiBaseUrlHint: 'ブラウザから直接リクエストします。一般的なOpenAI互換プロキシにも対応。',
+  aiResetDefaultUrl: 'デフォルトに戻す',
+  aiApiKeyLabel: 'API Key（このブラウザのローカルのみに保存）',
+  aiApiKeyPlaceholder: 'sk-... または各サービスのAPI Key',
+  aiLocalOnlyNote: '※ サーバーへ送信・保存されず、この端末のローカルストレージにのみ保存されます。',
+  aiUsingGlobalKeyBadge: 'グローバルAPI Keyで動作可能',
+  aiModelLabel: 'モデル選択',
+  aiFetchModelsBtn: 'モデル取得',
+  aiFetchingModels: '取得中...',
+  aiFetchModelsOk: (count) => `${count}件のモデルを取得しました`,
+  aiFetchModelsFail: '取得に失敗しました。手入力も可能です',
+  aiCustomModelPlaceholder: 'カスタムモデル名を手入力（例：gpt-4o-mini）',
+  aiPromptLabel: 'プリセットプロンプト（システム設定）',
+  aiPromptPlaceholder: 'キャラクターの性格・口調・関係性・返信ルールなどを入力...',
+  toastAiCharSaved: (name) => `「${name}」のAI設定をローカルに保存しました`,
+  aiGlobalModalTitle: 'AI グローバル設定',
+  aiGlobalModalSub: '右上の青い点からいつでも全体ルールと各キャラのプロンプトをまとめて編集できます。',
+  aiGlobalApiToggle: 'グローバル API Key を有効にする',
+  aiGlobalApiDesc: 'オンにすると、個別Key未設定のキャラも共通のプロトコル・URL・API Keyで返信できます。',
+  aiFollowUpToggle: 'AI同士の確率追撃返信',
+  aiFollowUpDesc: 'あるAIの返信後、設定確率で別の設定済みAIが1回だけ続けて会話に反応します。',
+  aiFollowUpProbLabel: (prob) => `追撃発生確率：${prob}%`,
+  aiUserIdentityTitle: '自分の送信表示名',
+  aiUserNamePlaceholder: '例：あなた',
+  aiCharPromptSectionTitle: 'キャラ別プロンプト・連携設定（同期保存）',
+  aiCharPromptSectionDesc: '左メンバー長押しの「AIチャット設定」とデータがリアルタイムに同期されます。',
+  aiConfiguredCharsCount: (ready, total) => `返信可能キャラ：${ready} / ${total} 名`,
+  toastAiGlobalSaved: 'AIグローバル設定をローカルに保存しました',
+  aiEmptyTitle: (title) => `「${title}」AIチャットテンプレート`,
+  aiEmptySub: '下の入力欄から直接メッセージ送信できます。左メンバー長押しでAPI Keyを設定するとランダム返信、@キャラ名で指名返信します。',
+  aiEmptyReadySummary: (ready, total) => `現在の返信可能キャラ：${ready} / ${total} 名`,
+  aiOpenGlobalQuickBtn: 'AI グローバル設定を開く',
+  aiOpenGuideBtn: '機能ガイドを見る',
+  aiOwnKeyBadge: '個別API Key使用中',
+  aiNoKeyStatusBadge: 'Key未設定（返信対象外）',
+  aiGeneratingStatus: (name) => `${name} が入力中...`,
+  aiToastBusy: 'AIが返信を生成中です。少しお待ちください',
+  aiToastNoConfiguredChar: 'API Keyが設定済みのキャラがいません。左のキャラを長押しするか右上の青い点から設定してください。',
+  aiToastTargetMissingKey: (name) => `「${name}」はAPI Key未設定のため返信できません`,
+  aiToastRequestFailed: (name, reason) => `${name} のAI返信に失敗しました（${reason}）`,
+  aiGuideTitle: 'AIチャットモード ガイド',
+  aiGuideBadges: ['ガイド 1 / 4', 'ガイド 2 / 4', 'ガイド 3 / 4', 'ガイド 4 / 4'],
+  aiGuideStep1Title: 'ブラウザ直接通信・純粋静的テンプレート',
+  aiGuideStep1Desc:
+    'このページは元のNightcord画面を保ったまま、自分のメッセージに直接AIが返信するモードです。API Keyと設定はすべてこのブラウザのlocalStorageのみに保存され、サーバーへは送信されません。',
+  aiGuideStep1Note: '※ 上部メニュー「25時、ナイトコードで。▾」からいつでも通常モードへ戻れます。',
+  aiGuideStep2Title: '左メンバー長押しでキャラ別AI設定',
+  aiGuideStep2Desc:
+    '左のキャラクターを長押し（PCは右クリック）して「AIチャット設定」を開くと、プロトコル（OpenAI / Gemini / Anthropic）、URL、API Key、モデル、プロンプトを個別に設定できます。API Key設定済みのキャラだけが返信に参加します。',
+  aiGuideStep3Title: '右上の青い点：AIグローバル設定',
+  aiGuideStep3Desc:
+    '右上の1番目の青い点を押すとグローバル設定が開きます。共通のグローバルAPI Key、AI同士の確率追撃返信、そして左メンバー設定とリアルタイム同期する各キャラのプロンプト編集をまとめて行えます。',
+  aiGuideStep4Title: '直接送信・@指名・長押しで再生成／編集',
+  aiGuideStep4Desc:
+    '下の入力欄からそのまま送信できます。@キャラ名 を含めると必ずそのキャラが返信し、未指定時は設定済みキャラからランダムに選ばれます。送信済みメッセージは長押しで「再生成」「編集」「削除」が可能です。',
+  aiGuideOpenConfigBtn: '今すぐAI設定を開く',
+  editMessageBtn: '編集',
+  regenerateMessageBtn: '再生成',
+  saveEditBtn: '保存',
+  toastMessageUpdated: 'メッセージを更新しました',
 };
 
 const ZH_TEXT: UiText = {
   guideTitle: 'nightcord 使用引导',
-  stepBadges: ['步骤 1 / 5', '步骤 2 / 5', '步骤 3 / 5', '步骤 4 / 5', '步骤 5 / 5'],
+  stepBadges: ['步骤 1 / 6', '步骤 2 / 6', '步骤 3 / 6', '步骤 4 / 6', '步骤 5 / 6', '步骤 6 / 6'],
   step1Title: '选择引导与操作界面语言',
   step1Desc: '请先选择后续引导及编辑按钮的显示语言，选择后会自动保存在本地。',
   step1Note:
     '※ 进入后默认处于「沉浸模式（仅浏览，无法发送消息）」。角色名称及沉浸模式中的聊天界面文本均保持日文原版显示。',
-  step2Title: '切换与新建对话',
+  step2Title: '切换对话、AI 模式与 UI 模板',
   step2Desc:
-    '点击左上角的「25時、ナイトコードで。▾」即可展开菜单。原有对话会作为模板保留，你可以随时新建对话、导入/导出本地备份或重新打开新手教程。',
-  step3Title: '角色切换、媒体发送与状态管理',
+    '点击左上角的「25時、ナイトコードで。▾」即可切换或新建对话、进入「AI 对话模式」、查看开源 UI 模板、导出/导入本地备份，或重新打开功能引导。',
+  step3Title: '角色切换、媒体发送与定时状态',
   step3Desc:
-    '点击右上角第 1 个蓝色圆点进入角色切换模式后才能发送消息。支持自定义角色、发送图片/MP4/MP3（可编辑文件名）、自定义发送日期时间、长按头像 @ 角色、长按消息删除以及长按左侧成员切换在线/语音聊天/离线状态。',
+    '点击右上角第 1 个蓝色圆点进入角色切换模式即可发送消息。支持自定义角色、图片/MP4/MP3、自定义时间、长按消息删除，以及长按左侧成员切换状态或勾选「为状态切换添加时间」。',
   step3Label: '角色切换・可发消息',
   step4Title: '切换为沉浸模式（禁止发送）',
   step4Desc:
@@ -400,8 +554,12 @@ const ZH_TEXT: UiText = {
   step4Label: '沉浸模式・禁止发送',
   step5Title: '消息自动播放模式（红色圆点）',
   step5Desc:
-    '点击右上角第 3 个红色圆点后默认进入沉浸模式并弹出设置框，可按发送时间流速（完全真实流速或等比例倍率）或固定时间间隔（0.5 秒 – 60 秒）逐条自动发送消息，并可自由设定时间基准与起始位置。',
+    '点击右上角第 3 个红色圆点后默认进入沉浸模式并弹出设置框，支持按发送时间流速或固定间隔（0.5 秒 – 60 秒）逐条自动播放消息，并可选同步播放左侧成员的定时上下线切换。',
   step5Label: '自动播放模式',
+  step6Title: 'AI 对话模式（纯静态本地直连）',
+  step6Desc:
+    '在左侧菜单点击「AI 对话模式」进入全新对话页。长按左侧角色填写协议/API Key/提示词，点击右上角小蓝点打开 AI 全局设置与同伴概率追击；在沉浸模式下直接发送即可对话（@角色名 指定回复），长按消息可编辑、重新生成或删除。',
+  step6Label: 'AI 对话模式',
   skip: '跳过',
   back: '上一步',
   next: '下一步',
@@ -575,22 +733,94 @@ const ZH_TEXT: UiText = {
   playbackStatusSyncOffSub: '保持左侧角色栏当前状态不变，只逐条展示聊天消息',
   playbackStatusEventsManage: (count) => `管理已记录的状态切换（${count} 条）`,
   playbackClearStatusEventsBtn: '全部清空',
+  aiModeBtn: 'AI 对话模式',
+  aiModeBackBtn: '返回主页面',
+  aiModeActiveBadge: '当前',
+  aiCharSettingsBtn: 'AI 对话设置',
+  aiReadyBadge: '已就绪',
+  aiUnconfiguredBadge: '未填Key',
+  aiCharModalTitle: (name) => `${name} 的 AI 对话设置`,
+  aiProtocolLabel: 'AI 协议',
+  aiProtocolOpenai: 'OpenAI 兼容协议（通用默认）',
+  aiProtocolGemini: 'Google Gemini 原生协议',
+  aiProtocolAnthropic: 'Anthropic Claude 协议',
+  aiBaseUrlLabel: '链接地址（不修改则默认通用地址）',
+  aiBaseUrlHint: '纯静态浏览器直连请求，支持官方地址或支持浏览器 CORS 的第三方兼容地址。',
+  aiResetDefaultUrl: '恢复默认',
+  aiApiKeyLabel: 'API Key（仅保存在本地）',
+  aiApiKeyPlaceholder: '输入你的 API Key（不填且未开全局Key则不会回复）',
+  aiLocalOnlyNote: '※ 仅保存在当前浏览器的本地存储中，不经过任何后端代理服务器。',
+  aiUsingGlobalKeyBadge: '已启用全局 API Key 兜底',
+  aiModelLabel: '选择或输入模型',
+  aiFetchModelsBtn: '拉取模型',
+  aiFetchingModels: '拉取中...',
+  aiFetchModelsOk: (count) => `已拉取 ${count} 个模型`,
+  aiFetchModelsFail: '拉取失败，可直接选择预设或手动填写模型名',
+  aiCustomModelPlaceholder: '手动输入模型 ID（例：gpt-4o-mini）',
+  aiPromptLabel: '预设提示词',
+  aiPromptPlaceholder: '输入该角色的性格设定、口癖、背景与回复要求...',
+  toastAiCharSaved: (name) => `已保存「${name}」的 AI 设置`,
+  aiGlobalModalTitle: 'AI 全局设置面板',
+  aiGlobalModalSub: '点击右上角小蓝点即可设置全局 API Key、AI 概率接话以及快速编辑各角色提示词。',
+  aiGlobalApiToggle: '开启全局 API Key',
+  aiGlobalApiDesc: '开启后，未单独填写 API Key 的角色也会使用下方通用协议与全局 Key 参与回复。',
+  aiFollowUpToggle: 'AI 概率回复一次其他 AI 的发言',
+  aiFollowUpDesc: '某个 AI 回复后，按设定概率再随机触发另一名已就绪的 AI 接话回复一次。',
+  aiFollowUpProbLabel: (prob) => `概率回复触发率：${prob}%`,
+  aiUserIdentityTitle: '我的聊天名称',
+  aiUserNamePlaceholder: '默认：あなた',
+  aiCharPromptSectionTitle: '选择角色填写预设提示词（数据互通）',
+  aiCharPromptSectionDesc: '此处修改的角色提示词与设置会和左侧长按角色面板实时互通同步。',
+  aiConfiguredCharsCount: (ready, total) => `当前可回复角色：${ready} / ${total}`,
+  toastAiGlobalSaved: '已保存 AI 全局设置',
+  aiEmptyTitle: (title) => `「${title}」空白 AI 对话模板`,
+  aiEmptySub: '在沉浸模式下即可直接发消息！长按左侧角色填写 API Key 后会随机抽取已填 Key 的角色回复，输入 @角色名 可指定回复。',
+  aiEmptyReadySummary: (ready, total) => `当前已就绪角色：${ready} / ${total}`,
+  aiOpenGlobalQuickBtn: '打开 AI 全局设置',
+  aiOpenGuideBtn: '查看功能引导',
+  aiOwnKeyBadge: '使用独立 API Key',
+  aiNoKeyStatusBadge: '未填 Key（不会参与回复）',
+  aiGeneratingStatus: (name) => `${name} 正在思考回复...`,
+  aiToastBusy: 'AI 正在生成回复，请稍候…',
+  aiToastNoConfiguredChar: '当前没有填写 API Key 的角色，请长按左侧角色或点击右上角小蓝点设置。',
+  aiToastTargetMissingKey: (name) => `角色「${name}」尚未填写 API Key，无法回复`,
+  aiToastRequestFailed: (name, reason) => `${name} 请求 AI 失败（${reason}）`,
+  aiGuideTitle: 'AI 对话模式功能引导',
+  aiGuideBadges: ['引导 1 / 4', '引导 2 / 4', '引导 3 / 4', '引导 4 / 4'],
+  aiGuideStep1Title: '纯静态直连 · 保留原版界面体验',
+  aiGuideStep1Desc:
+    'AI 对话模式沿用原版 Nightcord 沉浸界面并开放底部直接输入。所有请求均由你的浏览器直接发起，API Key、对话和设定仅保存在本地 localStorage，不经过任何后端服务器。',
+  aiGuideStep1Note: '※ 随时可通过左上角「25時、ナイトコードで。▾」切换回主页面，两个页面的角色名单与 AI 配置实时互通。',
+  aiGuideStep2Title: '长按左侧角色：配置独立 AI 与提示词',
+  aiGuideStep2Desc:
+    '长按（桌面端可右键）左侧任意角色，点击「AI 对话设置」，即可选择协议（OpenAI 兼容 / Gemini / Anthropic）、接口地址、API Key、模型并编写预设提示词。只有填过有效 Key 的角色才会开口回复！',
+  aiGuideStep3Title: '右上角小蓝点：AI 全局设置面板',
+  aiGuideStep3Desc:
+    '点击右上角第 1 个小蓝点即可打开 AI 全局设置：一键开启「全局 API Key」（给未单独填 Key 的角色兜底）、调节「AI 概率追击回复」概率，还能在同一面板内切换角色编辑提示词并实时同步。',
+  aiGuideStep4Title: '直接发消息 · @点名 · 长按编辑与重生成',
+  aiGuideStep4Desc:
+    '在底部直接发消息：未 @ 角色时会从已填 Key 的角色中随机回复；@角色名 则强制该角色回复（若其未填 Key 会提示）。长按任意消息可「重新生成」、「编辑」或「删除」。',
+  aiGuideOpenConfigBtn: '立即打开 AI 全局设置',
+  editMessageBtn: '编辑',
+  regenerateMessageBtn: '重新生成',
+  saveEditBtn: '保存修改',
+  toastMessageUpdated: '已保存消息修改',
 };
 
 const EN_TEXT: UiText = {
   guideTitle: 'nightcord Guide',
-  stepBadges: ['Step 1 / 5', 'Step 2 / 5', 'Step 3 / 5', 'Step 4 / 5', 'Step 5 / 5'],
+  stepBadges: ['Step 1 / 6', 'Step 2 / 6', 'Step 3 / 6', 'Step 4 / 6', 'Step 5 / 6', 'Step 6 / 6'],
   step1Title: 'Choose Guide & Control Language',
   step1Desc:
     'Select the language for this tutorial and editing controls. Your preference is saved locally.',
   step1Note:
     '* The app launches in Immersive Mode (read-only). Character names and the Immersive Mode chat interface stay in the original Japanese.',
-  step2Title: 'Switch & Create Conversations',
+  step2Title: 'Chats, AI Mode & UI Template',
   step2Desc:
-    'Click "25時、ナイトコードで。▾" in the top-left to switch or create conversations, export/import local backups, or reopen this tutorial anytime.',
-  step3Title: 'Role-Switch Mode & Local Media',
+    'Click "25時、ナイトコードで。▾" in the top-left to switch/create conversations, enter AI Chat Mode, inspect the open-source UI Template, or export/import local JSON backups.',
+  step3Title: 'Role-Switch Mode & Scheduled Status',
   step3Desc:
-    'Click the 1st cyan dot (top-right) to enter Role-Switch Mode and send messages. Customize characters, upload local images/MP4/MP3 with editable filenames, set custom dates, long-press avatars to @mention, long-press messages to delete, or long-press members to toggle Online / Voice / Offline.',
+    'Click the 1st cyan dot (top-right) to enter Role-Switch Mode. Customize roles, send local images/MP4/MP3, set custom dates, long-press messages to delete, or long-press sidebar members to switch status & schedule timed transitions.',
   step3Label: 'Role-Switch · Editable',
   step4Title: 'Immersive Mode (Read-Only)',
   step4Desc:
@@ -598,8 +828,12 @@ const EN_TEXT: UiText = {
   step4Label: 'Immersive · Read-Only',
   step5Title: 'Auto-Playback Mode (Red Dot)',
   step5Desc:
-    'Click the 3rd red dot (top-right) to enter Immersive Mode and replay messages one by one. Choose timeline flow (exact real-time or proportional speed) or a fixed interval (0.5s – 60s), plus date anchor mode and starting message.',
+    'Click the 3rd red dot (top-right) to replay messages one by one (with optional synced sidebar status transitions) using Timestamp Flow or Fixed Interval (0.5s – 60s).',
   step5Label: 'Auto-Playback Mode',
+  step6Title: 'AI Chat Mode (Direct Browser Fetch)',
+  step6Desc:
+    'Open "AI Chat Mode" from the server menu to chat directly in Immersive Mode! Long-press sidebar members to set Protocol/API Key/Prompts, click the cyan dot for Global Key & follow-ups, @mention to pick who replies, and long-press messages to edit or regenerate.',
+  step6Label: 'AI Chat Mode',
   skip: 'Skip',
   back: 'Back',
   next: 'Next',
@@ -776,6 +1010,78 @@ const EN_TEXT: UiText = {
   playbackStatusSyncOffSub: 'Keep sidebar member statuses fixed while replaying chat messages',
   playbackStatusEventsManage: (count) => `Manage scheduled switches (${count})`,
   playbackClearStatusEventsBtn: 'Clear All',
+  aiModeBtn: 'AI Chat Mode',
+  aiModeBackBtn: 'Back to Main Page',
+  aiModeActiveBadge: 'Active',
+  aiCharSettingsBtn: 'AI Chat Settings',
+  aiReadyBadge: 'Ready',
+  aiUnconfiguredBadge: 'No Key',
+  aiCharModalTitle: (name) => `AI Settings · ${name}`,
+  aiProtocolLabel: 'AI Protocol',
+  aiProtocolOpenai: 'OpenAI Compatible (Default)',
+  aiProtocolGemini: 'Google Gemini API',
+  aiProtocolAnthropic: 'Anthropic Claude API',
+  aiBaseUrlLabel: 'Base URL (Defaults to Generic Endpoint)',
+  aiBaseUrlHint: 'Direct browser fetch; works with official APIs or CORS-enabled compatible endpoints.',
+  aiResetDefaultUrl: 'Reset Default',
+  aiApiKeyLabel: 'API Key (Saved Locally Only)',
+  aiApiKeyPlaceholder: 'Enter API Key (required unless Global Key is on)',
+  aiLocalOnlyNote: '* Stored strictly in local browser storage; never uploaded to a backend.',
+  aiUsingGlobalKeyBadge: 'Fallback to Global API Key active',
+  aiModelLabel: 'Model Selection',
+  aiFetchModelsBtn: 'Fetch Models',
+  aiFetchingModels: 'Fetching...',
+  aiFetchModelsOk: (count) => `Loaded ${count} models`,
+  aiFetchModelsFail: 'Could not fetch models; pick a preset or type manually',
+  aiCustomModelPlaceholder: 'Enter model ID (e.g. gpt-4o-mini)',
+  aiPromptLabel: 'Preset System Prompt',
+  aiPromptPlaceholder: 'Describe character persona, tone, catchphrases, and reply rules...',
+  toastAiCharSaved: (name) => `Saved AI settings for "${name}"`,
+  aiGlobalModalTitle: 'AI Global Settings',
+  aiGlobalModalSub: 'Configure Global API Key, AI-to-AI probabilistic follow-ups, and per-character prompts.',
+  aiGlobalApiToggle: 'Enable Global API Key',
+  aiGlobalApiDesc: 'Allow characters without their own API Key to use this shared protocol, URL, and key.',
+  aiFollowUpToggle: 'Probabilistic AI Follow-up Reply',
+  aiFollowUpDesc: 'After an AI replies, roll the probability once for another ready AI to respond to it.',
+  aiFollowUpProbLabel: (prob) => `Follow-up probability: ${prob}%`,
+  aiUserIdentityTitle: 'Your Display Name',
+  aiUserNamePlaceholder: 'Default: あなた',
+  aiCharPromptSectionTitle: 'Character Prompts & Sync',
+  aiCharPromptSectionDesc: 'Synced live with each character panel from long-pressing sidebar members.',
+  aiConfiguredCharsCount: (ready, total) => `Ready characters: ${ready} / ${total}`,
+  toastAiGlobalSaved: 'Saved AI global settings',
+  aiEmptyTitle: (title) => `Blank AI Chat Template · ${title}`,
+  aiEmptySub: 'Send messages directly below! Configure API Keys via long-pressing sidebar roles; @mention targets a specific role, otherwise a configured role replies randomly.',
+  aiEmptyReadySummary: (ready, total) => `Ready characters: ${ready} / ${total}`,
+  aiOpenGlobalQuickBtn: 'Open AI Global Settings',
+  aiOpenGuideBtn: 'Feature Guide',
+  aiOwnKeyBadge: 'Using own API Key',
+  aiNoKeyStatusBadge: 'No API Key (inactive)',
+  aiGeneratingStatus: (name) => `${name} is typing...`,
+  aiToastBusy: 'AI is generating a reply, please wait...',
+  aiToastNoConfiguredChar: 'No characters have an API Key configured yet. Long-press a sidebar role or click the blue dot.',
+  aiToastTargetMissingKey: (name) => `Character "${name}" has no API Key configured`,
+  aiToastRequestFailed: (name, reason) => `${name} failed to reply (${reason})`,
+  aiGuideTitle: 'AI Chat Mode Guide',
+  aiGuideBadges: ['Guide 1 / 4', 'Guide 2 / 4', 'Guide 3 / 4', 'Guide 4 / 4'],
+  aiGuideStep1Title: 'Direct Browser Fetch · Pure Static Design',
+  aiGuideStep1Desc:
+    'Chat with AI characters directly inside the authentic Nightcord UI. Requests go straight from your browser to the API provider, and API Keys & settings stay strictly in local browser storage.',
+  aiGuideStep1Note: '* Return to the main page anytime from the "25時、ナイトコードで。▾" menu; rosters & AI configs stay synced.',
+  aiGuideStep2Title: 'Long-Press Left Roles: Per-Character AI Setup',
+  aiGuideStep2Desc:
+    'Long-press (or right-click) any sidebar member and choose "AI Chat Settings" to set Protocol (OpenAI / Gemini / Anthropic), Base URL, API Key, Model, and Prompt. Only characters with a valid key will reply.',
+  aiGuideStep3Title: 'Top-Right Cyan Dot: AI Global Settings',
+  aiGuideStep3Desc:
+    'Click the 1st cyan dot to configure a shared Global API Key fallback, enable probabilistic AI-to-AI follow-up replies, and quickly edit synced character prompts.',
+  aiGuideStep4Title: 'Direct Chat · @Mention · Edit & Regenerate',
+  aiGuideStep4Desc:
+    'Send messages directly from the bottom bar. Include @Name to force that character to reply, or let an eligible character answer randomly. Long-press any message to Regenerate, Edit, or Delete.',
+  aiGuideOpenConfigBtn: 'Open AI Settings Now',
+  editMessageBtn: 'Edit',
+  regenerateMessageBtn: 'Regenerate',
+  saveEditBtn: 'Save',
+  toastMessageUpdated: 'Message updated',
 };
 
 export function getUiText(lang: UiLanguage): UiText {

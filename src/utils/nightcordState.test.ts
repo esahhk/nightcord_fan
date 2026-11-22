@@ -139,16 +139,19 @@ test('createOutgoingMessage and createFileMessage preserve sender and format Nig
   assert.equal(formatDuration(65), '1:05');
 });
 
-test('i18n dictionary provides distinct zh, ja, and en control text with 5 onboarding steps', () => {
+test('i18n dictionary provides distinct zh, ja, and en control text with 6 onboarding steps and 4 AI guide steps', () => {
   const zh = getUiText('zh');
   const ja = getUiText('ja');
   const en = getUiText('en');
-  assert.equal(zh.stepBadges.length, 5);
-  assert.equal(ja.stepBadges.length, 5);
-  assert.equal(en.stepBadges.length, 5);
-  assert.equal(zh.stepBadges[4], '步骤 5 / 5');
-  assert.equal(ja.stepBadges[4], 'ステップ 5 / 5');
-  assert.equal(en.stepBadges[4], 'Step 5 / 5');
+  assert.equal(zh.stepBadges.length, 6);
+  assert.equal(ja.stepBadges.length, 6);
+  assert.equal(en.stepBadges.length, 6);
+  assert.equal(zh.stepBadges[5], '步骤 6 / 6');
+  assert.equal(ja.stepBadges[5], 'ステップ 6 / 6');
+  assert.equal(en.stepBadges[5], 'Step 6 / 6');
+  assert.equal(zh.aiGuideBadges.length, 4);
+  assert.equal(ja.aiGuideBadges.length, 4);
+  assert.equal(en.aiGuideBadges.length, 4);
   assert.equal(zh.editChar, '编辑');
   assert.equal(ja.editChar, '編集');
   assert.equal(en.editChar, 'Edit');

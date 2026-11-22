@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
+import { AiGlobalSettingsModal } from './components/AiGlobalSettingsModal';
+import { AiOnboardingModal } from './components/AiOnboardingModal';
+import { CharacterAiModal } from './components/CharacterAiModal';
 import { ChatArea } from './components/ChatArea';
 import { ClearCacheModal } from './components/ClearCacheModal';
 import { ImageSendModal } from './components/ImageSendModal';
@@ -9,6 +12,8 @@ import { PlaybackSetupModal } from './components/PlaybackSetupModal';
 import { Sidebar } from './components/Sidebar';
 import { UiTemplateSubpage } from './components/UiTemplateSubpage';
 import type {
+  AiCharacterConfig,
+  AiGlobalConfig,
   AppMode,
   AvatarType,
   CharacterProfile,
@@ -25,22 +30,43 @@ import type {
   UiLanguage,
   VoiceMember,
 } from './types/nightcord';
+import {
+  DEFAULT_AI_GLOBAL_CONFIG,
+  editMessageText,
+  getAiCharacterConfig,
+  getEligibleAiCharacters,
+  pickAiFollowUpResponder,
+  prepareRegenerateTarget,
+  requestAiCompletion,
+  resolveAiResponder,
+  resolveEffectiveAiCredentials,
+} from './utils/aiClient';
 import { getUiText } from './utils/i18n';
 import {
   base64ToBlob,
   blobToBase64,
   clearLocalCacheData,
+  isAiOnboardingCompleted,
   isOnboardingCompleted,
+  loadActiveAiConversationId,
   loadActiveCharacterId,
   loadActiveConversationId,
+  loadAiCharacterConfigs,
+  loadAiGlobalConfig,
   loadLocalMediaBlob,
+  loadSavedAiConversations,
   loadSavedCharacters,
   loadSavedConversations,
   loadSavedLanguage,
   loadSavedMembers,
+  markAiOnboardingCompleted,
   markOnboardingCompleted,
+  saveActiveAiConversationId,
   saveActiveCharacterId,
   saveActiveConversationId,
+  saveAiCharacterConfigs,
+  saveAiConversations,
+  saveAiGlobalConfig,
   saveCharacters,
   saveConversations,
   saveLanguage,
@@ -49,6 +75,7 @@ import {
   saveMode,
 } from './utils/localStorageStore';
 import {
+  AI_TEMPLATE_CONVERSATION_ID,
   INITIAL_CHARACTERS,
   INITIAL_VOICE_MEMBERS,
   TEMPLATE_CONVERSATION_ID,
@@ -60,6 +87,7 @@ import {
   computePlaybackStepDelayMs,
   computePlaybackStepState,
   createFileMessage,
+  createInitialAiConversations,
   createInitialConversations,
   createNewConversation,
   createOutgoingMessage,
@@ -82,7 +110,7 @@ import {
   toggleMemberMute,
   upsertCharacter,
 } from './utils/nightcordState';
-import { isTemplateSubpageLocation } from './utils/nightcordTemplateCode';
+import { isAiSubpageLocation, isTemplateSubpageLocation } from './utils/nightcordTemplateCode';
 
 interface AppProps {
   actions?: Partial<NightcordActions>;
@@ -100,6 +128,21 @@ export default function App({ actions }: AppProps) {
     }
     return list[0].id;
   });
+  const [aiConversations, setAiConversations] = useState<Conversation[]>(
+    () => loadSavedAiConversations() ?? createInitialAiConversations()
+  );
+  const [activeAiConversationId, setActiveAiConversationId] = useState<string>(() => {
+    const saved = loadActiveAiConversationId();
+    const list = loadSavedAiConversations() ?? createInitialAiConversations();
+    if (saved && list.some((c) => c.id === saved)) {
+      return saved;
+    }
+    return list[0].id;
+  });
+  const [aiCharacterConfigs, setAiCharacterConfigs] = useState<Record<string, AiCharacterConfig>>(
+    () => loadAiCharacterConfigs()
+  );
+  const [aiGlobalConfig, setAiGlobalConfig] = useState<AiGlobalConfig>(() => loadAiGlobalConfig());
   const [characters, setCharacters] = useState<CharacterProfile[]>(
     () => loadSavedCharacters() ?? INITIAL_CHARACTERS
   );
@@ -113,15 +156,21 @@ export default function App({ actions }: AppProps) {
   });
   const [mode, setMode] = useState<AppMode>('immersive');
   const [lang, setLang] = useState<UiLanguage>(() => loadSavedLanguage());
-  const [activeView, setActiveView] = useState<'app' | 'template'>(() => {
-    if (typeof window !== 'undefined' && isTemplateSubpageLocation(window.location)) {
-      return 'template';
+  const [activeView, setActiveView] = useState<'app' | 'template' | 'ai'>(() => {
+    if (typeof window !== 'undefined') {
+      if (isTemplateSubpageLocation(window.location)) {
+        return 'template';
+      }
+      if (isAiSubpageLocation(window.location)) {
+        return 'ai';
+      }
     }
     return 'app';
   });
+  const isAiMode = activeView === 'ai';
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      if (isTemplateSubpageLocation(window.location)) {
+      if (isTemplateSubpageLocation(window.location) || isAiSubpageLocation(window.location)) {
         return false;
       }
       const params = new URLSearchParams(window.location.search);
@@ -159,8 +208,24 @@ export default function App({ actions }: AppProps) {
   const [playbackBaseNow, setPlaybackBaseNow] = useState<Date | null>(null);
   const [clockNow, setClockNow] = useState<Date>(() => new Date());
   const [toastText, setToastText] = useState<string | null>(null);
+  const [aiCharModalTargetId, setAiCharModalTargetId] = useState<string | null>(null);
+  const [aiGlobalModalOpen, setAiGlobalModalOpen] = useState(false);
+  const [aiGeneratingName, setAiGeneratingName] = useState<string | null>(null);
+  const [showAiOnboarding, setShowAiOnboarding] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('autostart') === '1') {
+        return false;
+      }
+      if (isAiSubpageLocation(window.location)) {
+        return !isAiOnboardingCompleted();
+      }
+    }
+    return false;
+  });
 
   const actionsRef = useRef<Partial<NightcordActions>>(actions ?? {});
+  const aiBusyRef = useRef(false);
   const toastTimerRef = useRef<number | null>(null);
   const playbackTimerRef = useRef<number | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -169,15 +234,51 @@ export default function App({ actions }: AppProps) {
   const anyFileInputRef = useRef<HTMLInputElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
-  const activeConversation = useMemo(
+  const mainActiveConversation = useMemo(
     () => conversations.find((c) => c.id === activeConversationId) ?? conversations[0],
     [conversations, activeConversationId]
   );
+
+  const aiActiveConversation = useMemo(
+    () => aiConversations.find((c) => c.id === activeAiConversationId) ?? aiConversations[0],
+    [aiConversations, activeAiConversationId]
+  );
+
+  const activeConversation = isAiMode ? aiActiveConversation : mainActiveConversation;
+  const displayedConversations = isAiMode ? aiConversations : conversations;
 
   const activeCharacter = useMemo(
     () => characters.find((c) => c.id === activeCharacterId) ?? characters[0],
     [characters, activeCharacterId]
   );
+
+  const aiReadyMemberIds = useMemo(
+    () =>
+      new Set(
+        getEligibleAiCharacters(characters, aiCharacterConfigs, aiGlobalConfig).map((c) => c.id)
+      ),
+    [characters, aiCharacterConfigs, aiGlobalConfig]
+  );
+
+  const aiCharModalTarget = useMemo(() => {
+    if (!aiCharModalTargetId) {
+      return null;
+    }
+    const found = characters.find((c) => c.id === aiCharModalTargetId);
+    if (found) {
+      return found;
+    }
+    const member = members.find((m) => m.id === aiCharModalTargetId);
+    if (!member) {
+      return null;
+    }
+    return {
+      id: member.id,
+      name: member.name,
+      avatarType: member.avatar === 'k-pink' ? 'k' : member.avatar,
+      customAvatarMediaId: member.customAvatarMediaId,
+    } satisfies CharacterProfile;
+  }, [aiCharModalTargetId, characters, members]);
 
   const lastMessageDateTime = useMemo(
     () => getLastMessageDateTime(activeConversation.messages),
@@ -236,7 +337,13 @@ export default function App({ actions }: AppProps) {
 
   useEffect(() => {
     const syncViewFromLocation = () => {
-      setActiveView(isTemplateSubpageLocation(window.location) ? 'template' : 'app');
+      if (isTemplateSubpageLocation(window.location)) {
+        setActiveView('template');
+      } else if (isAiSubpageLocation(window.location)) {
+        setActiveView('ai');
+      } else {
+        setActiveView('app');
+      }
     };
     window.addEventListener('popstate', syncViewFromLocation);
     window.addEventListener('hashchange', syncViewFromLocation);
@@ -253,6 +360,22 @@ export default function App({ actions }: AppProps) {
   useEffect(() => {
     saveActiveConversationId(activeConversationId);
   }, [activeConversationId]);
+
+  useEffect(() => {
+    saveAiConversations(aiConversations);
+  }, [aiConversations]);
+
+  useEffect(() => {
+    saveActiveAiConversationId(activeAiConversationId);
+  }, [activeAiConversationId]);
+
+  useEffect(() => {
+    saveAiCharacterConfigs(aiCharacterConfigs);
+  }, [aiCharacterConfigs]);
+
+  useEffect(() => {
+    saveAiGlobalConfig(aiGlobalConfig);
+  }, [aiGlobalConfig]);
 
   useEffect(() => {
     saveCharacters(characters);
@@ -417,6 +540,8 @@ export default function App({ actions }: AppProps) {
         setPlaybackModalOpen(false);
         setPendingUpload(null);
         setClearCacheOpen(false);
+        setAiCharModalTargetId(null);
+        setAiGlobalModalOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -470,10 +595,11 @@ export default function App({ actions }: AppProps) {
     setActiveView('app');
     try {
       const url = new URL(window.location.href);
-      if (url.searchParams.get('view') === 'template') {
+      if (url.searchParams.get('view') === 'template' || url.searchParams.get('view') === 'ai') {
         url.searchParams.delete('view');
       }
-      if (url.pathname.replace(/\/+$/, '').toLowerCase() === '/template') {
+      const normPath = url.pathname.replace(/\/+$/, '').toLowerCase();
+      if (normPath === '/template' || normPath === '/ai') {
         url.pathname = '/';
       }
       url.hash = '';
@@ -482,7 +608,64 @@ export default function App({ actions }: AppProps) {
     }
   }, []);
 
+  const handleCompleteAiOnboarding = () => {
+    markAiOnboardingCompleted();
+    setShowAiOnboarding(false);
+  };
+
+  const handleOpenAiMode = useCallback(() => {
+    stopPlayback();
+    setPendingUpload(null);
+    setPlaybackModalOpen(false);
+    setServerMenuOpen(false);
+    setMobileSidebarOpen(false);
+    setMode('immersive');
+    setActiveView('ai');
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('view') === 'template') {
+        url.searchParams.delete('view');
+      }
+      url.hash = '#ai';
+      window.history.pushState(null, '', url.toString());
+      if (url.searchParams.get('autostart') !== '1' && !isAiOnboardingCompleted()) {
+        setShowAiOnboarding(true);
+      }
+    } catch {
+      if (!isAiOnboardingCompleted()) {
+        setShowAiOnboarding(true);
+      }
+    }
+  }, [stopPlayback]);
+
+  const handleExitAiMode = useCallback(() => {
+    stopPlayback();
+    setAiCharModalTargetId(null);
+    setAiGlobalModalOpen(false);
+    setServerMenuOpen(false);
+    setMobileSidebarOpen(false);
+    setActiveView('app');
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('view') === 'ai') {
+        url.searchParams.delete('view');
+      }
+      if (url.pathname.replace(/\/+$/, '').toLowerCase() === '/ai') {
+        url.pathname = '/';
+      }
+      url.hash = '';
+      window.history.pushState(null, '', url.toString());
+    } catch {
+    }
+  }, [stopPlayback]);
+
   const handleSwitchStudioMode = () => {
+    if (isAiMode) {
+      stopPlayback();
+      setPlaybackModalOpen(false);
+      setAiGlobalModalOpen((prev) => !prev);
+      return;
+    }
     if (activeView === 'template') {
       handleCloseTemplatePage();
     }
@@ -495,6 +678,13 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleSwitchImmersiveMode = () => {
+    if (isAiMode) {
+      stopPlayback();
+      setPlaybackModalOpen(false);
+      setAiGlobalModalOpen(false);
+      setAiCharModalTargetId(null);
+      return;
+    }
     if (activeView === 'template') {
       handleCloseTemplatePage();
     }
@@ -543,19 +733,31 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleSelectConversation = (conversationId: string) => {
-    setActiveConversationId(conversationId);
+    if (isAiMode) {
+      setActiveAiConversationId(conversationId);
+    } else {
+      setActiveConversationId(conversationId);
+    }
     setServerMenuOpen(false);
     setMobileSidebarOpen(false);
     invokeAction(actionsRef.current, 'onConversationSelect', conversationId);
   };
 
   const handleCreateConversation = (title: string, fromTemplate: boolean) => {
-    const created = createNewConversation(title, fromTemplate);
+    const created = createNewConversation(title, isAiMode ? false : fromTemplate);
     if (!created) {
       return;
     }
-    setConversations((prev) => [...prev, created]);
-    setActiveConversationId(created.id);
+    if (isAiMode) {
+      if (fromTemplate) {
+        created.messages = activeConversation.messages.map((m) => ({ ...m }));
+      }
+      setAiConversations((prev) => [...prev, created]);
+      setActiveAiConversationId(created.id);
+    } else {
+      setConversations((prev) => [...prev, created]);
+      setActiveConversationId(created.id);
+    }
     setServerMenuOpen(false);
     setMobileSidebarOpen(false);
     invokeAction(actionsRef.current, 'onConversationCreate', created);
@@ -563,6 +765,20 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleDeleteConversation = (conversationId: string) => {
+    if (isAiMode) {
+      if (conversationId === AI_TEMPLATE_CONVERSATION_ID) {
+        return;
+      }
+      setAiConversations((prev) => {
+        const next = prev.filter((c) => c.id !== conversationId);
+        if (activeAiConversationId === conversationId) {
+          setActiveAiConversationId(next[0]?.id ?? AI_TEMPLATE_CONVERSATION_ID);
+        }
+        return next;
+      });
+      showToast(t.toastConvDeleted);
+      return;
+    }
     if (conversationId === TEMPLATE_CONVERSATION_ID) {
       return;
     }
@@ -577,22 +793,232 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleDeleteMessage = (messageId: string) => {
-    if (mode !== 'studio') {
+    if (mode !== 'studio' && !isAiMode) {
       return;
     }
-    setConversations((prev) =>
-      prev.map((conv) =>
-        conv.id === activeConversation.id
-          ? { ...conv, messages: deleteMessageAndRebuildDividers(conv.messages, messageId) }
-          : conv
-      )
-    );
+    if (isAiMode) {
+      setAiConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === activeConversation.id
+            ? { ...conv, messages: deleteMessageAndRebuildDividers(conv.messages, messageId) }
+            : conv
+        )
+      );
+    } else {
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === activeConversation.id
+            ? { ...conv, messages: deleteMessageAndRebuildDividers(conv.messages, messageId) }
+            : conv
+        )
+      );
+    }
     showToast(t.toastMessageDeleted);
   };
 
+  const handleEditMessage = (messageId: string, nextText: string) => {
+    if (!isAiMode && mode !== 'studio') {
+      return;
+    }
+    const updateConv = (conv: Conversation) =>
+      conv.id === activeConversation.id
+        ? { ...conv, messages: editMessageText(conv.messages, messageId, nextText) }
+        : conv;
+    if (isAiMode) {
+      setAiConversations((prev) => prev.map(updateConv));
+    } else {
+      setConversations((prev) => prev.map(updateConv));
+    }
+    showToast(t.toastMessageUpdated);
+  };
+
+  const appendAiCharacterReply = useCallback(
+    (
+      convId: string,
+      speaker: CharacterProfile,
+      replyText: string,
+      historySnapshot: ChatMessage[]
+    ): ChatMessage | null => {
+      const now = new Date();
+      const resolved = resolveOutgoingTimestamp(historySnapshot, undefined, now);
+      if (!resolved.ok) {
+        return null;
+      }
+      const createdMsg = createOutgoingMessage(replyText, speaker, now, {
+        timestamp: resolved.timestamp,
+        sentAt: resolved.sentAt,
+        dividerBefore: resolved.dividerBefore,
+      });
+      if (!createdMsg) {
+        return null;
+      }
+      setAiConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === convId
+            ? {
+                ...conv,
+                messages: [...conv.messages, createdMsg],
+              }
+            : conv
+        )
+      );
+      return createdMsg;
+    },
+    []
+  );
+
+  const runAiReplyTurn = useCallback(
+    async (convId: string, historyBeforeReply: ChatMessage[], triggerText: string) => {
+      const selection = resolveAiResponder(
+        triggerText,
+        characters,
+        aiCharacterConfigs,
+        aiGlobalConfig
+      );
+      if (selection.kind === 'none_configured') {
+        showToast(t.aiToastNoConfiguredChar);
+        return;
+      }
+      if (selection.kind === 'mentioned_missing_key') {
+        showToast(t.aiToastTargetMissingKey(selection.character.name));
+        return;
+      }
+
+      aiBusyRef.current = true;
+      const firstSpeaker = selection.character;
+      setAiGeneratingName(firstSpeaker.name);
+      try {
+        const replyText = await requestAiCompletion({
+          targetCharacter: firstSpeaker,
+          charConfig: getAiCharacterConfig(aiCharacterConfigs, firstSpeaker.id),
+          globalConfig: aiGlobalConfig,
+          history: historyBeforeReply,
+          allCharacters: characters,
+        });
+        const firstMsg = appendAiCharacterReply(
+          convId,
+          firstSpeaker,
+          replyText,
+          historyBeforeReply
+        );
+        const historyAfterFirst = firstMsg
+          ? [...historyBeforeReply, firstMsg]
+          : historyBeforeReply;
+
+        const secondSpeaker = pickAiFollowUpResponder(
+          firstSpeaker.id,
+          characters,
+          aiCharacterConfigs,
+          aiGlobalConfig
+        );
+        if (secondSpeaker) {
+          setAiGeneratingName(secondSpeaker.name);
+          try {
+            const followUpText = await requestAiCompletion({
+              targetCharacter: secondSpeaker,
+              charConfig: getAiCharacterConfig(aiCharacterConfigs, secondSpeaker.id),
+              globalConfig: aiGlobalConfig,
+              history: historyAfterFirst,
+              allCharacters: characters,
+            });
+            appendAiCharacterReply(convId, secondSpeaker, followUpText, historyAfterFirst);
+          } catch (err) {
+            const reason = err instanceof Error ? err.message : 'Error';
+            showToast(t.aiToastRequestFailed(secondSpeaker.name, reason));
+          }
+        }
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : 'Error';
+        showToast(t.aiToastRequestFailed(firstSpeaker.name, reason));
+      } finally {
+        setAiGeneratingName(null);
+        aiBusyRef.current = false;
+      }
+    },
+    [aiCharacterConfigs, aiGlobalConfig, appendAiCharacterReply, characters, showToast, t]
+  );
+
+  const handleRegenerateMessage = useCallback(
+    async (messageId: string) => {
+      if (!isAiMode) {
+        return;
+      }
+      if (aiBusyRef.current) {
+        showToast(t.aiToastBusy);
+        return;
+      }
+      const conv = activeConversation;
+      const target = prepareRegenerateTarget(conv.messages, messageId, characters, '__user__');
+      if (!target) {
+        return;
+      }
+      if (target.mode === 'replace_ai' && target.targetCharacter) {
+        const speaker = target.targetCharacter;
+        const cred = resolveEffectiveAiCredentials(
+          getAiCharacterConfig(aiCharacterConfigs, speaker.id),
+          aiGlobalConfig
+        );
+        if (!cred.ready) {
+          showToast(t.aiToastTargetMissingKey(speaker.name));
+          return;
+        }
+        aiBusyRef.current = true;
+        setAiGeneratingName(speaker.name);
+        try {
+          const nextReply = await requestAiCompletion({
+            targetCharacter: speaker,
+            charConfig: getAiCharacterConfig(aiCharacterConfigs, speaker.id),
+            globalConfig: aiGlobalConfig,
+            history: target.historyBeforeTarget,
+            allCharacters: characters,
+          });
+          setAiConversations((prev) =>
+            prev.map((item) =>
+              item.id === conv.id
+                ? {
+                    ...item,
+                    messages: editMessageText(item.messages, messageId, nextReply),
+                  }
+                : item
+            )
+          );
+          showToast(t.toastMessageUpdated);
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : 'Error';
+          showToast(t.aiToastRequestFailed(speaker.name, reason));
+        } finally {
+          setAiGeneratingName(null);
+          aiBusyRef.current = false;
+        }
+        return;
+      }
+
+      setAiConversations((prev) =>
+        prev.map((item) =>
+          item.id === conv.id ? { ...item, messages: target.historyBeforeTarget } : item
+        )
+      );
+      await runAiReplyTurn(conv.id, target.historyBeforeTarget, target.triggerText);
+    },
+    [
+      activeConversation,
+      aiCharacterConfigs,
+      aiGlobalConfig,
+      characters,
+      isAiMode,
+      runAiReplyTurn,
+      showToast,
+      t,
+    ]
+  );
+
   const handleExportData = async () => {
     try {
-      const mediaIds = collectReferencedMediaIds(conversations, characters, members);
+      const mediaIds = collectReferencedMediaIds(
+        [...conversations, ...aiConversations],
+        characters,
+        members
+      );
       const media: NightcordBackupPayload['media'] = {};
       for (const mediaId of mediaIds) {
         const blob = await loadLocalMediaBlob(mediaId);
@@ -609,10 +1035,14 @@ export default function App({ actions }: AppProps) {
         version: 1,
         exportedAt: new Date().toISOString(),
         conversations,
+        aiConversations,
         characters,
         members,
-        activeConversationId: activeConversation.id,
+        activeConversationId: mainActiveConversation.id,
+        activeAiConversationId: aiActiveConversation.id,
         activeCharacterId: activeCharacter.id,
+        aiCharacterConfigs,
+        aiGlobalConfig,
         media,
       };
       const jsonBlob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -657,7 +1087,24 @@ export default function App({ actions }: AppProps) {
         await saveLocalMediaBlob(mediaId, blob);
       }
       stopPlayback();
+      setAiCharModalTargetId(null);
+      setAiGlobalModalOpen(false);
       setConversations(parsed.conversations);
+      if (parsed.aiConversations && parsed.aiConversations.length > 0) {
+        setAiConversations(parsed.aiConversations);
+        const importedAiActive =
+          parsed.activeAiConversationId &&
+          parsed.aiConversations.some((c) => c.id === parsed.activeAiConversationId)
+            ? parsed.activeAiConversationId
+            : parsed.aiConversations[0].id;
+        setActiveAiConversationId(importedAiActive);
+      }
+      if (parsed.aiCharacterConfigs) {
+        setAiCharacterConfigs(parsed.aiCharacterConfigs);
+      }
+      if (parsed.aiGlobalConfig) {
+        setAiGlobalConfig(parsed.aiGlobalConfig);
+      }
       setCharacters(parsed.characters);
       setMembers(parsed.members);
       setActiveConversationId(parsed.activeConversationId);
@@ -681,8 +1128,13 @@ export default function App({ actions }: AppProps) {
     stopPlayback();
     await clearLocalCacheData();
     const initialConvs = createInitialConversations();
+    const initialAiConvs = createInitialAiConversations();
     setConversations(initialConvs);
     setActiveConversationId(TEMPLATE_CONVERSATION_ID);
+    setAiConversations(initialAiConvs);
+    setActiveAiConversationId(AI_TEMPLATE_CONVERSATION_ID);
+    setAiCharacterConfigs({});
+    setAiGlobalConfig({ ...DEFAULT_AI_GLOBAL_CONFIG });
     setCharacters(INITIAL_CHARACTERS);
     setActiveCharacterId(INITIAL_CHARACTERS[0].id);
     setMembers(INITIAL_VOICE_MEMBERS);
@@ -807,7 +1259,7 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleDeleteStatusEvent = (eventId: string) => {
-    setConversations((prev) =>
+    const updater = (prev: Conversation[]) =>
       prev.map((conv) =>
         conv.id === activeConversation.id
           ? {
@@ -815,17 +1267,25 @@ export default function App({ actions }: AppProps) {
               statusEvents: removeMemberStatusEvent(conv.statusEvents ?? [], eventId),
             }
           : conv
-      )
-    );
+      );
+    if (isAiMode) {
+      setAiConversations(updater);
+    } else {
+      setConversations(updater);
+    }
     showToast(t.toastStatusEventRemoved);
   };
 
   const handleClearStatusEvents = () => {
-    setConversations((prev) =>
+    const updater = (prev: Conversation[]) =>
       prev.map((conv) =>
         conv.id === activeConversation.id ? { ...conv, statusEvents: [] } : conv
-      )
-    );
+      );
+    if (isAiMode) {
+      setAiConversations(updater);
+    } else {
+      setConversations(updater);
+    }
     showToast(t.toastStatusEventsCleared);
   };
 
@@ -838,7 +1298,15 @@ export default function App({ actions }: AppProps) {
     setCharacters(res.characters);
     setMembers(res.members);
     setActiveCharacterId(res.activeCharacterId);
-    setConversations((prev) =>
+    setAiCharacterConfigs((prev) => {
+      if (!(member.id in prev)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[member.id];
+      return next;
+    });
+    const stripEvents = (prev: Conversation[]) =>
       prev.map((conv) =>
         conv.statusEvents?.some((ev) => ev.memberId === member.id)
           ? {
@@ -846,15 +1314,20 @@ export default function App({ actions }: AppProps) {
               statusEvents: conv.statusEvents.filter((ev) => ev.memberId !== member.id),
             }
           : conv
-      )
-    );
+      );
+    setConversations(stripEvents);
+    setAiConversations(stripEvents);
     showToast(t.toastCharRemoved(member.name));
   };
 
   const handleOpenTutorial = () => {
     setServerMenuOpen(false);
     setMobileSidebarOpen(false);
-    setShowOnboarding(true);
+    if (isAiMode) {
+      setShowAiOnboarding(true);
+    } else {
+      setShowOnboarding(true);
+    }
   };
 
   const handleOpenTemplatePage = () => {
@@ -896,10 +1369,43 @@ export default function App({ actions }: AppProps) {
 
   const handleSubmitMessage = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (mode !== 'studio') {
+    if (!inputValue.trim()) {
       return;
     }
-    if (!inputValue.trim()) {
+    if (isAiMode) {
+      if (aiBusyRef.current) {
+        showToast(t.aiToastBusy);
+        return;
+      }
+      const rawText = inputValue;
+      const now = new Date();
+      const convId = activeConversation.id;
+      const resolved = resolveOutgoingTimestamp(activeConversation.messages, undefined, now);
+      if (!resolved.ok) {
+        return;
+      }
+      const userSender: CharacterProfile = {
+        id: '__user__',
+        name: aiGlobalConfig.userDisplayName.trim() || 'あなた',
+        avatarType: aiGlobalConfig.userAvatar || 'k',
+      };
+      const userMsg = createOutgoingMessage(rawText, userSender, now, {
+        timestamp: resolved.timestamp,
+        sentAt: resolved.sentAt,
+        dividerBefore: resolved.dividerBefore,
+      });
+      if (!userMsg) {
+        return;
+      }
+      const updatedHistory = [...activeConversation.messages, userMsg];
+      setAiConversations((prev) =>
+        prev.map((conv) => (conv.id === convId ? { ...conv, messages: updatedHistory } : conv))
+      );
+      setInputValue('');
+      void runAiReplyTurn(convId, updatedHistory, rawText);
+      return;
+    }
+    if (mode !== 'studio') {
       return;
     }
     if (pushMessage(inputValue)) {
@@ -1001,7 +1507,7 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleMentionCharacter = (name: string) => {
-    if (mode !== 'studio') {
+    if (mode !== 'studio' && !isAiMode) {
       return;
     }
     setInputValue((prev) => appendInputToken(prev, `@${name} `));
@@ -1009,7 +1515,7 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleFormatClick = () => {
-    if (mode !== 'studio') {
+    if (mode !== 'studio' && !isAiMode) {
       return;
     }
     setFormatActive((prev) => {
@@ -1021,7 +1527,7 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleEmojiClick = () => {
-    if (mode !== 'studio') {
+    if (mode !== 'studio' && !isAiMode) {
       return;
     }
     setInputValue((prev) => appendInputToken(prev, '♪'));
@@ -1079,9 +1585,9 @@ export default function App({ actions }: AppProps) {
           <button
             type="button"
             data-action="mode-studio"
-            aria-label="ロール切替モード"
-            aria-pressed={mode === 'studio'}
-            title="ロール切替モード"
+            aria-label={isAiMode ? t.aiGlobalModalTitle : 'ロール切替モード'}
+            aria-pressed={isAiMode ? aiGlobalModalOpen : mode === 'studio'}
+            title={isAiMode ? t.aiGlobalModalTitle : 'ロール切替モード'}
             onClick={handleSwitchStudioMode}
             className="h-[11px] w-[11px] cursor-pointer rounded-full bg-[#64D2E6] transition-transform hover:scale-110 hover:brightness-110"
           />
@@ -1120,7 +1626,9 @@ export default function App({ actions }: AppProps) {
         <Sidebar
           lang={lang}
           mode={mode}
-          conversations={conversations}
+          aiMode={isAiMode}
+          aiReadyMemberIds={aiReadyMemberIds}
+          conversations={displayedConversations}
           activeConversationId={activeConversation.id}
           activeChannelTitle={activeConversation.title}
           voiceExpanded={effectiveVoiceExpanded}
@@ -1154,11 +1662,19 @@ export default function App({ actions }: AppProps) {
           }}
           onOpenTutorial={handleOpenTutorial}
           onOpenTemplatePage={handleOpenTemplatePage}
+          onOpenAiMode={handleOpenAiMode}
+          onExitAiMode={handleExitAiMode}
+          onOpenMemberAiSettings={(member) => {
+            setAiCharModalTargetId(member.id);
+          }}
         />
         <ChatArea
           lang={lang}
           channelTitle={activeConversation.title}
           mode={mode}
+          aiMode={isAiMode}
+          aiGeneratingName={aiGeneratingName}
+          aiReadyCount={aiReadyMemberIds.size}
           messages={displayedMessages}
           isPlaying={playbackConfig !== null}
           animatedFromIndex={playbackConfig ? playbackConfig.startIndex : null}
@@ -1172,6 +1688,10 @@ export default function App({ actions }: AppProps) {
           onChatHeaderClick={handleChatHeaderClick}
           onMessageClick={handleMessageClick}
           onDeleteMessage={handleDeleteMessage}
+          onEditMessage={handleEditMessage}
+          onRegenerateMessage={handleRegenerateMessage}
+          onOpenAiGlobalSettings={() => setAiGlobalModalOpen(true)}
+          onOpenAiGuide={() => setShowAiOnboarding(true)}
           onAvatarClick={handleAvatarClick}
           onFileDownload={handleFileDownload}
           onMentionCharacter={handleMentionCharacter}
@@ -1223,6 +1743,48 @@ export default function App({ actions }: AppProps) {
         lang={lang}
         onSelectLanguage={setLang}
         onComplete={handleCompleteOnboarding}
+      />
+
+      <AiOnboardingModal
+        open={showAiOnboarding}
+        lang={lang}
+        onComplete={handleCompleteAiOnboarding}
+        onOpenGlobalSettings={() => setAiGlobalModalOpen(true)}
+      />
+
+      <CharacterAiModal
+        lang={lang}
+        open={aiCharModalTarget !== null}
+        character={aiCharModalTarget}
+        initialConfig={
+          aiCharModalTarget
+            ? getAiCharacterConfig(aiCharacterConfigs, aiCharModalTarget.id)
+            : getAiCharacterConfig(aiCharacterConfigs, '')
+        }
+        globalConfig={aiGlobalConfig}
+        onClose={() => setAiCharModalTargetId(null)}
+        onSave={(charId, nextCfg) => {
+          setAiCharacterConfigs((prev) => ({
+            ...prev,
+            [charId]: nextCfg,
+          }));
+          const charName = characters.find((c) => c.id === charId)?.name ?? charId;
+          showToast(t.toastAiCharSaved(charName));
+        }}
+      />
+
+      <AiGlobalSettingsModal
+        lang={lang}
+        open={aiGlobalModalOpen}
+        globalConfig={aiGlobalConfig}
+        characters={characters}
+        characterConfigs={aiCharacterConfigs}
+        onClose={() => setAiGlobalModalOpen(false)}
+        onSave={(nextGlobal, nextCharConfigs) => {
+          setAiGlobalConfig(nextGlobal);
+          setAiCharacterConfigs(nextCharConfigs);
+          showToast(t.toastAiGlobalSaved);
+        }}
       />
 
       <div

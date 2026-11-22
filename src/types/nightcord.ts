@@ -109,6 +109,28 @@ export interface CustomMessageTime {
   time: string;
 }
 
+export type AiProtocol = 'openai' | 'gemini' | 'anthropic';
+
+export interface AiCharacterConfig {
+  protocol: AiProtocol;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  systemPrompt: string;
+}
+
+export interface AiGlobalConfig {
+  useGlobalApi: boolean;
+  protocol: AiProtocol;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  aiFollowUpEnabled: boolean;
+  aiFollowUpProbability: number;
+  userDisplayName: string;
+  userAvatar: AvatarType;
+}
+
 export interface NightcordBackupMediaEntry {
   mimeType: string;
   dataBase64: string;
@@ -118,10 +140,14 @@ export interface NightcordBackupPayload {
   version: 1;
   exportedAt: string;
   conversations: Conversation[];
+  aiConversations?: Conversation[];
   characters: CharacterProfile[];
   members?: VoiceMember[];
   activeConversationId?: string;
+  activeAiConversationId?: string;
   activeCharacterId?: string;
+  aiCharacterConfigs?: Record<string, AiCharacterConfig>;
+  aiGlobalConfig?: AiGlobalConfig;
   media: Record<string, NightcordBackupMediaEntry>;
 }
 

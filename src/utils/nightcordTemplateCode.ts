@@ -34,6 +34,23 @@ export function isTemplateSubpageLocation(loc: {
   return normalizedPath === '/template';
 }
 
+export function isAiSubpageLocation(loc: {
+  pathname: string;
+  search: string;
+  hash: string;
+}): boolean {
+  const params = new URLSearchParams(loc.search);
+  if (params.get('view') === 'ai') {
+    return true;
+  }
+  const normalizedHash = loc.hash.replace(/^#\/?/, '').toLowerCase();
+  if (normalizedHash === 'ai') {
+    return true;
+  }
+  const normalizedPath = loc.pathname.replace(/\/+$/, '').toLowerCase();
+  return normalizedPath === '/ai';
+}
+
 export const NIGHTCORD_TSX_TEMPLATE = `import { useState } from 'react';
 import type { FormEvent } from 'react';
 

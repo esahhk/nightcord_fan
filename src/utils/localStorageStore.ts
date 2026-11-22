@@ -1,20 +1,28 @@
 import type {
+  AiCharacterConfig,
+  AiGlobalConfig,
   AppMode,
   CharacterProfile,
   Conversation,
   UiLanguage,
   VoiceMember,
 } from '../types/nightcord';
+import { DEFAULT_AI_GLOBAL_CONFIG } from './aiClient';
 
 const STORAGE_KEYS = {
   conversations: 'nightcord_conversations_v1',
   activeConversationId: 'nightcord_active_conv_v1',
+  aiConversations: 'nightcord_ai_conversations_v1',
+  activeAiConversationId: 'nightcord_active_ai_conv_v1',
+  aiCharacterConfigs: 'nightcord_ai_char_configs_v1',
+  aiGlobalConfig: 'nightcord_ai_global_config_v1',
   characters: 'nightcord_characters_v1',
   activeCharacterId: 'nightcord_active_char_v1',
   members: 'nightcord_members_v1',
   mode: 'nightcord_mode_v1',
   language: 'nightcord_lang_v1',
   onboardingDone: 'nightcord_onboarding_done_v2',
+  aiOnboardingDone: 'nightcord_ai_onboarding_done_v1',
 } as const;
 
 const DB_NAME = 'nightcord_local_media_v1';
@@ -188,6 +196,21 @@ export function markOnboardingCompleted(): void {
   }
 }
 
+export function isAiOnboardingCompleted(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.aiOnboardingDone) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function markAiOnboardingCompleted(): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.aiOnboardingDone, '1');
+  } catch {
+  }
+}
+
 export function loadSavedLanguage(): UiLanguage {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.language);
@@ -231,15 +254,79 @@ export function saveMembers(members: VoiceMember[]): void {
   writeJson(STORAGE_KEYS.members, members);
 }
 
+export function loadSavedAiConversations(): Conversation[] | null {
+  const data = readJson<Conversation[]>(STORAGE_KEYS.aiConversations);
+  return Array.isArray(data) && data.length > 0 ? data : null;
+}
+
+export function saveAiConversations(conversations: Conversation[]): void {
+  writeJson(STORAGE_KEYS.aiConversations, conversations);
+}
+
+export function loadActiveAiConversationId(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.activeAiConversationId);
+  } catch {
+    return null;
+  }
+}
+
+export function saveActiveAiConversationId(id: string): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.activeAiConversationId, id);
+  } catch {
+  }
+}
+
+export function loadAiCharacterConfigs(): Record<string, AiCharacterConfig> {
+  const data = readJson<Record<string, AiCharacterConfig>>(STORAGE_KEYS.aiCharacterConfigs);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return {};
+  }
+  return data;
+}
+
+export function saveAiCharacterConfigs(configs: Record<string, AiCharacterConfig>): void {
+  writeJson(STORAGE_KEYS.aiCharacterConfigs, configs);
+}
+
+export function loadAiGlobalConfig(): AiGlobalConfig {
+  const data = readJson<Partial<AiGlobalConfig>>(STORAGE_KEYS.aiGlobalConfig);
+  if (!data || typeof data !== 'object') {
+    return { ...DEFAULT_AI_GLOBAL_CONFIG };
+  }
+  return {
+    ...DEFAULT_AI_GLOBAL_CONFIG,
+    ...data,
+    aiFollowUpProbability:
+      typeof data.aiFollowUpProbability === 'number' && Number.isFinite(data.aiFollowUpProbability)
+        ? Math.min(100, Math.max(0, data.aiFollowUpProbability))
+        : DEFAULT_AI_GLOBAL_CONFIG.aiFollowUpProbability,
+    userDisplayName:
+      typeof data.userDisplayName === 'string' && data.userDisplayName.trim()
+        ? data.userDisplayName
+        : DEFAULT_AI_GLOBAL_CONFIG.userDisplayName,
+  };
+}
+
+export function saveAiGlobalConfig(config: AiGlobalConfig): void {
+  writeJson(STORAGE_KEYS.aiGlobalConfig, config);
+}
+
 export async function clearLocalCacheData(): Promise<void> {
   memoryBlobFallback.clear();
   try {
     localStorage.removeItem(STORAGE_KEYS.conversations);
     localStorage.removeItem(STORAGE_KEYS.activeConversationId);
+    localStorage.removeItem(STORAGE_KEYS.aiConversations);
+    localStorage.removeItem(STORAGE_KEYS.activeAiConversationId);
+    localStorage.removeItem(STORAGE_KEYS.aiCharacterConfigs);
+    localStorage.removeItem(STORAGE_KEYS.aiGlobalConfig);
     localStorage.removeItem(STORAGE_KEYS.characters);
     localStorage.removeItem(STORAGE_KEYS.activeCharacterId);
     localStorage.removeItem(STORAGE_KEYS.members);
     localStorage.removeItem(STORAGE_KEYS.onboardingDone);
+    localStorage.removeItem(STORAGE_KEYS.aiOnboardingDone);
   } catch {
   }
   const db = await openMediaDb();

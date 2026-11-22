@@ -24,6 +24,8 @@ const STATUS_MONTHS: number[] = Array.from({ length: 12 }, (_, idx) => idx + 1);
 interface SidebarProps {
   lang: UiLanguage;
   mode: AppMode;
+  aiMode?: boolean;
+  aiReadyMemberIds?: Set<string>;
   conversations: Conversation[];
   activeConversationId: string;
   activeChannelTitle: string;
@@ -59,11 +61,16 @@ interface SidebarProps {
   onRequestClearCache: () => void;
   onOpenTutorial: () => void;
   onOpenTemplatePage: () => void;
+  onOpenAiMode?: () => void;
+  onExitAiMode?: () => void;
+  onOpenMemberAiSettings?: (member: VoiceMember) => void;
 }
 
 export function Sidebar({
   lang,
   mode,
+  aiMode = false,
+  aiReadyMemberIds,
   conversations,
   activeConversationId,
   activeChannelTitle,
@@ -95,8 +102,12 @@ export function Sidebar({
   onRequestClearCache,
   onOpenTutorial,
   onOpenTemplatePage,
+  onOpenAiMode,
+  onExitAiMode,
+  onOpenMemberAiSettings,
 }: SidebarProps) {
   const t = getUiText(lang);
+  const canManageMembers = mode === 'studio' || aiMode;
   const [newTitle, setNewTitle] = useState('');
   const [fromTemplate, setFromTemplate] = useState(false);
   const [createExpanded, setCreateExpanded] = useState(false);
@@ -123,12 +134,12 @@ export function Sidebar({
   );
 
   useEffect(() => {
-    if (mode !== 'studio') {
+    if (!canManageMembers) {
       setMemberMenuId(null);
       setStatusTimeEnabled(false);
       setStatusTimeError(null);
     }
-  }, [mode]);
+  }, [canManageMembers]);
 
   useEffect(() => {
     if (!serverMenuOpen) {
@@ -196,7 +207,7 @@ export function Sidebar({
     y: number,
     rowEl: HTMLElement | null
   ) => {
-    if (mode !== 'studio') {
+    if (!canManageMembers) {
       return;
     }
     clearLongPress();
@@ -240,7 +251,7 @@ export function Sidebar({
   };
 
   const renderStatusPopover = (member: VoiceMember) => {
-    if (mode !== 'studio' || memberMenuId !== member.id) {
+    if (!canManageMembers || memberMenuId !== member.id) {
       return null;
     }
     const options: { value: MemberPresenceStatus; label: string; dotClass: string }[] = [
@@ -249,6 +260,7 @@ export function Sidebar({
       { value: 'offline', label: t.statusOfflineBtn, dotClass: 'bg-[#857A99]' },
     ];
     const memberEvents = activeStatusEvents.filter((ev) => ev.memberId === member.id);
+    const isAiReady = aiReadyMemberIds?.has(member.id) ?? false;
 
     return (
       <div
@@ -259,6 +271,34 @@ export function Sidebar({
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
       >
+        {aiMode && onOpenMemberAiSettings && (
+          <>
+            <button
+              type="button"
+              data-action="open-member-ai-settings"
+              onClick={() => {
+                onOpenMemberAiSettings(member);
+                setMemberMenuId(null);
+              }}
+              className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-[6px] bg-[#362B4A] px-2.5 py-1.5 text-left text-[12px] font-semibold text-[#EFEBF5] transition-colors hover:bg-[#493B62] hover:text-white"
+            >
+              <span className="flex items-center gap-2 truncate">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-[#64D2E6]" />
+                <span className="truncate">{t.aiCharSettingsBtn}</span>
+              </span>
+              <span
+                className={`shrink-0 rounded px-1.5 py-0.5 text-[9.5px] font-medium ${
+                  isAiReady
+                    ? 'bg-[#55D8C1]/20 text-[#55D8C1]'
+                    : 'bg-[#211A2C] text-[#9B90AD]'
+                }`}
+              >
+                {isAiReady ? t.aiReadyBadge : t.aiUnconfiguredBadge}
+              </span>
+            </button>
+            <div className="my-1 h-px w-full bg-[#362B49]" />
+          </>
+        )}
         {options.map((opt) => {
           const isCurrent = member.status === opt.value && !statusTimeEnabled;
           return (
@@ -301,133 +341,137 @@ export function Sidebar({
           );
         })}
 
-        <div className="my-1 h-px w-full bg-[#362B49]" />
+        {!aiMode && (
+          <>
+            <div className="my-1 h-px w-full bg-[#362B49]" />
 
-        <div className="rounded-[6px] px-1 py-1">
-          <label className="flex cursor-pointer items-start gap-2 px-1.5 py-0.5 text-[11.5px] font-medium text-[#DCD7E5] hover:text-white">
-            <input
-              type="checkbox"
-              data-action="toggle-member-status-time"
-              checked={statusTimeEnabled}
-              onChange={(e) => {
-                const next = e.target.checked;
-                setStatusTimeEnabled(next);
-                setStatusTimeError(null);
-                setMemberMenuFlipUp(computeFlipUp(activeMemberRowRef.current, next));
-              }}
-              className="mt-0.5 shrink-0 accent-[#64D2E6]"
-            />
-            <span className="leading-[1.35]">{t.statusAddTimeToggle}</span>
-          </label>
-
-          {statusTimeEnabled && (
-            <div className="mt-1.5 flex flex-col gap-1.5 rounded-[6px] border border-[#3E3254] bg-[#292038] p-2">
-              <p className="text-[10px] leading-[1.35] text-[#A499B8]">{t.statusAddTimeHint}</p>
-              <div className="grid grid-cols-[1.3fr_0.9fr_0.8fr] gap-1">
-                <select
-                  data-action="member-status-year"
-                  aria-label={t.yearUnit}
-                  value={statusTimeYear}
-                  onChange={(e) => updateStatusYearOrMonth(Number(e.target.value), statusTimeMonth)}
-                  className="cursor-pointer rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1 py-0.5 text-[10.5px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
-                >
-                  {STATUS_YEARS.map((y) => (
-                    <option key={y} value={y}>
-                      {y}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  data-action="member-status-month"
-                  aria-label={t.monthUnit}
-                  value={statusTimeMonth}
-                  onChange={(e) => updateStatusYearOrMonth(statusTimeYear, Number(e.target.value))}
-                  className="cursor-pointer rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1 py-0.5 text-[10.5px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
-                >
-                  {STATUS_MONTHS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                      {t.monthUnit}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  data-action="member-status-day"
-                  aria-label={t.dayUnit}
-                  value={statusTimeDay}
-                  onChange={(e) => {
-                    setStatusTimeDay(Number(e.target.value));
-                    setStatusTimeError(null);
-                  }}
-                  className="cursor-pointer rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1 py-0.5 text-[10.5px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
-                >
-                  {statusDaysList.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                      {t.dayUnit}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center gap-1">
+            <div className="rounded-[6px] px-1 py-1">
+              <label className="flex cursor-pointer items-start gap-2 px-1.5 py-0.5 text-[11.5px] font-medium text-[#DCD7E5] hover:text-white">
                 <input
-                  type="time"
-                  data-action="member-status-time-input"
-                  aria-label={t.statusAddTimeToggle}
-                  value={statusTimeClock}
+                  type="checkbox"
+                  data-action="toggle-member-status-time"
+                  checked={statusTimeEnabled}
                   onChange={(e) => {
-                    setStatusTimeClock(e.target.value);
+                    const next = e.target.checked;
+                    setStatusTimeEnabled(next);
                     setStatusTimeError(null);
+                    setMemberMenuFlipUp(computeFlipUp(activeMemberRowRef.current, next));
                   }}
-                  className="min-w-0 flex-1 rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1.5 py-0.5 text-[11px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+                  className="mt-0.5 shrink-0 accent-[#64D2E6]"
                 />
-                <button
-                  type="button"
-                  data-action="member-status-time-sync"
-                  onClick={() => {
-                    setStatusTimeYear(suggestedStatusTime.year);
-                    setStatusTimeMonth(suggestedStatusTime.month);
-                    setStatusTimeDay(suggestedStatusTime.day);
-                    setStatusTimeClock(suggestedStatusTime.time);
-                    setStatusTimeError(null);
-                  }}
-                  className="shrink-0 cursor-pointer rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1.5 py-0.5 text-[10px] text-[#C2B8D3] hover:bg-[#473A5C] hover:text-white"
-                >
-                  {t.statusTimeSyncBtn}
-                </button>
-              </div>
-              {statusTimeError && (
-                <div className="text-[10px] font-medium text-[#FF9EB3]">{statusTimeError}</div>
-              )}
-              {memberEvents.length > 0 && (
-                <div className="mt-0.5 flex flex-col gap-1 border-t border-[#3B2F50] pt-1.5">
-                  <span className="text-[10px] font-medium text-[#9B90AD]">
-                    {t.statusScheduledListLabel(memberEvents.length)}
-                  </span>
-                  {memberEvents.map((ev) => (
-                    <div
-                      key={ev.id}
-                      className="flex items-center justify-between gap-1 rounded-[4px] bg-[#211A2C] px-1.5 py-1 text-[10px] text-[#DCD7E5]"
+                <span className="leading-[1.35]">{t.statusAddTimeToggle}</span>
+              </label>
+
+              {statusTimeEnabled && (
+                <div className="mt-1.5 flex flex-col gap-1.5 rounded-[6px] border border-[#3E3254] bg-[#292038] p-2">
+                  <p className="text-[10px] leading-[1.35] text-[#A499B8]">{t.statusAddTimeHint}</p>
+                  <div className="grid grid-cols-[1.3fr_0.9fr_0.8fr] gap-1">
+                    <select
+                      data-action="member-status-year"
+                      aria-label={t.yearUnit}
+                      value={statusTimeYear}
+                      onChange={(e) => updateStatusYearOrMonth(Number(e.target.value), statusTimeMonth)}
+                      className="cursor-pointer rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1 py-0.5 text-[10.5px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
                     >
-                      <span className="truncate">
-                        {formatDateTimeBadge(ev.sentAt)} · {getStatusLabel(ev.status)}
+                      {STATUS_YEARS.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      data-action="member-status-month"
+                      aria-label={t.monthUnit}
+                      value={statusTimeMonth}
+                      onChange={(e) => updateStatusYearOrMonth(statusTimeYear, Number(e.target.value))}
+                      className="cursor-pointer rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1 py-0.5 text-[10.5px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+                    >
+                      {STATUS_MONTHS.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                          {t.monthUnit}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      data-action="member-status-day"
+                      aria-label={t.dayUnit}
+                      value={statusTimeDay}
+                      onChange={(e) => {
+                        setStatusTimeDay(Number(e.target.value));
+                        setStatusTimeError(null);
+                      }}
+                      className="cursor-pointer rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1 py-0.5 text-[10.5px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+                    >
+                      {statusDaysList.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                          {t.dayUnit}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="time"
+                      data-action="member-status-time-input"
+                      aria-label={t.statusAddTimeToggle}
+                      value={statusTimeClock}
+                      onChange={(e) => {
+                        setStatusTimeClock(e.target.value);
+                        setStatusTimeError(null);
+                      }}
+                      className="min-w-0 flex-1 rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1.5 py-0.5 text-[11px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+                    />
+                    <button
+                      type="button"
+                      data-action="member-status-time-sync"
+                      onClick={() => {
+                        setStatusTimeYear(suggestedStatusTime.year);
+                        setStatusTimeMonth(suggestedStatusTime.month);
+                        setStatusTimeDay(suggestedStatusTime.day);
+                        setStatusTimeClock(suggestedStatusTime.time);
+                        setStatusTimeError(null);
+                      }}
+                      className="shrink-0 cursor-pointer rounded-[5px] border border-[#4D3F66] bg-[#332844] px-1.5 py-0.5 text-[10px] text-[#C2B8D3] hover:bg-[#473A5C] hover:text-white"
+                    >
+                      {t.statusTimeSyncBtn}
+                    </button>
+                  </div>
+                  {statusTimeError && (
+                    <div className="text-[10px] font-medium text-[#FF9EB3]">{statusTimeError}</div>
+                  )}
+                  {memberEvents.length > 0 && (
+                    <div className="mt-0.5 flex flex-col gap-1 border-t border-[#3B2F50] pt-1.5">
+                      <span className="text-[10px] font-medium text-[#9B90AD]">
+                        {t.statusScheduledListLabel(memberEvents.length)}
                       </span>
-                      <button
-                        type="button"
-                        data-action={`delete-status-event-${ev.id}`}
-                        aria-label={t.cancel}
-                        onClick={() => onDeleteStatusEvent(ev.id)}
-                        className="shrink-0 cursor-pointer px-1 text-[#9B90AD] hover:text-[#FF9EB3]"
-                      >
-                        ×
-                      </button>
+                      {memberEvents.map((ev) => (
+                        <div
+                          key={ev.id}
+                          className="flex items-center justify-between gap-1 rounded-[4px] bg-[#211A2C] px-1.5 py-1 text-[10px] text-[#DCD7E5]"
+                        >
+                          <span className="truncate">
+                            {formatDateTimeBadge(ev.sentAt)} · {getStatusLabel(ev.status)}
+                          </span>
+                          <button
+                            type="button"
+                            data-action={`delete-status-event-${ev.id}`}
+                            aria-label={t.cancel}
+                            onClick={() => onDeleteStatusEvent(ev.id)}
+                            className="shrink-0 cursor-pointer px-1 text-[#9B90AD] hover:text-[#FF9EB3]"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
+          </>
+        )}
 
         <div className="my-1 h-px w-full bg-[#362B49]" />
         <button
@@ -628,7 +672,48 @@ export function Sidebar({
                 </form>
               )}
 
-              <div className="mt-3 space-y-2.5 rounded-[9px] border border-[#362B49] bg-[#2C223C]/80 p-2.5">
+              {aiMode ? (
+                <a
+                  href="#/"
+                  data-action="back-main-mode"
+                  onClick={(e) => {
+                    if (onExitAiMode) {
+                      e.preventDefault();
+                      onExitAiMode();
+                    }
+                  }}
+                  className="mt-2.5 flex h-[34px] w-full cursor-pointer items-center justify-between rounded-[8px] border border-[#64D2E6]/50 bg-[#352A4A] px-2.5 text-[12px] font-semibold text-white transition-colors hover:border-[#64D2E6] hover:bg-[#42345B]"
+                >
+                  <span className="flex items-center gap-2 truncate">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-[#64D2E6]" />
+                    <span className="truncate">{t.aiModeBtn}</span>
+                    <span className="shrink-0 rounded bg-[#64D2E6]/20 px-1.5 py-0.5 text-[9.5px] text-[#64D2E6]">
+                      {t.aiModeActiveBadge}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-[10.5px] text-[#CFC7DD]">{t.aiModeBackBtn} →</span>
+                </a>
+              ) : (
+                <a
+                  href="#ai"
+                  data-action="open-ai-mode"
+                  onClick={(e) => {
+                    if (onOpenAiMode) {
+                      e.preventDefault();
+                      onOpenAiMode();
+                    }
+                  }}
+                  className="mt-2.5 flex h-[34px] w-full cursor-pointer items-center justify-between rounded-[8px] border border-[#4A3C63] bg-[#312645] px-2.5 text-[12px] font-semibold text-[#EFEBF5] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#3E3156] hover:text-white"
+                >
+                  <span className="flex items-center gap-2 truncate">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-[#64D2E6]" />
+                    <span className="truncate">{t.aiModeBtn}</span>
+                  </span>
+                  <span className="shrink-0 text-[11px] text-[#64D2E6]">→</span>
+                </a>
+              )}
+
+              <div className="mt-2.5 space-y-2.5 rounded-[9px] border border-[#362B49] bg-[#2C223C]/80 p-2.5">
                 <div className="space-y-1.5">
                   <span className="block text-[10.5px] font-medium text-[#A499B8]">
                     {t.langLabel}
@@ -884,7 +969,7 @@ export function Sidebar({
                   onPointerLeave={clearLongPress}
                   onPointerCancel={clearLongPress}
                   onContextMenu={(e) => {
-                    if (mode === 'studio') {
+                    if (canManageMembers) {
                       e.preventDefault();
                       window.getSelection?.()?.removeAllRanges();
                       openMemberMenu(member.id, e.currentTarget);
@@ -945,7 +1030,7 @@ export function Sidebar({
                   onPointerLeave={clearLongPress}
                   onPointerCancel={clearLongPress}
                   onContextMenu={(e) => {
-                    if (mode === 'studio') {
+                    if (canManageMembers) {
                       e.preventDefault();
                       window.getSelection?.()?.removeAllRanges();
                       openMemberMenu(member.id, e.currentTarget);
@@ -1058,7 +1143,7 @@ export function Sidebar({
                   onPointerLeave={clearLongPress}
                   onPointerCancel={clearLongPress}
                   onContextMenu={(e) => {
-                    if (mode === 'studio') {
+                    if (canManageMembers) {
                       e.preventDefault();
                       window.getSelection?.()?.removeAllRanges();
                       openMemberMenu(member.id, e.currentTarget);

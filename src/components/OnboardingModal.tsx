@@ -65,6 +65,13 @@ export function OnboardingModal({
       note: '',
       visual: 'playback' as const,
     },
+    {
+      badge: t.stepBadges[5],
+      title: t.step6Title,
+      description: t.step6Desc,
+      note: '',
+      visual: 'aimode' as const,
+    },
   ];
 
   const current = steps[stepIndex];
@@ -171,6 +178,15 @@ export function OnboardingModal({
                 <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#EB7F97] ring-4 ring-[#EB7F97]/25" />
                 <span className="ml-2 text-[12px] font-semibold text-[#FFD2DC]">
                   {t.step5Label}
+                </span>
+              </div>
+            )}
+            {current.visual === 'aimode' && (
+              <div className="flex items-center gap-2.5 rounded-[7px] border border-[#64D2E6]/45 bg-[#2E243D] px-3.5 py-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#64D2E6] ring-4 ring-[#64D2E6]/20" />
+                <span className="text-[12.5px] font-bold text-[#EFEBF5]">{t.step6Label}</span>
+                <span className="rounded bg-[#64D2E6]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#64D2E6]">
+                  @AI
                 </span>
               </div>
             )}

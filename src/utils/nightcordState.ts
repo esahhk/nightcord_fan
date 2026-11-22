@@ -1,4 +1,6 @@
 import type {
+  AiCharacterConfig,
+  AiGlobalConfig,
   AvatarType,
   CharacterProfile,
   ChatFileMedia,
@@ -13,6 +15,7 @@ import type {
   NightcordActions,
   VoiceMember,
 } from '../types/nightcord';
+import { DEFAULT_AI_GLOBAL_CONFIG } from './aiClient';
 
 export const INITIAL_VOICE_MEMBERS: VoiceMember[] = [
   { id: 'k', name: 'K', avatar: 'k-pink', muted: false, online: true, status: 'voice' },
@@ -100,6 +103,7 @@ export const INITIAL_MESSAGES: ChatMessage[] = [
 ];
 
 export const TEMPLATE_CONVERSATION_ID = 'template-work';
+export const AI_TEMPLATE_CONVERSATION_ID = 'ai-template-work';
 
 export function createInitialConversations(): Conversation[] {
   return [
@@ -108,6 +112,17 @@ export function createInitialConversations(): Conversation[] {
       title: '作業',
       isTemplate: true,
       messages: INITIAL_MESSAGES,
+    },
+  ];
+}
+
+export function createInitialAiConversations(): Conversation[] {
+  return [
+    {
+      id: AI_TEMPLATE_CONVERSATION_ID,
+      title: '作業',
+      isTemplate: true,
+      messages: [],
     },
   ];
 }
@@ -821,10 +836,14 @@ export function collectReferencedMediaIds(
 
 export function parseNightcordBackup(rawText: string): {
   conversations: Conversation[];
+  aiConversations?: Conversation[];
   characters: CharacterProfile[];
   members: VoiceMember[];
   activeConversationId: string;
+  activeAiConversationId?: string;
   activeCharacterId: string;
+  aiCharacterConfigs?: Record<string, AiCharacterConfig>;
+  aiGlobalConfig?: AiGlobalConfig;
   media: Record<string, { mimeType: string; dataBase64: string }>;
 } | null {
   try {
@@ -988,12 +1007,65 @@ export function parseNightcordBackup(rawText: string): {
       }
     }
 
+    let aiConversations: Conversation[] | undefined;
+    if (Array.isArray(parsed.aiConversations) && parsed.aiConversations.length > 0) {
+      const validAi: Conversation[] = [];
+      for (const item of parsed.aiConversations) {
+        if (!item || typeof item !== 'object') {
+          continue;
+        }
+        const conv = item as Record<string, unknown>;
+        if (
+          typeof conv.id === 'string' &&
+          conv.id.trim() &&
+          typeof conv.title === 'string' &&
+          conv.title.trim() &&
+          Array.isArray(conv.messages)
+        ) {
+          validAi.push({
+            id: conv.id,
+            title: conv.title,
+            isTemplate: Boolean(conv.isTemplate),
+            messages: conv.messages as ChatMessage[],
+          });
+        }
+      }
+      if (validAi.length > 0) {
+        aiConversations = validAi;
+      }
+    }
+
+    const activeAiConversationId =
+      aiConversations && typeof parsed.activeAiConversationId === 'string'
+        ? aiConversations.some((c) => c.id === parsed.activeAiConversationId)
+          ? parsed.activeAiConversationId
+          : aiConversations[0].id
+        : undefined;
+
+    const aiCharacterConfigs =
+      parsed.aiCharacterConfigs &&
+      typeof parsed.aiCharacterConfigs === 'object' &&
+      !Array.isArray(parsed.aiCharacterConfigs)
+        ? (parsed.aiCharacterConfigs as Record<string, AiCharacterConfig>)
+        : undefined;
+
+    const aiGlobalConfig =
+      parsed.aiGlobalConfig &&
+      typeof parsed.aiGlobalConfig === 'object' &&
+      !Array.isArray(parsed.aiGlobalConfig)
+        ? { ...DEFAULT_AI_GLOBAL_CONFIG, ...(parsed.aiGlobalConfig as Partial<AiGlobalConfig>) }
+        : undefined;
+
     return {
       conversations,
+      aiConversations,
       characters,
       members,
       activeConversationId,
+      activeAiConversationId,
       activeCharacterId,
+      aiCharacterConfigs,
+      aiGlobalConfig,
       media,
     };
   } catch {
