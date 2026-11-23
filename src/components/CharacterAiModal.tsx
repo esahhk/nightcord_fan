@@ -15,6 +15,7 @@ interface CharacterAiModalProps {
   lang: UiLanguage;
   open: boolean;
   character: CharacterProfile | null;
+  isOnline?: boolean;
   initialConfig: AiCharacterConfig;
   globalConfig: AiGlobalConfig;
   onClose: () => void;
@@ -25,6 +26,7 @@ export function CharacterAiModal({
   lang,
   open,
   character,
+  isOnline = true,
   initialConfig,
   globalConfig,
   onClose,
@@ -146,7 +148,12 @@ export function CharacterAiModal({
               </h2>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            {!isOnline && (
+              <span className="rounded-[5px] bg-[#3E2A3A] px-2 py-0.5 text-[10.5px] font-medium text-[#FFB6C7]">
+                {t.aiOfflineStatusBadge}
+              </span>
+            )}
             <span
               className={`rounded-[5px] px-2 py-0.5 text-[10.5px] font-medium ${
                 effectiveCred.ready
@@ -180,6 +187,7 @@ export function CharacterAiModal({
               className="h-[36px] w-full cursor-pointer rounded-[7px] border border-[#4D3F66] bg-[#332844] px-2.5 text-[12.5px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
             >
               <option value="openai">{t.aiProtocolOpenai}</option>
+              <option value="deepseek">{t.aiProtocolDeepseek}</option>
               <option value="gemini">{t.aiProtocolGemini}</option>
               <option value="anthropic">{t.aiProtocolAnthropic}</option>
             </select>

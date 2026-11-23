@@ -295,9 +295,19 @@ export function loadAiGlobalConfig(): AiGlobalConfig {
   if (!data || typeof data !== 'object') {
     return { ...DEFAULT_AI_GLOBAL_CONFIG };
   }
+  const protocol =
+    data.protocol === 'deepseek' ||
+    data.protocol === 'gemini' ||
+    data.protocol === 'anthropic' ||
+    data.protocol === 'openai'
+      ? data.protocol
+      : DEFAULT_AI_GLOBAL_CONFIG.protocol;
+  const timeMode = data.timeMode === 'ai_inferred' ? 'ai_inferred' : 'realtime';
   return {
     ...DEFAULT_AI_GLOBAL_CONFIG,
     ...data,
+    protocol,
+    timeMode,
     aiFollowUpProbability:
       typeof data.aiFollowUpProbability === 'number' && Number.isFinite(data.aiFollowUpProbability)
         ? Math.min(100, Math.max(0, data.aiFollowUpProbability))
@@ -306,6 +316,12 @@ export function loadAiGlobalConfig(): AiGlobalConfig {
       typeof data.userDisplayName === 'string' && data.userDisplayName.trim()
         ? data.userDisplayName
         : DEFAULT_AI_GLOBAL_CONFIG.userDisplayName,
+    userAvatarMediaId:
+      typeof data.userAvatarMediaId === 'string' && data.userAvatarMediaId.trim()
+        ? data.userAvatarMediaId
+        : undefined,
+    userPersona: typeof data.userPersona === 'string' ? data.userPersona : '',
+    worldviewPrompt: typeof data.worldviewPrompt === 'string' ? data.worldviewPrompt : '',
   };
 }
 

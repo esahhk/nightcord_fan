@@ -1,20 +1,23 @@
-import { useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import type {
   AiCharacterConfig,
   AiGlobalConfig,
   AiProtocol,
   CharacterProfile,
   UiLanguage,
+  VoiceMember,
 } from '../types/nightcord';
 import {
   AI_PROTOCOL_METAS,
   fetchAiModels,
   getAiCharacterConfig,
   getEligibleAiCharacters,
+  isMemberOnlineForAi,
   resolveEffectiveAiCredentials,
 } from '../utils/aiClient';
 import { getUiText } from '../utils/i18n';
+import { saveLocalMediaBlob } from '../utils/localStorageStore';
 import { CharacterAvatar } from './LocalMedia';
 
 interface AiGlobalSettingsModalProps {
@@ -22,6 +25,7 @@ interface AiGlobalSettingsModalProps {
   open: boolean;
   globalConfig: AiGlobalConfig;
   characters: CharacterProfile[];
+  members?: VoiceMember[];
   characterConfigs: Record<string, AiCharacterConfig>;
   onClose: () => void;
   onSave: (
@@ -35,6 +39,7 @@ export function AiGlobalSettingsModal({
   open,
   globalConfig,
   characters,
+  members,
   characterConfigs,
   onClose,
   onSave,
@@ -49,6 +54,11 @@ export function AiGlobalSettingsModal({
   const [fetchedModels, setFetchedModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
   const [fetchStatus, setFetchStatus] = useState<string | null>(null);
+  const [showCharKey, setShowCharKey] = useState(false);
+  const [charFetchedModels, setCharFetchedModels] = useState<string[]>([]);
+  const [charFetchingModels, setCharFetchingModels] = useState(false);
+  const [charFetchStatus, setCharFetchStatus] = useState<string | null>(null);
+  const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -66,6 +76,9 @@ export function AiGlobalSettingsModal({
     setFetchedModels([]);
     setFetchStatus(null);
     setShowGlobalKey(false);
+    setCharFetchedModels([]);
+    setCharFetchStatus(null);
+    setShowCharKey(false);
   }, [open, globalConfig, characterConfigs, characters]);
 
   if (!open) {
@@ -77,7 +90,12 @@ export function AiGlobalSettingsModal({
     ? getAiCharacterConfig(draftCharConfigs, selectedChar.id)
     : null;
 
-  const readyCharacters = getEligibleAiCharacters(characters, draftCharConfigs, draftGlobal);
+  const readyCharacters = getEligibleAiCharacters(
+    characters,
+    draftCharConfigs,
+    draftGlobal,
+    members
+  );
 
   const handleGlobalProtocolChange = (nextProtocol: AiProtocol) => {
     const prevDefaultUrl = AI_PROTOCOL_METAS[draftGlobal.protocol].defaultBaseUrl;
@@ -136,6 +154,74 @@ export function AiGlobalSettingsModal({
     }));
   };
 
+  const handleCharProtocolChange = (nextProtocol: AiProtocol) => {
+    if (!selectedCharCfg) {
+      return;
+    }
+    const prevDefaultUrl = AI_PROTOCOL_METAS[selectedCharCfg.protocol].defaultBaseUrl;
+    const prevDefaultModel = AI_PROTOCOL_METAS[selectedCharCfg.protocol].defaultModel;
+    const nextBaseUrl =
+      !selectedCharCfg.baseUrl.trim() || selectedCharCfg.baseUrl.trim() === prevDefaultUrl
+        ? AI_PROTOCOL_METAS[nextProtocol].defaultBaseUrl
+        : selectedCharCfg.baseUrl;
+    const nextModel =
+      !selectedCharCfg.model.trim() || selectedCharCfg.model.trim() === prevDefaultModel
+        ? AI_PROTOCOL_METAS[nextProtocol].defaultModel
+        : selectedCharCfg.model;
+    updateSelectedCharConfig({
+      protocol: nextProtocol,
+      baseUrl: nextBaseUrl,
+      model: nextModel,
+    });
+    setCharFetchedModels([]);
+    setCharFetchStatus(null);
+  };
+
+  const handleFetchCharModels = async () => {
+    if (!selectedCharCfg) {
+      return;
+    }
+    const effectiveKey =
+      selectedCharCfg.apiKey.trim() ||
+      (draftGlobal.useGlobalApi ? draftGlobal.apiKey.trim() : '');
+    if (!effectiveKey) {
+      setCharFetchStatus(t.aiFetchModelsFail);
+      return;
+    }
+    setCharFetchingModels(true);
+    setCharFetchStatus(null);
+    try {
+      const list = await fetchAiModels(
+        selectedCharCfg.protocol,
+        selectedCharCfg.baseUrl,
+        effectiveKey
+      );
+      setCharFetchedModels(list);
+      if (list.length > 0 && !list.includes(selectedCharCfg.model)) {
+        updateSelectedCharConfig({ model: list[0] });
+      }
+      setCharFetchStatus(t.aiFetchModelsOk(list.length));
+    } catch {
+      setCharFetchStatus(t.aiFetchModelsFail);
+    } finally {
+      setCharFetchingModels(false);
+    }
+  };
+
+  const handleUserAvatarUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+    const mediaId = `ai-user-avatar-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    await saveLocalMediaBlob(mediaId, file);
+    setDraftGlobal((prev) => ({
+      ...prev,
+      userAvatarMediaId: mediaId,
+    }));
+  };
+
   const globalModelChoices = Array.from(
     new Set([
       ...fetchedModels,
@@ -144,8 +230,27 @@ export function AiGlobalSettingsModal({
     ])
   );
 
+  const charModelChoices = selectedCharCfg
+    ? Array.from(
+        new Set([
+          ...charFetchedModels,
+          ...AI_PROTOCOL_METAS[selectedCharCfg.protocol].presetModels,
+          ...(selectedCharCfg.model.trim() ? [selectedCharCfg.model.trim()] : []),
+        ])
+      )
+    : [];
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const cleanedCharConfigs: Record<string, AiCharacterConfig> = {};
+    for (const [charId, cfg] of Object.entries(draftCharConfigs)) {
+      cleanedCharConfigs[charId] = {
+        ...cfg,
+        baseUrl: cfg.baseUrl.trim() || AI_PROTOCOL_METAS[cfg.protocol].defaultBaseUrl,
+        apiKey: cfg.apiKey.trim(),
+        model: cfg.model.trim() || AI_PROTOCOL_METAS[cfg.protocol].defaultModel,
+      };
+    }
     onSave(
       {
         ...draftGlobal,
@@ -154,8 +259,10 @@ export function AiGlobalSettingsModal({
         apiKey: draftGlobal.apiKey.trim(),
         model: draftGlobal.model.trim() || AI_PROTOCOL_METAS[draftGlobal.protocol].defaultModel,
         userDisplayName: draftGlobal.userDisplayName.trim() || 'あなた',
+        userPersona: draftGlobal.userPersona.trim(),
+        worldviewPrompt: draftGlobal.worldviewPrompt.trim(),
       },
-      draftCharConfigs
+      cleanedCharConfigs
     );
     onClose();
   };
@@ -171,7 +278,7 @@ export function AiGlobalSettingsModal({
       <form
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="nc-modal-enter flex max-h-[92dvh] w-full max-w-[520px] flex-col overflow-hidden rounded-[12px] border border-[#524468] bg-[#241C32] shadow-[0_22px_54px_rgba(0,0,0,0.72)]"
+        className="nc-modal-enter flex max-h-[92dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-[12px] border border-[#524468] bg-[#241C32] shadow-[0_22px_54px_rgba(0,0,0,0.72)]"
       >
         <div className="flex shrink-0 items-start justify-between gap-2 border-b border-[#372B4A] bg-[#211A2C] px-4 py-3">
           <div className="min-w-0">
@@ -197,6 +304,129 @@ export function AiGlobalSettingsModal({
         </div>
 
         <div className="nc-scroll min-h-0 flex-1 space-y-4 p-4">
+          <div className="space-y-3 rounded-[9px] border border-[#3E3156] bg-[#2C223D] p-3">
+            <div className="text-[12.5px] font-semibold text-[#EFEBF5]">
+              {t.aiUserIdentityTitle}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <CharacterAvatar
+                avatarType={draftGlobal.userAvatar || 'k'}
+                customAvatarMediaId={draftGlobal.userAvatarMediaId}
+                size={40}
+              />
+              <div className="min-w-[160px] flex-1 space-y-1.5">
+                <input
+                  type="text"
+                  data-action="global-ai-user-name"
+                  value={draftGlobal.userDisplayName}
+                  onChange={(e) =>
+                    setDraftGlobal((prev) => ({ ...prev, userDisplayName: e.target.value }))
+                  }
+                  placeholder={t.aiUserNamePlaceholder}
+                  className="h-[34px] w-full rounded-[6px] border border-[#4D3F66] bg-[#1E1729] px-2.5 text-[12px] text-[#EFEBF5] placeholder-[#7C7191] outline-none focus:border-[#64D2E6]"
+                />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <input
+                    ref={avatarFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    data-action="global-ai-user-avatar-input"
+                    onChange={handleUserAvatarUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    data-action="global-ai-user-avatar-upload"
+                    onClick={() => avatarFileInputRef.current?.click()}
+                    className="cursor-pointer rounded-[6px] border border-[#524468] bg-[#362B4A] px-2.5 py-1 text-[11px] font-medium text-[#EFEBF5] transition-colors hover:bg-[#493B62]"
+                  >
+                    {t.aiUploadAvatarBtn}
+                  </button>
+                  {draftGlobal.userAvatarMediaId && (
+                    <button
+                      type="button"
+                      data-action="global-ai-user-avatar-reset"
+                      onClick={() =>
+                        setDraftGlobal((prev) => ({ ...prev, userAvatarMediaId: undefined }))
+                      }
+                      className="cursor-pointer rounded-[6px] bg-[#241C32] px-2.5 py-1 text-[11px] text-[#B8AED0] transition-colors hover:bg-[#382C4B] hover:text-white"
+                    >
+                      {t.aiResetAvatarBtn}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[11px] font-medium text-[#C5BBD6]">
+                {t.aiUserPersonaLabel}
+              </label>
+              <textarea
+                data-action="global-ai-user-persona"
+                value={draftGlobal.userPersona}
+                onChange={(e) =>
+                  setDraftGlobal((prev) => ({ ...prev, userPersona: e.target.value }))
+                }
+                rows={2}
+                placeholder={t.aiUserPersonaPlaceholder}
+                className="nc-scroll w-full resize-y rounded-[6px] border border-[#4D3F66] bg-[#1E1729] px-2.5 py-1.5 text-[12px] leading-[1.45] text-[#EFEBF5] placeholder-[#7C7191] outline-none focus:border-[#64D2E6]"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5 rounded-[9px] border border-[#3E3156] bg-[#2C223D] p-3">
+            <label className="block text-[12.5px] font-semibold text-[#EFEBF5]">
+              {t.aiWorldviewTitle}
+            </label>
+            <textarea
+              data-action="global-ai-worldview"
+              value={draftGlobal.worldviewPrompt}
+              onChange={(e) =>
+                setDraftGlobal((prev) => ({ ...prev, worldviewPrompt: e.target.value }))
+              }
+              rows={3}
+              placeholder={t.aiWorldviewPlaceholder}
+              className="nc-scroll w-full resize-y rounded-[6px] border border-[#4D3F66] bg-[#1E1729] px-2.5 py-2 text-[12px] leading-[1.45] text-[#EFEBF5] placeholder-[#7C7191] outline-none focus:border-[#64D2E6]"
+            />
+          </div>
+
+          <div className="space-y-2 rounded-[9px] border border-[#3E3156] bg-[#2C223D] p-3">
+            <div className="text-[12.5px] font-semibold text-[#EFEBF5]">{t.aiTimeModeTitle}</div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                data-action="global-ai-time-realtime"
+                onClick={() => setDraftGlobal((prev) => ({ ...prev, timeMode: 'realtime' }))}
+                className={`flex cursor-pointer flex-col items-start rounded-[7px] border px-3 py-2 text-left transition-colors ${
+                  draftGlobal.timeMode === 'realtime'
+                    ? 'border-[#64D2E6] bg-[#3B2E52] text-white'
+                    : 'border-[#46385C] bg-[#241C32] text-[#CFC7DD] hover:bg-[#322745]'
+                }`}
+              >
+                <span className="text-[12px] font-semibold">{t.aiTimeModeRealtime}</span>
+                <span className="mt-0.5 text-[10.5px] leading-[1.35] text-[#A499B8]">
+                  {t.aiTimeModeRealtimeSub}
+                </span>
+              </button>
+              <button
+                type="button"
+                data-action="global-ai-time-inferred"
+                onClick={() => setDraftGlobal((prev) => ({ ...prev, timeMode: 'ai_inferred' }))}
+                className={`flex cursor-pointer flex-col items-start rounded-[7px] border px-3 py-2 text-left transition-colors ${
+                  draftGlobal.timeMode === 'ai_inferred'
+                    ? 'border-[#64D2E6] bg-[#3B2E52] text-white'
+                    : 'border-[#46385C] bg-[#241C32] text-[#CFC7DD] hover:bg-[#322745]'
+                }`}
+              >
+                <span className="text-[12px] font-semibold">{t.aiTimeModeInferred}</span>
+                <span className="mt-0.5 text-[10.5px] leading-[1.35] text-[#A499B8]">
+                  {t.aiTimeModeInferredSub}
+                </span>
+              </button>
+            </div>
+          </div>
+
           <div className="rounded-[9px] border border-[#3E3156] bg-[#2C223D] p-3">
             <label className="flex cursor-pointer items-start gap-2.5">
               <input
@@ -283,6 +513,7 @@ export function AiGlobalSettingsModal({
                       className="h-[34px] w-full cursor-pointer rounded-[6px] border border-[#4D3F66] bg-[#332844] px-2 text-[12px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
                     >
                       <option value="openai">{t.aiProtocolOpenai}</option>
+                      <option value="deepseek">{t.aiProtocolDeepseek}</option>
                       <option value="gemini">{t.aiProtocolGemini}</option>
                       <option value="anthropic">{t.aiProtocolAnthropic}</option>
                     </select>
@@ -322,7 +553,7 @@ export function AiGlobalSettingsModal({
                   </div>
                 </div>
 
-                <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
                   <input
                     type="text"
                     data-action="global-ai-baseurl"
@@ -331,8 +562,21 @@ export function AiGlobalSettingsModal({
                       setDraftGlobal((prev) => ({ ...prev, baseUrl: e.target.value }))
                     }
                     placeholder={AI_PROTOCOL_METAS[draftGlobal.protocol].defaultBaseUrl}
-                    className="h-[34px] w-full rounded-[6px] border border-[#4D3F66] bg-[#1E1729] px-2.5 text-[12px] text-[#EFEBF5] placeholder-[#7C7191] outline-none focus:border-[#64D2E6]"
+                    className="h-[34px] min-w-0 flex-1 rounded-[6px] border border-[#4D3F66] bg-[#1E1729] px-2.5 text-[12px] text-[#EFEBF5] placeholder-[#7C7191] outline-none focus:border-[#64D2E6]"
                   />
+                  <button
+                    type="button"
+                    data-action="global-ai-reset-url"
+                    onClick={() =>
+                      setDraftGlobal((prev) => ({
+                        ...prev,
+                        baseUrl: AI_PROTOCOL_METAS[prev.protocol].defaultBaseUrl,
+                      }))
+                    }
+                    className="h-[34px] shrink-0 cursor-pointer rounded-[6px] bg-[#362B4A] px-2.5 text-[10.5px] text-[#BEB5D0] transition-colors hover:bg-[#493B62] hover:text-white"
+                  >
+                    {t.aiResetDefaultUrl}
+                  </button>
                 </div>
 
                 <div className="flex items-center gap-1.5">
@@ -371,22 +615,6 @@ export function AiGlobalSettingsModal({
             )}
           </div>
 
-          <div className="rounded-[9px] border border-[#3E3156] bg-[#2C223D] p-3">
-            <label className="mb-1.5 block text-[11.5px] font-semibold text-[#D6CFE3]">
-              {t.aiUserIdentityTitle}
-            </label>
-            <input
-              type="text"
-              data-action="global-ai-user-name"
-              value={draftGlobal.userDisplayName}
-              onChange={(e) =>
-                setDraftGlobal((prev) => ({ ...prev, userDisplayName: e.target.value }))
-              }
-              placeholder={t.aiUserNamePlaceholder}
-              className="h-[34px] w-full rounded-[6px] border border-[#4D3F66] bg-[#1E1729] px-2.5 text-[12px] text-[#EFEBF5] placeholder-[#7C7191] outline-none focus:border-[#64D2E6]"
-            />
-          </div>
-
           {selectedChar && selectedCharCfg && (
             <div className="rounded-[9px] border border-[#3E3156] bg-[#2C223D] p-3">
               <div className="mb-2">
@@ -398,22 +626,27 @@ export function AiGlobalSettingsModal({
                 </p>
               </div>
 
-              <div className="mb-2.5 flex flex-wrap gap-1.5">
+              <div className="mb-3 flex flex-wrap gap-1.5">
                 {characters.map((char) => {
                   const cfg = getAiCharacterConfig(draftCharConfigs, char.id);
                   const cred = resolveEffectiveAiCredentials(cfg, draftGlobal);
+                  const online = isMemberOnlineForAi(char.id, members);
                   const active = char.id === selectedChar.id;
                   return (
                     <button
                       key={char.id}
                       type="button"
                       data-action={`global-ai-select-char-${char.id}`}
-                      onClick={() => setSelectedCharId(char.id)}
+                      onClick={() => {
+                        setSelectedCharId(char.id);
+                        setCharFetchedModels([]);
+                        setCharFetchStatus(null);
+                      }}
                       className={`flex cursor-pointer items-center gap-1.5 rounded-[7px] border px-2 py-1 text-[11.5px] font-medium transition-colors ${
                         active
                           ? 'border-[#64D2E6] bg-[#43355C] text-white'
                           : 'border-[#46385C] bg-[#241C32] text-[#CFC7DD] hover:bg-[#342947] hover:text-white'
-                      }`}
+                      } ${!online ? 'opacity-70' : ''}`}
                     >
                       <CharacterAvatar
                         avatarType={char.avatarType}
@@ -423,7 +656,11 @@ export function AiGlobalSettingsModal({
                       <span className="max-w-[84px] truncate">{char.name}</span>
                       <span
                         className={`h-1.5 w-1.5 rounded-full ${
-                          cred.ready ? 'bg-[#55D8C1]' : 'bg-[#7A708D]'
+                          !online
+                            ? 'bg-[#FF8FA3]'
+                            : cred.ready
+                              ? 'bg-[#55D8C1]'
+                              : 'bg-[#7A708D]'
                         }`}
                       />
                     </button>
@@ -431,49 +668,150 @@ export function AiGlobalSettingsModal({
                 })}
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {(() => {
                   const selectedCred = resolveEffectiveAiCredentials(selectedCharCfg, draftGlobal);
+                  const online = isMemberOnlineForAi(selectedChar.id, members);
                   return (
-                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px]">
                       <span className="font-semibold text-[#DCD7E5]">{selectedChar.name}</span>
-                      <span
-                        className={`rounded px-2 py-0.5 text-[10px] font-medium ${
-                          selectedCred.ready
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {!online && (
+                          <span className="rounded bg-[#3E2A3A] px-2 py-0.5 text-[10px] font-medium text-[#FFB6C7]">
+                            {t.aiOfflineStatusBadge}
+                          </span>
+                        )}
+                        <span
+                          className={`rounded px-2 py-0.5 text-[10px] font-medium ${
+                            selectedCred.ready
+                              ? selectedCred.usingGlobalKey
+                                ? 'bg-[#64D2E6]/15 text-[#64D2E6]'
+                                : 'bg-[#55D8C1]/15 text-[#55D8C1]'
+                              : 'bg-[#241C32] text-[#9A90A8]'
+                          }`}
+                        >
+                          {selectedCred.ready
                             ? selectedCred.usingGlobalKey
-                              ? 'bg-[#64D2E6]/15 text-[#64D2E6]'
-                              : 'bg-[#55D8C1]/15 text-[#55D8C1]'
-                            : 'bg-[#241C32] text-[#9A90A8]'
-                        }`}
-                      >
-                        {selectedCred.ready
-                          ? selectedCred.usingGlobalKey
-                            ? t.aiUsingGlobalKeyBadge
-                            : t.aiOwnKeyBadge
-                          : t.aiNoKeyStatusBadge}
-                      </span>
+                              ? t.aiUsingGlobalKeyBadge
+                              : t.aiOwnKeyBadge
+                            : t.aiNoKeyStatusBadge}
+                        </span>
+                      </div>
                     </div>
                   );
                 })()}
+
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-medium text-[#C5BBD6]">
+                      {t.aiProtocolLabel}
+                    </label>
+                    <select
+                      data-action="global-ai-char-protocol"
+                      value={selectedCharCfg.protocol}
+                      onChange={(e) => handleCharProtocolChange(e.target.value as AiProtocol)}
+                      className="h-[34px] w-full cursor-pointer rounded-[6px] border border-[#4D3F66] bg-[#332844] px-2 text-[12px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+                    >
+                      <option value="openai">{t.aiProtocolOpenai}</option>
+                      <option value="deepseek">{t.aiProtocolDeepseek}</option>
+                      <option value="gemini">{t.aiProtocolGemini}</option>
+                      <option value="anthropic">{t.aiProtocolAnthropic}</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[11px] font-medium text-[#C5BBD6]">
+                        {t.aiModelLabel}
+                      </label>
+                      <button
+                        type="button"
+                        data-action="global-ai-char-fetch-models"
+                        disabled={charFetchingModels}
+                        onClick={handleFetchCharModels}
+                        className="cursor-pointer text-[10.5px] text-[#64D2E6] hover:underline disabled:opacity-50"
+                      >
+                        {charFetchingModels ? t.aiFetchingModels : t.aiFetchModelsBtn}
+                      </button>
+                    </div>
+                    <select
+                      data-action="global-ai-char-model-select"
+                      value={
+                        charModelChoices.includes(selectedCharCfg.model)
+                          ? selectedCharCfg.model
+                          : ''
+                      }
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          updateSelectedCharConfig({ model: e.target.value });
+                        }
+                      }}
+                      className="h-[34px] w-full cursor-pointer rounded-[6px] border border-[#4D3F66] bg-[#332844] px-2 text-[12px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+                    >
+                      {charModelChoices.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
                   <input
-                    type="password"
+                    type="text"
+                    data-action="global-ai-char-baseurl"
+                    value={selectedCharCfg.baseUrl}
+                    onChange={(e) => updateSelectedCharConfig({ baseUrl: e.target.value })}
+                    placeholder={AI_PROTOCOL_METAS[selectedCharCfg.protocol].defaultBaseUrl}
+                    className="h-[34px] min-w-0 flex-1 rounded-[6px] border border-[#4D3F66] bg-[#1E1729] px-2.5 text-[12px] text-[#EFEBF5] placeholder-[#7C7191] outline-none focus:border-[#64D2E6]"
+                  />
+                  <button
+                    type="button"
+                    data-action="global-ai-char-reset-url"
+                    onClick={() =>
+                      updateSelectedCharConfig({
+                        baseUrl: AI_PROTOCOL_METAS[selectedCharCfg.protocol].defaultBaseUrl,
+                      })
+                    }
+                    className="h-[34px] shrink-0 cursor-pointer rounded-[6px] bg-[#362B4A] px-2.5 text-[10.5px] text-[#BEB5D0] transition-colors hover:bg-[#493B62] hover:text-white"
+                  >
+                    {t.aiResetDefaultUrl}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type={showCharKey ? 'text' : 'password'}
                     data-action="global-ai-char-apikey"
                     value={selectedCharCfg.apiKey}
                     onChange={(e) => updateSelectedCharConfig({ apiKey: e.target.value })}
                     placeholder={`${selectedChar.name} API Key`}
                     autoComplete="off"
-                    className="h-[32px] w-full rounded-[6px] border border-[#4D3F66] bg-[#1E1729] px-2.5 text-[11.5px] text-[#EFEBF5] placeholder-[#7C7191] outline-none focus:border-[#64D2E6]"
+                    className="h-[34px] min-w-0 flex-1 rounded-[6px] border border-[#4D3F66] bg-[#1E1729] px-2.5 text-[12px] text-[#EFEBF5] placeholder-[#7C7191] outline-none focus:border-[#64D2E6]"
                   />
-                  <input
-                    type="text"
-                    data-action="global-ai-char-model"
-                    value={selectedCharCfg.model}
-                    onChange={(e) => updateSelectedCharConfig({ model: e.target.value })}
-                    placeholder={t.aiCustomModelPlaceholder}
-                    className="h-[32px] w-full rounded-[6px] border border-[#4D3F66] bg-[#1E1729] px-2.5 text-[11.5px] text-[#EFEBF5] placeholder-[#7C7191] outline-none focus:border-[#64D2E6]"
-                  />
+                  <button
+                    type="button"
+                    data-action="global-ai-char-toggle-key"
+                    onClick={() => setShowCharKey((prev) => !prev)}
+                    className="flex h-[34px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] border border-[#4D3F66] bg-[#332844] px-2.5 text-[11px] text-[#CFC7DD] hover:bg-[#44365B] hover:text-white"
+                  >
+                    {showCharKey ? '🙈' : '👁'}
+                  </button>
                 </div>
+
+                <input
+                  type="text"
+                  data-action="global-ai-char-model"
+                  value={selectedCharCfg.model}
+                  onChange={(e) => updateSelectedCharConfig({ model: e.target.value })}
+                  placeholder={t.aiCustomModelPlaceholder}
+                  className="h-[32px] w-full rounded-[6px] border border-[#4D3F66] bg-[#1E1729] px-2.5 text-[11.5px] text-[#EFEBF5] placeholder-[#7C7191] outline-none focus:border-[#64D2E6]"
+                />
+                {charFetchStatus && (
+                  <p className="text-[10.5px] text-[#64D2E6]">{charFetchStatus}</p>
+                )}
+
                 <textarea
                   data-action="global-ai-char-prompt"
                   value={selectedCharCfg.systemPrompt}

@@ -427,6 +427,40 @@ export function resolveOutgoingTimestamp(
   return { ok: true, timestamp, sentAt, dividerBefore };
 }
 
+export function resolveClampedOutgoingTimestamp(
+  messages: ChatMessage[],
+  preferredDt?: MessageDateTime | null,
+  now: Date = new Date()
+): { timestamp: string; sentAt: MessageDateTime; dividerBefore?: string } {
+  const refNow = dateToMessageDateTime(now);
+  const prevDt = getLastMessageDateTime(messages, now);
+  const candidate = preferredDt ?? refNow;
+  const sentAt =
+    prevDt && dateTimeToEpochMinutes(candidate) < dateTimeToEpochMinutes(prevDt)
+      ? prevDt
+      : candidate;
+
+  const timestamp = formatTimestampRelativeToRef(sentAt, refNow);
+  let dividerBefore: string | undefined;
+  if (
+    prevDt &&
+    (prevDt.year !== sentAt.year || prevDt.month !== sentAt.month || prevDt.day !== sentAt.day)
+  ) {
+    const diff = dayDiffBetween(sentAt, refNow);
+    if (diff === 0) {
+      dividerBefore = '今日';
+    } else if (diff === 1) {
+      dividerBefore = '昨日';
+    } else if (sentAt.year === refNow.year && sentAt.month === refNow.month) {
+      dividerBefore = `${sentAt.day}日`;
+    } else {
+      dividerBefore = `${sentAt.year}年${sentAt.month}月${sentAt.day}日`;
+    }
+  }
+
+  return { timestamp, sentAt, dividerBefore };
+}
+
 export function computeDisplayMessagesForPlayback(
   visibleMessages: ChatMessage[],
   anchorToToday: boolean,
@@ -802,9 +836,15 @@ export function formatNightcordFileMeta(
 export function collectReferencedMediaIds(
   conversations: Conversation[],
   characters: CharacterProfile[],
-  members: VoiceMember[] = []
+  members: VoiceMember[] = [],
+  extraMediaIds: (string | undefined)[] = []
 ): string[] {
   const ids = new Set<string>();
+  for (const extraId of extraMediaIds) {
+    if (extraId) {
+      ids.add(extraId);
+    }
+  }
   for (const char of characters) {
     if (char.customAvatarMediaId) {
       ids.add(char.customAvatarMediaId);

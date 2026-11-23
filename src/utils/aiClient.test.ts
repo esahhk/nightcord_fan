@@ -9,14 +9,22 @@ import {
   extractMentionedCharacters,
   getAiCharacterConfig,
   getEligibleAiCharacters,
+  isMemberOnlineForAi,
   normalizeAiEndpoint,
+  parseAiDateTimeTag,
+  parseAiModelOutput,
   pickAiFollowUpResponder,
   prepareRegenerateTarget,
   resolveAiResponder,
   resolveEffectiveAiCredentials,
   stripSpeakerPrefix,
 } from './aiClient';
-import { INITIAL_CHARACTERS, createOutgoingMessage } from './nightcordState';
+import {
+  INITIAL_CHARACTERS,
+  INITIAL_VOICE_MEMBERS,
+  createOutgoingMessage,
+  setMemberPresenceStatus,
+} from './nightcordState';
 import { isAiSubpageLocation } from './nightcordTemplateCode';
 import type { AiCharacterConfig, AiGlobalConfig } from '../types/nightcord';
 
@@ -312,3 +320,127 @@ test('editMessageText and prepareRegenerateTarget support AI and user message re
     ['msg-user']
   );
 });
+
+test('deepseek preset normalizes properly and offline characters are excluded from AI replies', () => {
+  assert.equal(AI_PROTOCOL_METAS.deepseek.defaultBaseUrl, 'https://api.deepseek.com/v1');
+  assert.deepEqual(AI_PROTOCOL_METAS.deepseek.presetModels, [
+    'deepseek-chat',
+    'deepseek-reasoner',
+  ]);
+  const dsEndpoint = normalizeAiEndpoint('deepseek', '', 'deepseek-chat', 'ds-key');
+  assert.equal(dsEndpoint.url, 'https://api.deepseek.com/v1/chat/completions');
+  assert.equal(dsEndpoint.baseRoot, 'https://api.deepseek.com/v1');
+
+  const configs: Record<string, AiCharacterConfig> = {
+    k: {
+      protocol: 'deepseek',
+      baseUrl: 'https://api.deepseek.com/v1',
+      apiKey: 'ds-key',
+      model: 'deepseek-chat',
+      systemPrompt: '',
+    },
+    enanan: {
+      ...createDefaultAiCharacterConfig(),
+      apiKey: 'ena-key',
+    },
+  };
+  const globalOff: AiGlobalConfig = {
+    ...DEFAULT_AI_GLOBAL_CONFIG,
+    useGlobalApi: false,
+    aiFollowUpEnabled: true,
+    aiFollowUpProbability: 100,
+  };
+
+  let members = setMemberPresenceStatus(INITIAL_VOICE_MEMBERS, 'enanan', 'offline').members;
+  assert.equal(isMemberOnlineForAi('enanan', members), false);
+  assert.equal(isMemberOnlineForAi('k', members), true);
+
+  const eligible = getEligibleAiCharacters(INITIAL_CHARACTERS, configs, globalOff, members);
+  assert.deepEqual(
+    eligible.map((c) => c.id),
+    ['k']
+  );
+
+  const mentionOffline = resolveAiResponder(
+    '@えななん いる？',
+    INITIAL_CHARACTERS,
+    configs,
+    globalOff,
+    () => 0,
+    members
+  );
+  assert.equal(mentionOffline.kind, 'mentioned_offline');
+
+  assert.equal(
+    pickAiFollowUpResponder('k', INITIAL_CHARACTERS, configs, globalOff, () => 0, members),
+    null
+  );
+
+  members = setMemberPresenceStatus(members, 'k', 'offline').members;
+  const allOffline = resolveAiResponder(
+    'おーい',
+    INITIAL_CHARACTERS,
+    configs,
+    globalOff,
+    () => 0,
+    members
+  );
+  assert.equal(allOffline.kind, 'none_online');
+});
+
+test('buildAiChatPayload injects worldview/userPersona/timeMode and parseAiModelOutput extracts shell files and clamped times', () => {
+  const baseNow = new Date(2026, 10, 22, 1, 10);
+  const prevDt = { year: 2026, month: 11, day: 22, hour: 1, minute: 36 };
+  const k = INITIAL_CHARACTERS[0];
+  const userMsg = {
+    ...createOutgoingMessage('@K 新曲のデモ送って', k, baseNow, {
+      sentAt: prevDt,
+      timestamp: '今日 1:36',
+    })!,
+    memberId: '__user__',
+    username: 'テストユーザー',
+  };
+
+  const payload = buildAiChatPayload(k, [userMsg], '深夜に作曲する', INITIAL_CHARACTERS, {
+    userDisplayName: 'テストユーザー',
+    userPersona: '歌詞を担当しているメンバー',
+    worldviewPrompt: '25時にナイトコードで作業中の世界線',
+    timeMode: 'ai_inferred',
+    lastMessageDateTime: prevDt,
+    now: baseNow,
+  });
+
+  assert.ok(payload.systemInstruction.includes('25時にナイトコードで作業中の世界線'));
+  assert.ok(payload.systemInstruction.includes('歌詞を担当しているメンバー'));
+  assert.ok(payload.systemInstruction.includes('[[FILE:'));
+  assert.ok(payload.systemInstruction.includes('[[TIME:YYYY-MM-DD HH:mm]]'));
+  assert.ok(payload.systemInstruction.includes('2026/11/22 1:36'));
+
+  const validTag = parseAiDateTimeTag('2026-11-22 02:05', prevDt, baseNow);
+  assert.deepEqual(validTag, { year: 2026, month: 11, day: 22, hour: 2, minute: 5 });
+
+  const clampedTag = parseAiDateTimeTag('2026-11-22 01:00', prevDt, baseNow);
+  assert.deepEqual(clampedTag, prevDt);
+
+  const parsedWithFile = parseAiModelOutput(
+    '[[TIME:2026-11-22 01:50]] 仮ミックスまとめたよ。聴いてみて。\n[[FILE:nightcord_demo_01.mp3|4MB MP3]]',
+    'K',
+    prevDt,
+    baseNow
+  );
+  assert.deepEqual(parsedWithFile.inferredSentAt, {
+    year: 2026,
+    month: 11,
+    day: 22,
+    hour: 1,
+    minute: 50,
+  });
+  assert.equal(parsedWithFile.text, '仮ミックスまとめたよ。聴いてみて。');
+  assert.ok(parsedWithFile.fileMedia);
+  assert.equal(parsedWithFile.fileMedia.mediaId, '');
+  assert.equal(parsedWithFile.fileMedia.kind, 'audio');
+  assert.equal(parsedWithFile.fileMedia.filename, 'nightcord_demo_01.mp3');
+  assert.equal(parsedWithFile.fileMedia.sizeLabel, '4MB MP3');
+  assert.equal(parsedWithFile.fileMedia.fileType, 'MP3');
+});
+

@@ -272,8 +272,10 @@ export function LocalFileMediaCard({
     );
   }
 
+  const isShell = !media.mediaId;
+
   const triggerDownload = () => {
-    if (!url) {
+    if (isShell || !url) {
       return;
     }
     const link = document.createElement('a');
@@ -285,7 +287,7 @@ export function LocalFileMediaCard({
   };
 
   const handleCardClick = () => {
-    if (!url) {
+    if (isShell || !url) {
       return;
     }
     if (media.kind === 'video') {
@@ -307,7 +309,7 @@ export function LocalFileMediaCard({
 
   return (
     <div className="mt-1.5">
-      {media.kind === 'audio' && url && (
+      {!isShell && media.kind === 'audio' && url && (
         <audio
           ref={audioRef}
           src={url}
@@ -317,13 +319,18 @@ export function LocalFileMediaCard({
           onEnded={() => setPlayingAudio(false)}
         />
       )}
-      <div className="flex h-[54px] w-full max-w-[310px] items-center justify-between rounded-[6px] border border-[#61527A] bg-[#524468] px-3.5 transition-all hover:bg-[#5C4D74]">
+      <div
+        data-testid={isShell ? 'ai-shell-file-card' : undefined}
+        className="flex h-[54px] w-full max-w-[310px] items-center justify-between rounded-[6px] border border-[#61527A] bg-[#524468] px-3.5 transition-all hover:bg-[#5C4D74]"
+      >
         <button
           type="button"
-          data-action={`open-local-file-${media.mediaId}`}
+          data-action={isShell ? `shell-file-${media.filename}` : `open-local-file-${media.mediaId}`}
           aria-label={media.filename}
           onClick={handleCardClick}
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 bg-transparent text-left"
+          className={`flex min-w-0 flex-1 items-center gap-3 bg-transparent text-left ${
+            isShell ? 'cursor-default' : 'cursor-pointer'
+          }`}
         >
           <NightcordFileGlyph kind={media.kind} fileType={media.fileType} />
           <span className="flex min-w-0 flex-col">
@@ -340,10 +347,12 @@ export function LocalFileMediaCard({
         </button>
         <button
           type="button"
-          data-action={`download-local-${media.mediaId}`}
+          data-action={isShell ? `shell-download-${media.filename}` : `download-local-${media.mediaId}`}
           aria-label={`${media.filename}をダウンロード`}
           onClick={triggerDownload}
-          className="flex shrink-0 cursor-pointer items-center justify-center rounded p-1 text-[#EFEBF5] hover:bg-[#61527A]"
+          className={`flex shrink-0 items-center justify-center rounded p-1 text-[#EFEBF5] ${
+            isShell ? 'cursor-default opacity-80' : 'cursor-pointer hover:bg-[#61527A]'
+          }`}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <path d="M3.5 3.5H12.5L8 9.5L3.5 3.5Z" />

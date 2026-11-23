@@ -33,6 +33,7 @@ import {
   parseNightcordBackup,
   removeCharacterAndMember,
   removeMemberStatusEvent,
+  resolveClampedOutgoingTimestamp,
   resolveOutgoingTimestamp,
   setMemberOnlineStatus,
   setMemberPresenceStatus,
@@ -139,7 +140,7 @@ test('createOutgoingMessage and createFileMessage preserve sender and format Nig
   assert.equal(formatDuration(65), '1:05');
 });
 
-test('i18n dictionary provides distinct zh, ja, and en control text with 6 onboarding steps and 4 AI guide steps', () => {
+test('i18n dictionary provides distinct zh, ja, and en control text with 6 onboarding steps and 5 AI guide steps', () => {
   const zh = getUiText('zh');
   const ja = getUiText('ja');
   const en = getUiText('en');
@@ -149,9 +150,9 @@ test('i18n dictionary provides distinct zh, ja, and en control text with 6 onboa
   assert.equal(zh.stepBadges[5], '步骤 6 / 6');
   assert.equal(ja.stepBadges[5], 'ステップ 6 / 6');
   assert.equal(en.stepBadges[5], 'Step 6 / 6');
-  assert.equal(zh.aiGuideBadges.length, 4);
-  assert.equal(ja.aiGuideBadges.length, 4);
-  assert.equal(en.aiGuideBadges.length, 4);
+  assert.equal(zh.aiGuideBadges.length, 5);
+  assert.equal(ja.aiGuideBadges.length, 5);
+  assert.equal(en.aiGuideBadges.length, 5);
   assert.equal(zh.editChar, '编辑');
   assert.equal(ja.editChar, '編集');
   assert.equal(en.editChar, 'Edit');
@@ -570,5 +571,43 @@ test('Cloudflare Workers wrangler.jsonc and public/_redirects have valid SPA con
     assert.equal(sources.has(destination), false);
   }
 });
+
+test('resolveClampedOutgoingTimestamp clamps earlier dates and collectReferencedMediaIds includes user avatar extras', () => {
+  const refNow = new Date(2026, 10, 22, 1, 0);
+  const k = INITIAL_CHARACTERS[0];
+  const prevMsg = createOutgoingMessage('前条', k, new Date(2026, 10, 22, 3, 15))!;
+
+  const clampedPast = resolveClampedOutgoingTimestamp(
+    [prevMsg],
+    { year: 2026, month: 10, day: 21, hour: 23, minute: 0 },
+    refNow
+  );
+  assert.equal(clampedPast.sentAt.year, 2026);
+  assert.equal(clampedPast.sentAt.month, 11);
+  assert.equal(clampedPast.sentAt.day, 22);
+  assert.equal(clampedPast.sentAt.hour, 3);
+  assert.equal(clampedPast.sentAt.minute, 15);
+  assert.equal(clampedPast.dividerBefore, undefined);
+
+  const nextDay = resolveClampedOutgoingTimestamp(
+    [prevMsg],
+    { year: 2026, month: 11, day: 23, hour: 0, minute: 5 },
+    refNow
+  );
+  assert.equal(nextDay.sentAt.day, 23);
+  assert.equal(nextDay.sentAt.minute, 5);
+  assert.equal(nextDay.dividerBefore, '23日');
+
+  const realtimeClamped = resolveClampedOutgoingTimestamp([prevMsg], undefined, refNow);
+  assert.equal(realtimeClamped.sentAt.hour, 3);
+  assert.equal(realtimeClamped.sentAt.minute, 15);
+
+  const ids = collectReferencedMediaIds([], INITIAL_CHARACTERS, INITIAL_VOICE_MEMBERS, [
+    'ai-user-avatar-1',
+    undefined,
+  ]);
+  assert.ok(ids.includes('ai-user-avatar-1'));
+});
+
 
 

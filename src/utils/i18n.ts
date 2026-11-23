@@ -192,6 +192,7 @@ export interface UiText {
   aiCharModalTitle: (name: string) => string;
   aiProtocolLabel: string;
   aiProtocolOpenai: string;
+  aiProtocolDeepseek: string;
   aiProtocolGemini: string;
   aiProtocolAnthropic: string;
   aiBaseUrlLabel: string;
@@ -219,6 +220,18 @@ export interface UiText {
   aiFollowUpProbLabel: (prob: number) => string;
   aiUserIdentityTitle: string;
   aiUserNamePlaceholder: string;
+  aiUserAvatarLabel: string;
+  aiUploadAvatarBtn: string;
+  aiResetAvatarBtn: string;
+  aiUserPersonaLabel: string;
+  aiUserPersonaPlaceholder: string;
+  aiWorldviewTitle: string;
+  aiWorldviewPlaceholder: string;
+  aiTimeModeTitle: string;
+  aiTimeModeRealtime: string;
+  aiTimeModeRealtimeSub: string;
+  aiTimeModeInferred: string;
+  aiTimeModeInferredSub: string;
   aiCharPromptSectionTitle: string;
   aiCharPromptSectionDesc: string;
   aiConfiguredCharsCount: (ready: number, total: number) => string;
@@ -228,15 +241,19 @@ export interface UiText {
   aiEmptyReadySummary: (ready: number, total: number) => string;
   aiOpenGlobalQuickBtn: string;
   aiOpenGuideBtn: string;
+  aiHeaderGuideBtn: string;
   aiOwnKeyBadge: string;
   aiNoKeyStatusBadge: string;
+  aiOfflineStatusBadge: string;
   aiGeneratingStatus: (name: string) => string;
   aiToastBusy: string;
   aiToastNoConfiguredChar: string;
+  aiToastAllOffline: string;
+  aiToastCharOffline: (name: string) => string;
   aiToastTargetMissingKey: (name: string) => string;
   aiToastRequestFailed: (name: string, reason: string) => string;
   aiGuideTitle: string;
-  aiGuideBadges: [string, string, string, string];
+  aiGuideBadges: [string, string, string, string, string];
   aiGuideStep1Title: string;
   aiGuideStep1Desc: string;
   aiGuideStep1Note: string;
@@ -246,6 +263,8 @@ export interface UiText {
   aiGuideStep3Desc: string;
   aiGuideStep4Title: string;
   aiGuideStep4Desc: string;
+  aiGuideStep5Title: string;
+  aiGuideStep5Desc: string;
   aiGuideOpenConfigBtn: string;
   editMessageBtn: string;
   regenerateMessageBtn: string;
@@ -285,7 +304,7 @@ const JA_TEXT: UiText = {
   step5Label: '自動再生モード',
   step6Title: 'AIチャットモード（完全ローカル直連）',
   step6Desc:
-    'メニューの「AIチャットモード」に入ると、没入モードのまま自分が直接送信してAIキャラと会話できます。左メンバー長押しまたは右上の青い点でAPI Keyやプロンプトを設定すると返信し、@キャラ名で指名、メッセージ長押しで編集・再生成ができます。',
+    'メニューの「AIチャットモード」に入ると、没入モードのまま直接送信してAIキャラと会話できます。DeepSeek等のAPI設定、世界観・自分のプロフィール／アバター、送信時刻ルール（リアルタイム／AI推定）、オンライン限定返信、ダミーファイル送信、画面上部のガイドボタンを備えています。',
   step6Label: 'AIチャットモード',
   skip: 'スキップ',
   back: '戻る',
@@ -469,6 +488,7 @@ const JA_TEXT: UiText = {
   aiCharModalTitle: (name) => `${name} のAIチャット設定`,
   aiProtocolLabel: 'AIプロトコル',
   aiProtocolOpenai: 'OpenAI 互換（汎用デフォルト）',
+  aiProtocolDeepseek: 'DeepSeek 公式 (api.deepseek.com)',
   aiProtocolGemini: 'Google Gemini API',
   aiProtocolAnthropic: 'Anthropic Claude API',
   aiBaseUrlLabel: 'リンク先 URL（未変更時はデフォルト使用）',
@@ -483,51 +503,70 @@ const JA_TEXT: UiText = {
   aiFetchingModels: '取得中...',
   aiFetchModelsOk: (count) => `${count}件のモデルを取得しました`,
   aiFetchModelsFail: '取得に失敗しました。手入力も可能です',
-  aiCustomModelPlaceholder: 'カスタムモデル名を手入力（例：gpt-4o-mini）',
+  aiCustomModelPlaceholder: 'カスタムモデル名を手入力（例：deepseek-chat / gpt-4o-mini）',
   aiPromptLabel: 'プリセットプロンプト（システム設定）',
   aiPromptPlaceholder: 'キャラクターの性格・口調・関係性・返信ルールなどを入力...',
   toastAiCharSaved: (name) => `「${name}」のAI設定をローカルに保存しました`,
   aiGlobalModalTitle: 'AI グローバル設定',
-  aiGlobalModalSub: '右上の青い点からいつでも全体ルールと各キャラのプロンプトをまとめて編集できます。',
+  aiGlobalModalSub: '自分の設定・世界観・時刻ルール・全体APIや全キャラの個別API設定をまとめて管理できます。',
   aiGlobalApiToggle: 'グローバル API Key を有効にする',
-  aiGlobalApiDesc: 'オンにすると、個別Key未設定のキャラも共通のプロトコル・URL・API Keyで返信できます。',
+  aiGlobalApiDesc: 'オンにすると、個別Key未設定のキャラも共通のプロトコル（OpenAI / DeepSeek / Gemini / Anthropic）・URL・Keyで返信できます。',
   aiFollowUpToggle: 'AI同士の確率追撃返信',
-  aiFollowUpDesc: 'あるAIの返信後、設定確率で別の設定済みAIが1回だけ続けて会話に反応します。',
+  aiFollowUpDesc: 'あるAIの返信後、設定確率で別のオンライン・設定済みAIが1回だけ続けて反応します。',
   aiFollowUpProbLabel: (prob) => `追撃発生確率：${prob}%`,
-  aiUserIdentityTitle: '自分の送信表示名',
-  aiUserNamePlaceholder: '例：あなた',
-  aiCharPromptSectionTitle: 'キャラ別プロンプト・連携設定（同期保存）',
-  aiCharPromptSectionDesc: '左メンバー長押しの「AIチャット設定」とデータがリアルタイムに同期されます。',
-  aiConfiguredCharsCount: (ready, total) => `返信可能キャラ：${ready} / ${total} 名`,
+  aiUserIdentityTitle: '自分のプロフィール設定',
+  aiUserNamePlaceholder: '表示名（デフォルト：あなた）',
+  aiUserAvatarLabel: '自分のアバター',
+  aiUploadAvatarBtn: '画像をアップロード',
+  aiResetAvatarBtn: 'デフォルトに戻す',
+  aiUserPersonaLabel: '自分の設定・立場（AIへ共有）',
+  aiUserPersonaPlaceholder: '例：ナイトコードに曲や依頼を持ち込む作曲担当／友人、口調や関係性など...',
+  aiWorldviewTitle: '共通の世界観・背景設定',
+  aiWorldviewPlaceholder: 'すべてのAIキャラクターに共通で渡す世界観・舞台設定・深夜の作業状況などを入力...',
+  aiTimeModeTitle: 'AI返信の送信時刻ルール',
+  aiTimeModeRealtime: 'ローカル実時刻（リアルタイム）',
+  aiTimeModeRealtimeSub: '送信時点の端末の現在時刻を使用し、直前メッセージより前にならないよう補正します。',
+  aiTimeModeInferred: 'AIが時刻を自動推論（時系列保証）',
+  aiTimeModeInferredSub: '直前メッセージ以降の範囲で、物語や深夜会話に自然な日時・時刻をAIが自動で付けます。',
+  aiCharPromptSectionTitle: 'キャラ別 API・プロンプト設定（完全同期）',
+  aiCharPromptSectionDesc: 'プロトコル・URL・API Key・モデル・プロンプトをフル編集でき、左メンバー長押しとリアルタイム同期します（オフラインメンバーは返信対象外）。',
+  aiConfiguredCharsCount: (ready, total) => `オンライン返信可能：${ready} / ${total} 名`,
   toastAiGlobalSaved: 'AIグローバル設定をローカルに保存しました',
-  aiEmptyTitle: (title) => `「${title}」AIチャットテンプレート`,
-  aiEmptySub: '下の入力欄から直接メッセージ送信できます。左メンバー長押しでAPI Keyを設定するとランダム返信、@キャラ名で指名返信します。',
-  aiEmptyReadySummary: (ready, total) => `現在の返信可能キャラ：${ready} / ${total} 名`,
+  aiEmptyTitle: (title) => `「${title}」空白 AIチャットテンプレート`,
+  aiEmptySub: '下の入力欄から直接送信できます。オンライン＆API設定済みキャラからランダム返信、@キャラ名で指名返信、デモ曲などのファイルカード送信にも対応します。',
+  aiEmptyReadySummary: (ready, total) => `現在の返信可能（オンライン）キャラ：${ready} / ${total} 名`,
   aiOpenGlobalQuickBtn: 'AI グローバル設定を開く',
-  aiOpenGuideBtn: '機能ガイドを見る',
+  aiOpenGuideBtn: '使い方ガイドを見る',
+  aiHeaderGuideBtn: 'ガイド',
   aiOwnKeyBadge: '個別API Key使用中',
   aiNoKeyStatusBadge: 'Key未設定（返信対象外）',
+  aiOfflineStatusBadge: 'オフライン中（返信対象外）',
   aiGeneratingStatus: (name) => `${name} が入力中...`,
   aiToastBusy: 'AIが返信を生成中です。少しお待ちください',
-  aiToastNoConfiguredChar: 'API Keyが設定済みのキャラがいません。左のキャラを長押しするか右上の青い点から設定してください。',
+  aiToastNoConfiguredChar: 'API Key設定済みかつオンラインのキャラがいません。左のキャラ長押しまたは右上の青い点から設定してください。',
+  aiToastAllOffline: '設定済みのキャラがすべてオフラインです。左メンバー長押しで「オンライン」または「通話中」にすると返信できます。',
+  aiToastCharOffline: (name) => `「${name}」は現在オフラインのため返信できません`,
   aiToastTargetMissingKey: (name) => `「${name}」はAPI Key未設定のため返信できません`,
   aiToastRequestFailed: (name, reason) => `${name} のAI返信に失敗しました（${reason}）`,
   aiGuideTitle: 'AIチャットモード ガイド',
-  aiGuideBadges: ['ガイド 1 / 4', 'ガイド 2 / 4', 'ガイド 3 / 4', 'ガイド 4 / 4'],
-  aiGuideStep1Title: 'ブラウザ直接通信・純粋静的テンプレート',
+  aiGuideBadges: ['ガイド 1 / 5', 'ガイド 2 / 5', 'ガイド 3 / 5', 'ガイド 4 / 5', 'ガイド 5 / 5'],
+  aiGuideStep1Title: '完全静的直連・自分のプロフィール＆世界観',
   aiGuideStep1Desc:
-    'このページは元のNightcord画面を保ったまま、自分のメッセージに直接AIが返信するモードです。API Keyと設定はすべてこのブラウザのlocalStorageのみに保存され、サーバーへは送信されません。',
-  aiGuideStep1Note: '※ 上部メニュー「25時、ナイトコードで。▾」からいつでも通常モードへ戻れます。',
-  aiGuideStep2Title: '左メンバー長押しでキャラ別AI設定',
+    '元のNightcordUIのまま、ブラウザからAPIへ直接リクエストします。右上の青い点（グローバル設定）で「自分の名前・アバター・設定」と全AI共通の「世界観」を設定できます。',
+  aiGuideStep1Note: '※ 画面右上の「ガイド」ボタンや左上メニューからいつでもこの説明を開けます。',
+  aiGuideStep2Title: 'DeepSeekプリセット＆キャラ別フルAPI設定',
   aiGuideStep2Desc:
-    '左のキャラクターを長押し（PCは右クリック）して「AIチャット設定」を開くと、プロトコル（OpenAI / Gemini / Anthropic）、URL、API Key、モデル、プロンプトを個別に設定できます。API Key設定済みのキャラだけが返信に参加します。',
-  aiGuideStep3Title: '右上の青い点：AIグローバル設定',
+    '左メンバー長押し（右クリック）でもグローバル設定内でも、OpenAI互換・DeepSeek公式プリセット・Gemini・Claudeの全プロトコル、URL、API Key、モデル取得、プロンプトを個別に設定できます。',
+  aiGuideStep3Title: 'オフライン状態連動＆AI時刻モード',
   aiGuideStep3Desc:
-    '右上の1番目の青い点を押すとグローバル設定が開きます。共通のグローバルAPI Key、AI同士の確率追撃返信、そして左メンバー設定とリアルタイム同期する各キャラのプロンプト編集をまとめて行えます。',
-  aiGuideStep4Title: '直接送信・@指名・長押しで再生成／編集',
+    '左側で「オフライン」になっているキャラは自動抽選・追撃・@指名のいずれでも返信しません。また返信時刻は「ローカル実時刻」か「AIが会話に合わせて推定（直前より前にはならない）」から選べます。',
+  aiGuideStep4Title: '直接送信・@指名・AIファイル送信カード',
   aiGuideStep4Desc:
-    '下の入力欄からそのまま送信できます。@キャラ名 を含めると必ずそのキャラが返信し、未指定時は設定済みキャラからランダムに選ばれます。送信済みメッセージは長押しで「再生成」「編集」「削除」が可能です。',
-  aiGuideOpenConfigBtn: '今すぐAI設定を開く',
+    '下部から直接送信し、@キャラ名 で指名できます。たとえば「@K デモ作って送って」と頼むとAIが「.mp3」などのファイル風カード（表示専用ダミー）も会話に送信できます。',
+  aiGuideStep5Title: 'メッセージ長押しで再生成・編集・削除',
+  aiGuideStep5Desc:
+    '送信済みの発言は長押し（右クリック）で「再生成」「編集」「削除」が可能。AI同士の確率追撃返信をオンにすれば、返信後に別のオンラインキャラが自動で一言反応します。',
+  aiGuideOpenConfigBtn: '今すぐAIグローバル設定を開く',
   editMessageBtn: '編集',
   regenerateMessageBtn: '再生成',
   saveEditBtn: '保存',
@@ -558,7 +597,7 @@ const ZH_TEXT: UiText = {
   step5Label: '自动播放模式',
   step6Title: 'AI 对话模式（纯静态本地直连）',
   step6Desc:
-    '在左侧菜单点击「AI 对话模式」进入全新对话页。长按左侧角色填写协议/API Key/提示词，点击右上角小蓝点打开 AI 全局设置与同伴概率追击；在沉浸模式下直接发送即可对话（@角色名 指定回复），长按消息可编辑、重新生成或删除。',
+    '在左侧菜单点击「AI 对话模式」进入全新对话页。内置 DeepSeek 等多协议预设，可点击右上角小蓝点设置自己的名字/头像/人设、全局世界观、发送时间模式（本地实时或 AI 推演）与完整单角色 API；支持离线角色屏蔽回复、AI 发送文件空壳卡片（如 .mp3），页面顶部还配有独立使用引导。',
   step6Label: 'AI 对话模式',
   skip: '跳过',
   back: '上一步',
@@ -742,6 +781,7 @@ const ZH_TEXT: UiText = {
   aiCharModalTitle: (name) => `${name} 的 AI 对话设置`,
   aiProtocolLabel: 'AI 协议',
   aiProtocolOpenai: 'OpenAI 兼容协议（通用默认）',
+  aiProtocolDeepseek: 'DeepSeek 官方 (api.deepseek.com)',
   aiProtocolGemini: 'Google Gemini 原生协议',
   aiProtocolAnthropic: 'Anthropic Claude 协议',
   aiBaseUrlLabel: '链接地址（不修改则默认通用地址）',
@@ -756,50 +796,69 @@ const ZH_TEXT: UiText = {
   aiFetchingModels: '拉取中...',
   aiFetchModelsOk: (count) => `已拉取 ${count} 个模型`,
   aiFetchModelsFail: '拉取失败，可直接选择预设或手动填写模型名',
-  aiCustomModelPlaceholder: '手动输入模型 ID（例：gpt-4o-mini）',
+  aiCustomModelPlaceholder: '手动输入模型 ID（例：deepseek-chat / gpt-4o-mini）',
   aiPromptLabel: '预设提示词',
   aiPromptPlaceholder: '输入该角色的性格设定、口癖、背景与回复要求...',
   toastAiCharSaved: (name) => `已保存「${name}」的 AI 设置`,
   aiGlobalModalTitle: 'AI 全局设置面板',
-  aiGlobalModalSub: '点击右上角小蓝点即可设置全局 API Key、AI 概率接话以及快速编辑各角色提示词。',
+  aiGlobalModalSub: '管理全局 API、自己的身份/头像/设定、全局世界观、时间规则，以及完整单角色 API 配置。',
   aiGlobalApiToggle: '开启全局 API Key',
-  aiGlobalApiDesc: '开启后，未单独填写 API Key 的角色也会使用下方通用协议与全局 Key 参与回复。',
+  aiGlobalApiDesc: '开启后，未单独填写 API Key 的角色也会使用下方通用协议（OpenAI / DeepSeek / Gemini / Anthropic）与全局 Key 回复。',
   aiFollowUpToggle: 'AI 概率回复一次其他 AI 的发言',
-  aiFollowUpDesc: '某个 AI 回复后，按设定概率再随机触发另一名已就绪的 AI 接话回复一次。',
+  aiFollowUpDesc: '某个 AI 回复后，按设定概率再随机触发另一名在线且已就绪的 AI 接话回复一次。',
   aiFollowUpProbLabel: (prob) => `概率回复触发率：${prob}%`,
-  aiUserIdentityTitle: '我的聊天名称',
-  aiUserNamePlaceholder: '默认：あなた',
-  aiCharPromptSectionTitle: '选择角色填写预设提示词（数据互通）',
-  aiCharPromptSectionDesc: '此处修改的角色提示词与设置会和左侧长按角色面板实时互通同步。',
-  aiConfiguredCharsCount: (ready, total) => `当前可回复角色：${ready} / ${total}`,
+  aiUserIdentityTitle: '我的个人设定（名字 / 头像 / 人设）',
+  aiUserNamePlaceholder: '显示名称（默认：あなた）',
+  aiUserAvatarLabel: '我的头像',
+  aiUploadAvatarBtn: '上传头像',
+  aiResetAvatarBtn: '恢复默认',
+  aiUserPersonaLabel: '我的设定 / 身份简介（发给 AI）',
+  aiUserPersonaPlaceholder: '例：擅长编曲或作词的社团成员，性格温和或毒舌，与众人的关系说明...',
+  aiWorldviewTitle: '全局世界观设定（发给所有 AI）',
+  aiWorldviewPlaceholder: '输入共通世界观、深夜连线背景、当前活动设定或全员共识...',
+  aiTimeModeTitle: '发送时间推演方式',
+  aiTimeModeRealtime: '按本地实时时间',
+  aiTimeModeRealtimeSub: '以当前设备本地时间为准，自动保证不早于上一条消息的时间。',
+  aiTimeModeInferred: '让 AI 推演合适时间（不早于前条）',
+  aiTimeModeInferredSub: '由 AI 根据上下文自行判断合理的发送日期与时间，且严格限制不早于上一条消息。',
+  aiCharPromptSectionTitle: '单角色完整 API 与提示词设置（实时互通）',
+  aiCharPromptSectionDesc: '与左侧长按角色面板拥有完整一致的协议、URL、API Key、模型与提示词设置，并实时同步；离线角色不会参与回复。',
+  aiConfiguredCharsCount: (ready, total) => `在线可回复：${ready} / ${total}`,
   toastAiGlobalSaved: '已保存 AI 全局设置',
   aiEmptyTitle: (title) => `「${title}」空白 AI 对话模板`,
-  aiEmptySub: '在沉浸模式下即可直接发消息！长按左侧角色填写 API Key 后会随机抽取已填 Key 的角色回复，输入 @角色名 可指定回复。',
-  aiEmptyReadySummary: (ready, total) => `当前已就绪角色：${ready} / ${total}`,
+  aiEmptySub: '底部可直接发送消息！在线且已就绪的角色会参与随机回复，输入 @角色名 可指定回复，AI 还能发出 .mp3/.mp4 等文件卡片空壳。',
+  aiEmptyReadySummary: (ready, total) => `当前在线可回复角色：${ready} / ${total}`,
   aiOpenGlobalQuickBtn: '打开 AI 全局设置',
-  aiOpenGuideBtn: '查看功能引导',
+  aiOpenGuideBtn: '查看使用引导',
+  aiHeaderGuideBtn: '使用引导',
   aiOwnKeyBadge: '使用独立 API Key',
   aiNoKeyStatusBadge: '未填 Key（不会参与回复）',
+  aiOfflineStatusBadge: '当前离线（不会回复）',
   aiGeneratingStatus: (name) => `${name} 正在思考回复...`,
   aiToastBusy: 'AI 正在生成回复，请稍候…',
-  aiToastNoConfiguredChar: '当前没有填写 API Key 的角色，请长按左侧角色或点击右上角小蓝点设置。',
+  aiToastNoConfiguredChar: '当前没有在线且已填 API Key 的角色，请长按左侧角色或点击右上角小蓝点设置。',
+  aiToastAllOffline: '已填 Key 的角色目前全部处于离线状态，请在左侧切换为「在线」或「语音中」后再试。',
+  aiToastCharOffline: (name) => `角色「${name}」目前处于离线状态，不会回复`,
   aiToastTargetMissingKey: (name) => `角色「${name}」尚未填写 API Key，无法回复`,
   aiToastRequestFailed: (name, reason) => `${name} 请求 AI 失败（${reason}）`,
-  aiGuideTitle: 'AI 对话模式功能引导',
-  aiGuideBadges: ['引导 1 / 4', '引导 2 / 4', '引导 3 / 4', '引导 4 / 4'],
-  aiGuideStep1Title: '纯静态直连 · 保留原版界面体验',
+  aiGuideTitle: 'AI 对话模式使用引导',
+  aiGuideBadges: ['引导 1 / 5', '引导 2 / 5', '引导 3 / 5', '引导 4 / 5', '引导 5 / 5'],
+  aiGuideStep1Title: '纯静态直连 · 我的设定与全局世界观',
   aiGuideStep1Desc:
-    'AI 对话模式沿用原版 Nightcord 沉浸界面并开放底部直接输入。所有请求均由你的浏览器直接发起，API Key、对话和设定仅保存在本地 localStorage，不经过任何后端服务器。',
-  aiGuideStep1Note: '※ 随时可通过左上角「25時、ナイトコードで。▾」切换回主页面，两个页面的角色名单与 AI 配置实时互通。',
-  aiGuideStep2Title: '长按左侧角色：配置独立 AI 与提示词',
+    '保留原版 Nightcord 界面并开放底部直发，请求全部由浏览器本地直连发出。点右上角第 1 个小蓝点即可设置「我的名字、头像、人设」和共享给所有 AI 的「全局世界观」。',
+  aiGuideStep1Note: '※ 聊天标题栏右上角随时提供「使用引导」按钮，也可从左上菜单返回主页面。',
+  aiGuideStep2Title: 'DeepSeek 预设 · 完整单角色 API 设置',
   aiGuideStep2Desc:
-    '长按（桌面端可右键）左侧任意角色，点击「AI 对话设置」，即可选择协议（OpenAI 兼容 / Gemini / Anthropic）、接口地址、API Key、模型并编写预设提示词。只有填过有效 Key 的角色才会开口回复！',
-  aiGuideStep3Title: '右上角小蓝点：AI 全局设置面板',
+    '无论是长按（右键）左侧角色，还是在右上小蓝点全局面板内切换角色，都可以完整设置协议（OpenAI / DeepSeek 官方预设 / Gemini / Claude）、链接地址、API Key、拉取模型与预设提示词，两边数据实时互通。',
+  aiGuideStep3Title: '离线角色不回复 · 两种时间控制模式',
   aiGuideStep3Desc:
-    '点击右上角第 1 个小蓝点即可打开 AI 全局设置：一键开启「全局 API Key」（给未单独填 Key 的角色兜底）、调节「AI 概率追击回复」概率，还能在同一面板内切换角色编辑提示词并实时同步。',
-  aiGuideStep4Title: '直接发消息 · @点名 · 长按编辑与重生成',
+    '左侧栏处于「离线」状态的角色不会参与随机抽选、概率追击或 @点名回复。时间方面可在全局面板选择「本地实时时间」或「AI 推演合适时间」，系统会保证任何新消息都不早于上一条。',
+  aiGuideStep4Title: '直接发消息 · @点名 · AI 发送文件卡片',
   aiGuideStep4Desc:
-    '在底部直接发消息：未 @ 角色时会从已填 Key 的角色中随机回复；@角色名 则强制该角色回复（若其未填 Key 会提示）。长按任意消息可「重新生成」、「编辑」或「删除」。',
+    '直接发消息可 @角色名 定向对话；当你让角色“做完 demo 发群里”时，AI 会自动在聊天中发出一张 Nightcord 风格的 .mp3 / .txt / .mp4 文件卡片空壳（纯展示，无需真实文件）。',
+  aiGuideStep5Title: '长按消息重生成／编辑 · 概率接话',
+  aiGuideStep5Desc:
+    '长按或右键任意一条消息可选择「重新生成」、「编辑」或「删除」。开启全局「概率接话」后，每条 AI 回复还有机会触发另一位在线角色顺口接一句。',
   aiGuideOpenConfigBtn: '立即打开 AI 全局设置',
   editMessageBtn: '编辑',
   regenerateMessageBtn: '重新生成',
@@ -832,7 +891,7 @@ const EN_TEXT: UiText = {
   step5Label: 'Auto-Playback Mode',
   step6Title: 'AI Chat Mode (Direct Browser Fetch)',
   step6Desc:
-    'Open "AI Chat Mode" from the server menu to chat directly in Immersive Mode! Long-press sidebar members to set Protocol/API Key/Prompts, click the cyan dot for Global Key & follow-ups, @mention to pick who replies, and long-press messages to edit or regenerate.',
+    'Open "AI Chat Mode" from the server menu to chat directly in Immersive Mode. Supports DeepSeek & multi-protocol presets, your avatar/name/persona, shared worldview, full per-character API settings, online-only gating, realtime or AI-inferred timestamps, dummy file cards (e.g. .mp3), and a standalone top-bar guide.',
   step6Label: 'AI Chat Mode',
   skip: 'Skip',
   back: 'Back',
@@ -1019,6 +1078,7 @@ const EN_TEXT: UiText = {
   aiCharModalTitle: (name) => `AI Settings · ${name}`,
   aiProtocolLabel: 'AI Protocol',
   aiProtocolOpenai: 'OpenAI Compatible (Default)',
+  aiProtocolDeepseek: 'DeepSeek Official (api.deepseek.com)',
   aiProtocolGemini: 'Google Gemini API',
   aiProtocolAnthropic: 'Anthropic Claude API',
   aiBaseUrlLabel: 'Base URL (Defaults to Generic Endpoint)',
@@ -1033,50 +1093,69 @@ const EN_TEXT: UiText = {
   aiFetchingModels: 'Fetching...',
   aiFetchModelsOk: (count) => `Loaded ${count} models`,
   aiFetchModelsFail: 'Could not fetch models; pick a preset or type manually',
-  aiCustomModelPlaceholder: 'Enter model ID (e.g. gpt-4o-mini)',
+  aiCustomModelPlaceholder: 'Enter model ID (e.g. deepseek-chat / gpt-4o-mini)',
   aiPromptLabel: 'Preset System Prompt',
   aiPromptPlaceholder: 'Describe character persona, tone, catchphrases, and reply rules...',
   toastAiCharSaved: (name) => `Saved AI settings for "${name}"`,
   aiGlobalModalTitle: 'AI Global Settings',
-  aiGlobalModalSub: 'Configure Global API Key, AI-to-AI probabilistic follow-ups, and per-character prompts.',
+  aiGlobalModalSub: 'Configure your profile & avatar, worldview, timestamp mode, global API, and complete per-character APIs.',
   aiGlobalApiToggle: 'Enable Global API Key',
-  aiGlobalApiDesc: 'Allow characters without their own API Key to use this shared protocol, URL, and key.',
+  aiGlobalApiDesc: 'Allow characters without their own API Key to use this shared protocol (OpenAI / DeepSeek / Gemini / Anthropic), URL, and key.',
   aiFollowUpToggle: 'Probabilistic AI Follow-up Reply',
-  aiFollowUpDesc: 'After an AI replies, roll the probability once for another ready AI to respond to it.',
+  aiFollowUpDesc: 'After an AI replies, roll the probability once for another online & ready AI to respond.',
   aiFollowUpProbLabel: (prob) => `Follow-up probability: ${prob}%`,
-  aiUserIdentityTitle: 'Your Display Name',
+  aiUserIdentityTitle: 'Your Profile (Name / Avatar / Persona)',
   aiUserNamePlaceholder: 'Default: あなた',
-  aiCharPromptSectionTitle: 'Character Prompts & Sync',
-  aiCharPromptSectionDesc: 'Synced live with each character panel from long-pressing sidebar members.',
-  aiConfiguredCharsCount: (ready, total) => `Ready characters: ${ready} / ${total}`,
+  aiUserAvatarLabel: 'Your Avatar',
+  aiUploadAvatarBtn: 'Upload Avatar',
+  aiResetAvatarBtn: 'Reset Default',
+  aiUserPersonaLabel: 'Your Persona / Role (Shared with AI)',
+  aiUserPersonaPlaceholder: 'Describe who you are in this group chat, tone, and relationship with members...',
+  aiWorldviewTitle: 'Shared Worldview / Setting',
+  aiWorldviewPlaceholder: 'Enter shared worldview, setting rules, or current Nightcord session context passed to all AI models...',
+  aiTimeModeTitle: 'Message Timestamp Mode',
+  aiTimeModeRealtime: 'Local Real-Time Clock',
+  aiTimeModeRealtimeSub: 'Uses your local device clock while guaranteeing timestamps never go earlier than the previous message.',
+  aiTimeModeInferred: 'AI-Inferred Story Time (>= Prev)',
+  aiTimeModeInferredSub: 'Let AI choose a fitting send date/time for each reply, strictly clamped at or after the previous message.',
+  aiCharPromptSectionTitle: 'Complete Per-Character API & Prompt Settings',
+  aiCharPromptSectionDesc: 'Full Protocol, URL, API Key, Model, and Prompt controls synced live with sidebar long-press settings; offline roles stay silent.',
+  aiConfiguredCharsCount: (ready, total) => `Online & ready: ${ready} / ${total}`,
   toastAiGlobalSaved: 'Saved AI global settings',
   aiEmptyTitle: (title) => `Blank AI Chat Template · ${title}`,
-  aiEmptySub: 'Send messages directly below! Configure API Keys via long-pressing sidebar roles; @mention targets a specific role, otherwise a configured role replies randomly.',
-  aiEmptyReadySummary: (ready, total) => `Ready characters: ${ready} / ${total}`,
+  aiEmptySub: 'Send messages directly below! Online & configured roles reply randomly unless @mentioned, and can send Nightcord-style file shells (e.g. .mp3 demos).',
+  aiEmptyReadySummary: (ready, total) => `Online & ready roles: ${ready} / ${total}`,
   aiOpenGlobalQuickBtn: 'Open AI Global Settings',
-  aiOpenGuideBtn: 'Feature Guide',
+  aiOpenGuideBtn: 'Usage Guide',
+  aiHeaderGuideBtn: 'Guide',
   aiOwnKeyBadge: 'Using own API Key',
   aiNoKeyStatusBadge: 'No API Key (inactive)',
+  aiOfflineStatusBadge: 'Offline (will not reply)',
   aiGeneratingStatus: (name) => `${name} is typing...`,
   aiToastBusy: 'AI is generating a reply, please wait...',
-  aiToastNoConfiguredChar: 'No characters have an API Key configured yet. Long-press a sidebar role or click the blue dot.',
+  aiToastNoConfiguredChar: 'No online character has an API Key configured yet. Long-press a sidebar role or click the cyan dot.',
+  aiToastAllOffline: 'All configured characters are currently Offline. Switch a member Online or to Voice in the sidebar.',
+  aiToastCharOffline: (name) => `Character "${name}" is currently Offline and cannot reply`,
   aiToastTargetMissingKey: (name) => `Character "${name}" has no API Key configured`,
   aiToastRequestFailed: (name, reason) => `${name} failed to reply (${reason})`,
   aiGuideTitle: 'AI Chat Mode Guide',
-  aiGuideBadges: ['Guide 1 / 4', 'Guide 2 / 4', 'Guide 3 / 4', 'Guide 4 / 4'],
-  aiGuideStep1Title: 'Direct Browser Fetch · Pure Static Design',
+  aiGuideBadges: ['Guide 1 / 5', 'Guide 2 / 5', 'Guide 3 / 5', 'Guide 4 / 5', 'Guide 5 / 5'],
+  aiGuideStep1Title: 'Direct Browser Fetch · Profile & Worldview',
   aiGuideStep1Desc:
-    'Chat with AI characters directly inside the authentic Nightcord UI. Requests go straight from your browser to the API provider, and API Keys & settings stay strictly in local browser storage.',
-  aiGuideStep1Note: '* Return to the main page anytime from the "25時、ナイトコードで。▾" menu; rosters & AI configs stay synced.',
-  aiGuideStep2Title: 'Long-Press Left Roles: Per-Character AI Setup',
+    'Chat inside the authentic Nightcord UI with direct browser API requests. Click the 1st cyan dot (top-right) to set your Name, Avatar, Persona, and the shared Worldview passed to every AI character.',
+  aiGuideStep1Note: '* Open this guide anytime via the "Guide" button in the top chat header or return home from the server menu.',
+  aiGuideStep2Title: 'DeepSeek Preset & Complete Per-Character APIs',
   aiGuideStep2Desc:
-    'Long-press (or right-click) any sidebar member and choose "AI Chat Settings" to set Protocol (OpenAI / Gemini / Anthropic), Base URL, API Key, Model, and Prompt. Only characters with a valid key will reply.',
-  aiGuideStep3Title: 'Top-Right Cyan Dot: AI Global Settings',
+    'Both sidebar long-press and the Global Settings panel let you configure full Protocol (OpenAI / DeepSeek Official / Gemini / Anthropic), Base URL, API Key, Model fetch, and Prompt—kept in live sync.',
+  aiGuideStep3Title: 'Offline Gating & Two Timestamp Modes',
   aiGuideStep3Desc:
-    'Click the 1st cyan dot to configure a shared Global API Key fallback, enable probabilistic AI-to-AI follow-up replies, and quickly edit synced character prompts.',
-  aiGuideStep4Title: 'Direct Chat · @Mention · Edit & Regenerate',
+    'Sidebar members marked Offline cannot be picked, @mentioned, or triggered for follow-ups. Pick Local Real-Time or AI-Inferred timestamps (clamped never to precede the previous message).',
+  aiGuideStep4Title: 'Direct Send · @Mention · AI File Card Shells',
   aiGuideStep4Desc:
-    'Send messages directly from the bottom bar. Include @Name to force that character to reply, or let an eligible character answer randomly. Long-press any message to Regenerate, Edit, or Delete.',
+    'Send directly below or @mention a role. Asking someone to share a demo (e.g. @K send the demo mp3) lets the AI post a non-clickable Nightcord file card shell right in the chat.',
+  aiGuideStep5Title: 'Long-Press to Regenerate, Edit & Follow-Up',
+  aiGuideStep5Desc:
+    'Long-press (or right-click) any message to Regenerate, Edit, or Delete. Enable probabilistic follow-ups in Global Settings so another online role may chime in automatically.',
   aiGuideOpenConfigBtn: 'Open AI Settings Now',
   editMessageBtn: 'Edit',
   regenerateMessageBtn: 'Regenerate',

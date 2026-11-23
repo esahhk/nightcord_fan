@@ -109,7 +109,9 @@ export interface CustomMessageTime {
   time: string;
 }
 
-export type AiProtocol = 'openai' | 'gemini' | 'anthropic';
+export type AiProtocol = 'openai' | 'deepseek' | 'gemini' | 'anthropic';
+
+export type AiTimeMode = 'realtime' | 'ai_inferred';
 
 export interface AiCharacterConfig {
   protocol: AiProtocol;
@@ -129,6 +131,10 @@ export interface AiGlobalConfig {
   aiFollowUpProbability: number;
   userDisplayName: string;
   userAvatar: AvatarType;
+  userAvatarMediaId?: string;
+  userPersona: string;
+  worldviewPrompt: string;
+  timeMode: AiTimeMode;
 }
 
 export interface NightcordBackupMediaEntry {

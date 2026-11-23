@@ -35,6 +35,8 @@ import {
   editMessageText,
   getAiCharacterConfig,
   getEligibleAiCharacters,
+  isMemberOnlineForAi,
+  parseAiModelOutput,
   pickAiFollowUpResponder,
   prepareRegenerateTarget,
   requestAiCompletion,
@@ -103,6 +105,7 @@ import {
   parseNightcordBackup,
   removeCharacterAndMember,
   removeMemberStatusEvent,
+  resolveClampedOutgoingTimestamp,
   resolveOutgoingTimestamp,
   setMemberPresenceStatus,
   syncMembersWithCharacters,
@@ -255,9 +258,11 @@ export default function App({ actions }: AppProps) {
   const aiReadyMemberIds = useMemo(
     () =>
       new Set(
-        getEligibleAiCharacters(characters, aiCharacterConfigs, aiGlobalConfig).map((c) => c.id)
+        getEligibleAiCharacters(characters, aiCharacterConfigs, aiGlobalConfig, members).map(
+          (c) => c.id
+        )
       ),
-    [characters, aiCharacterConfigs, aiGlobalConfig]
+    [characters, aiCharacterConfigs, aiGlobalConfig, members]
   );
 
   const aiCharModalTarget = useMemo(() => {
@@ -836,19 +841,29 @@ export default function App({ actions }: AppProps) {
     (
       convId: string,
       speaker: CharacterProfile,
-      replyText: string,
-      historySnapshot: ChatMessage[]
+      rawReply: string,
+      historySnapshot: ChatMessage[],
+      timeMode: AiGlobalConfig['timeMode']
     ): ChatMessage | null => {
       const now = new Date();
-      const resolved = resolveOutgoingTimestamp(historySnapshot, undefined, now);
-      if (!resolved.ok) {
+      const prevDt = getLastMessageDateTime(historySnapshot, now);
+      const parsed = parseAiModelOutput(rawReply, speaker.name, prevDt, now);
+      if (!parsed.text && !parsed.fileMedia) {
         return null;
       }
-      const createdMsg = createOutgoingMessage(replyText, speaker, now, {
-        timestamp: resolved.timestamp,
-        sentAt: resolved.sentAt,
-        dividerBefore: resolved.dividerBefore,
-      });
+      const preferredDt = timeMode === 'ai_inferred' ? parsed.inferredSentAt : undefined;
+      const resolved = resolveClampedOutgoingTimestamp(historySnapshot, preferredDt, now);
+      const createdMsg = parsed.fileMedia
+        ? createFileMessage(parsed.fileMedia, speaker, parsed.text, now, {
+            timestamp: resolved.timestamp,
+            sentAt: resolved.sentAt,
+            dividerBefore: resolved.dividerBefore,
+          })
+        : createOutgoingMessage(parsed.text, speaker, now, {
+            timestamp: resolved.timestamp,
+            sentAt: resolved.sentAt,
+            dividerBefore: resolved.dividerBefore,
+          });
       if (!createdMsg) {
         return null;
       }
@@ -873,10 +888,20 @@ export default function App({ actions }: AppProps) {
         triggerText,
         characters,
         aiCharacterConfigs,
-        aiGlobalConfig
+        aiGlobalConfig,
+        Math.random,
+        members
       );
+      if (selection.kind === 'none_online') {
+        showToast(t.aiToastAllOffline);
+        return;
+      }
       if (selection.kind === 'none_configured') {
         showToast(t.aiToastNoConfiguredChar);
+        return;
+      }
+      if (selection.kind === 'mentioned_offline') {
+        showToast(t.aiToastCharOffline(selection.character.name));
         return;
       }
       if (selection.kind === 'mentioned_missing_key') {
@@ -899,7 +924,8 @@ export default function App({ actions }: AppProps) {
           convId,
           firstSpeaker,
           replyText,
-          historyBeforeReply
+          historyBeforeReply,
+          aiGlobalConfig.timeMode
         );
         const historyAfterFirst = firstMsg
           ? [...historyBeforeReply, firstMsg]
@@ -909,7 +935,9 @@ export default function App({ actions }: AppProps) {
           firstSpeaker.id,
           characters,
           aiCharacterConfigs,
-          aiGlobalConfig
+          aiGlobalConfig,
+          Math.random,
+          members
         );
         if (secondSpeaker) {
           setAiGeneratingName(secondSpeaker.name);
@@ -921,7 +949,13 @@ export default function App({ actions }: AppProps) {
               history: historyAfterFirst,
               allCharacters: characters,
             });
-            appendAiCharacterReply(convId, secondSpeaker, followUpText, historyAfterFirst);
+            appendAiCharacterReply(
+              convId,
+              secondSpeaker,
+              followUpText,
+              historyAfterFirst,
+              aiGlobalConfig.timeMode
+            );
           } catch (err) {
             const reason = err instanceof Error ? err.message : 'Error';
             showToast(t.aiToastRequestFailed(secondSpeaker.name, reason));
@@ -935,7 +969,7 @@ export default function App({ actions }: AppProps) {
         aiBusyRef.current = false;
       }
     },
-    [aiCharacterConfigs, aiGlobalConfig, appendAiCharacterReply, characters, showToast, t]
+    [aiCharacterConfigs, aiGlobalConfig, appendAiCharacterReply, characters, members, showToast, t]
   );
 
   const handleRegenerateMessage = useCallback(
@@ -954,6 +988,10 @@ export default function App({ actions }: AppProps) {
       }
       if (target.mode === 'replace_ai' && target.targetCharacter) {
         const speaker = target.targetCharacter;
+        if (!isMemberOnlineForAi(speaker.id, members)) {
+          showToast(t.aiToastCharOffline(speaker.name));
+          return;
+        }
         const cred = resolveEffectiveAiCredentials(
           getAiCharacterConfig(aiCharacterConfigs, speaker.id),
           aiGlobalConfig
@@ -972,12 +1010,37 @@ export default function App({ actions }: AppProps) {
             history: target.historyBeforeTarget,
             allCharacters: characters,
           });
+          const now = new Date();
+          const prevDt = getLastMessageDateTime(target.historyBeforeTarget, now);
+          const parsed = parseAiModelOutput(nextReply, speaker.name, prevDt, now);
+          if (!parsed.text && !parsed.fileMedia) {
+            throw new Error('EMPTY_RESPONSE');
+          }
+          const resolvedTime =
+            aiGlobalConfig.timeMode === 'ai_inferred' && parsed.inferredSentAt
+              ? resolveClampedOutgoingTimestamp(target.historyBeforeTarget, parsed.inferredSentAt, now)
+              : null;
           setAiConversations((prev) =>
             prev.map((item) =>
               item.id === conv.id
                 ? {
                     ...item,
-                    messages: editMessageText(item.messages, messageId, nextReply),
+                    messages: item.messages.map((m) =>
+                      m.id === messageId
+                        ? {
+                            ...m,
+                            text: parsed.text || undefined,
+                            fileMedia: parsed.fileMedia,
+                            ...(resolvedTime
+                              ? {
+                                  timestamp: resolvedTime.timestamp,
+                                  sentAt: resolvedTime.sentAt,
+                                  dividerBefore: resolvedTime.dividerBefore,
+                                }
+                              : {}),
+                          }
+                        : m
+                    ),
                   }
                 : item
             )
@@ -1006,6 +1069,7 @@ export default function App({ actions }: AppProps) {
       aiGlobalConfig,
       characters,
       isAiMode,
+      members,
       runAiReplyTurn,
       showToast,
       t,
@@ -1017,7 +1081,8 @@ export default function App({ actions }: AppProps) {
       const mediaIds = collectReferencedMediaIds(
         [...conversations, ...aiConversations],
         characters,
-        members
+        members,
+        [aiGlobalConfig.userAvatarMediaId]
       );
       const media: NightcordBackupPayload['media'] = {};
       for (const mediaId of mediaIds) {
@@ -1380,14 +1445,12 @@ export default function App({ actions }: AppProps) {
       const rawText = inputValue;
       const now = new Date();
       const convId = activeConversation.id;
-      const resolved = resolveOutgoingTimestamp(activeConversation.messages, undefined, now);
-      if (!resolved.ok) {
-        return;
-      }
+      const resolved = resolveClampedOutgoingTimestamp(activeConversation.messages, undefined, now);
       const userSender: CharacterProfile = {
         id: '__user__',
         name: aiGlobalConfig.userDisplayName.trim() || 'あなた',
         avatarType: aiGlobalConfig.userAvatar || 'k',
+        customAvatarMediaId: aiGlobalConfig.userAvatarMediaId,
       };
       const userMsg = createOutgoingMessage(rawText, userSender, now, {
         timestamp: resolved.timestamp,
@@ -1756,6 +1819,9 @@ export default function App({ actions }: AppProps) {
         lang={lang}
         open={aiCharModalTarget !== null}
         character={aiCharModalTarget}
+        isOnline={
+          aiCharModalTarget ? isMemberOnlineForAi(aiCharModalTarget.id, members) : true
+        }
         initialConfig={
           aiCharModalTarget
             ? getAiCharacterConfig(aiCharacterConfigs, aiCharModalTarget.id)
@@ -1778,11 +1844,27 @@ export default function App({ actions }: AppProps) {
         open={aiGlobalModalOpen}
         globalConfig={aiGlobalConfig}
         characters={characters}
+        members={members}
         characterConfigs={aiCharacterConfigs}
         onClose={() => setAiGlobalModalOpen(false)}
         onSave={(nextGlobal, nextCharConfigs) => {
           setAiGlobalConfig(nextGlobal);
           setAiCharacterConfigs(nextCharConfigs);
+          setAiConversations((prev) =>
+            prev.map((conv) => ({
+              ...conv,
+              messages: conv.messages.map((m) =>
+                m.memberId === '__user__'
+                  ? {
+                      ...m,
+                      username: nextGlobal.userDisplayName || 'あなた',
+                      avatar: nextGlobal.userAvatar || 'k',
+                      customAvatarMediaId: nextGlobal.userAvatarMediaId,
+                    }
+                  : m
+              ),
+            }))
+          );
           showToast(t.toastAiGlobalSaved);
         }}
       />

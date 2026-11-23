@@ -49,12 +49,19 @@ export function AiOnboardingModal({
       title: t.aiGuideStep3Title,
       description: t.aiGuideStep3Desc,
       note: '',
-      visual: 'global' as const,
+      visual: 'timing' as const,
     },
     {
       badge: t.aiGuideBadges[3],
       title: t.aiGuideStep4Title,
       description: t.aiGuideStep4Desc,
+      note: '',
+      visual: 'filecard' as const,
+    },
+    {
+      badge: t.aiGuideBadges[4],
+      title: t.aiGuideStep5Title,
+      description: t.aiGuideStep5Desc,
       note: '',
       visual: 'chat' as const,
     },
@@ -87,47 +94,59 @@ export function AiOnboardingModal({
           <div className="mb-4 flex min-h-[82px] items-center justify-center rounded-[8px] border border-[#453859] bg-[#3F3352] px-4 py-3">
             {current.visual === 'entry' && (
               <div className="flex flex-wrap items-center justify-center gap-2">
-                <div className="flex items-center gap-2 rounded-[6px] border border-[#524468] bg-[#2E243D] px-3 py-1.5 text-[12px] font-bold text-[#EFEBF5]">
-                  <span>25時、ナイトコードで。</span>
-                  <span className="text-[#64D2E6]">▾</span>
-                </div>
-                <span className="text-[#9A90A8]">→</span>
                 <div className="flex items-center gap-1.5 rounded-[6px] border border-[#64D2E6]/60 bg-[#241C32] px-3 py-1.5 text-[12px] font-semibold text-white">
                   <span className="h-2 w-2 rounded-full bg-[#64D2E6]" />
-                  <span>{t.aiModeBtn}</span>
+                  <span>{t.aiUserIdentityTitle}</span>
                 </div>
+                <span className="rounded-[6px] border border-[#524468] bg-[#211A2C] px-2.5 py-1.5 text-[11.5px] font-medium text-[#DCD7E5]">
+                  {t.aiWorldviewTitle}
+                </span>
               </div>
             )}
 
             {current.visual === 'member' && (
-              <div className="flex w-full items-center justify-between gap-2 rounded-[7px] border border-[#524468] bg-[#241C32] px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-5 w-5 rounded-full bg-[#9D97AC]" />
-                  <span className="text-[12.5px] font-semibold text-[#EFEBF5]">えななん</span>
+              <div className="flex w-full flex-col gap-1.5 rounded-[7px] border border-[#524468] bg-[#241C32] px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-4 w-4 rounded-full bg-[#9D97AC]" />
+                    <span className="text-[12px] font-semibold text-[#EFEBF5]">K / えななん</span>
+                  </div>
+                  <span className="rounded-[5px] bg-[#362B4A] px-2 py-0.5 text-[10.5px] font-semibold text-[#64D2E6]">
+                    DeepSeek / OpenAI / Gemini / Claude
+                  </span>
                 </div>
-                <span className="rounded-[5px] bg-[#362B4A] px-2.5 py-1 text-[11px] font-semibold text-[#64D2E6]">
-                  {t.aiCharSettingsBtn}
+              </div>
+            )}
+
+            {current.visual === 'timing' && (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <span className="rounded-[6px] border border-[#524468] bg-[#241C32] px-2.5 py-1 text-[11px] font-semibold text-[#FFB6C7]">
+                  {t.aiOfflineStatusBadge}
+                </span>
+                <span className="rounded-[6px] border border-[#64D2E6]/50 bg-[#241C32] px-2.5 py-1 text-[11px] font-semibold text-[#64D2E6]">
+                  {t.aiTimeModeInferred}
                 </span>
               </div>
             )}
 
-            {current.visual === 'global' && (
-              <div className="flex items-center gap-3">
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#64D2E6] ring-4 ring-[#64D2E6]/25" />
-                <span className="h-3.5 w-3.5 rounded-full bg-[#F6CE71]/40" />
-                <span className="h-3.5 w-3.5 rounded-full bg-[#EB7F97]/40" />
-                <span className="ml-1.5 text-[12px] font-semibold text-[#EFEBF5]">
-                  {t.aiGlobalModalTitle}
-                </span>
+            {current.visual === 'filecard' && (
+              <div className="flex w-full max-w-[270px] items-center justify-between rounded-[6px] border border-[#61527A] bg-[#524468] px-3 py-2">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex h-7 w-5 shrink-0 items-center justify-center rounded-[3px] border border-[#C2B8D3] text-[7px] font-bold text-[#C2B8D3]">
+                    MP3
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-[12px] font-bold text-white">demo_track_01.mp3</div>
+                    <div className="text-[10px] text-[#9A90A8]">4MB MP3</div>
+                  </div>
+                </div>
+                <span className="text-[11px] text-[#EFEBF5]">@K</span>
               </div>
             )}
 
             {current.visual === 'chat' && (
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <span className="rounded-[6px] border border-[#524468] bg-[#211A2C] px-2.5 py-1 text-[11.5px] font-semibold text-[#64D2E6]">
-                  @えななん
-                </span>
-                <span className="rounded-[6px] border border-[#524468] bg-[#211A2C] px-2.5 py-1 text-[11.5px] font-medium text-[#64D2E6]">
                   {t.regenerateMessageBtn}
                 </span>
                 <span className="rounded-[6px] border border-[#524468] bg-[#211A2C] px-2.5 py-1 text-[11.5px] font-medium text-[#DCD7E5]">

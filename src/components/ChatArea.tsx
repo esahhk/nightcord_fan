@@ -209,33 +209,51 @@ export function ChatArea({
 
   return (
     <main className="flex min-w-0 flex-1 flex-col bg-[#3F3352]">
-      <header className="flex h-[52px] min-h-[52px] w-full shrink-0 select-none items-center gap-1 border-b border-[#2F2540] px-2.5 sm:px-5">
-        <button
-          type="button"
-          data-action="sidebar-open"
-          aria-label="チャンネル一覧を開く"
-          onClick={onOpenSidebar}
-          className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-md text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white md:hidden"
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-            <path
-              d="M2.5 4.5H15.5M2.5 9H15.5M2.5 13.5H15.5"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
-        <button
-          type="button"
-          data-action="chat-header"
-          aria-label={`チャンネルヘッダー：${channelTitle}`}
-          onClick={onChatHeaderClick}
-          className="flex min-w-0 cursor-pointer items-center gap-2.5 rounded-md bg-transparent px-1 py-1 text-left transition-opacity hover:opacity-85"
-        >
-          <WorkChannelIcon size={22} />
-          <h1 className="truncate text-[15px] font-bold text-[#EFEBF5]">{channelTitle}</h1>
-        </button>
+      <header className="flex h-[52px] min-h-[52px] w-full shrink-0 select-none items-center justify-between gap-2 border-b border-[#2F2540] px-2.5 sm:px-5">
+        <div className="flex min-w-0 items-center gap-1">
+          <button
+            type="button"
+            data-action="sidebar-open"
+            aria-label="チャンネル一覧を開く"
+            onClick={onOpenSidebar}
+            className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-md text-[#DCD7E5] transition-colors hover:bg-[#473A5C] hover:text-white md:hidden"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <path
+                d="M2.5 4.5H15.5M2.5 9H15.5M2.5 13.5H15.5"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            data-action="chat-header"
+            aria-label={`チャンネルヘッダー：${channelTitle}`}
+            onClick={onChatHeaderClick}
+            className="flex min-w-0 cursor-pointer items-center gap-2.5 rounded-md bg-transparent px-1 py-1 text-left transition-opacity hover:opacity-85"
+          >
+            <WorkChannelIcon size={22} />
+            <h1 className="truncate text-[15px] font-bold text-[#EFEBF5]">{channelTitle}</h1>
+          </button>
+        </div>
+
+        {aiMode && onOpenAiGuide && (
+          <button
+            type="button"
+            data-action="ai-header-open-guide"
+            aria-label={t.aiOpenGuideBtn}
+            title={t.aiOpenGuideBtn}
+            onClick={onOpenAiGuide}
+            className="flex h-[28px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[6px] border border-[#524468] bg-[#2E243D] px-2.5 text-[11.5px] font-semibold text-[#DCD7E5] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#3A2D50] hover:text-white"
+          >
+            <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#64D2E6]/20 text-[10px] font-bold text-[#64D2E6]">
+              ?
+            </span>
+            <span>{t.aiHeaderGuideBtn}</span>
+          </button>
+        )}
       </header>
 
       <div
