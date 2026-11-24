@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
+import { AiAutoChatModal } from './components/AiAutoChatModal';
 import { AiGlobalSettingsModal } from './components/AiGlobalSettingsModal';
 import { AiOnboardingModal } from './components/AiOnboardingModal';
 import { CharacterAiModal } from './components/CharacterAiModal';
 import { ChatArea } from './components/ChatArea';
 import { ClearCacheModal } from './components/ClearCacheModal';
+import { CopyAiToMainModal } from './components/CopyAiToMainModal';
 import { ImageSendModal } from './components/ImageSendModal';
 import { WorkChannelIcon } from './components/NightcordArt';
 import { OnboardingModal } from './components/OnboardingModal';
@@ -12,6 +14,7 @@ import { PlaybackSetupModal } from './components/PlaybackSetupModal';
 import { Sidebar } from './components/Sidebar';
 import { UiTemplateSubpage } from './components/UiTemplateSubpage';
 import type {
+  AiAutoChatConfig,
   AiCharacterConfig,
   AiGlobalConfig,
   AppMode,
@@ -23,6 +26,7 @@ import type {
   CustomMessageTime,
   FileMediaKind,
   MemberPresenceStatus,
+  MemberStatusEvent,
   MessageDateTime,
   NightcordActions,
   NightcordBackupPayload,
@@ -31,16 +35,21 @@ import type {
   VoiceMember,
 } from './types/nightcord';
 import {
+  DEFAULT_AI_AUTO_CHAT_CONFIG,
   DEFAULT_AI_GLOBAL_CONFIG,
   editMessageText,
+  formatAiConversationTranscript,
   getAiCharacterConfig,
   getEligibleAiCharacters,
   isMemberOnlineForAi,
   parseAiModelOutput,
+  pickAiAutonomousSpeaker,
+  pickAiContinueResponder,
   pickAiFollowUpResponder,
+  pickRandomMemberPresenceTransition,
   prepareRegenerateTarget,
   requestAiCompletion,
-  resolveAiResponder,
+  resolveAiResponders,
   resolveEffectiveAiCredentials,
 } from './utils/aiClient';
 import { getUiText } from './utils/i18n';
@@ -213,6 +222,16 @@ export default function App({ actions }: AppProps) {
   const [toastText, setToastText] = useState<string | null>(null);
   const [aiCharModalTargetId, setAiCharModalTargetId] = useState<string | null>(null);
   const [aiGlobalModalOpen, setAiGlobalModalOpen] = useState(false);
+  const [aiAutoChatOpen, setAiAutoChatOpen] = useState(false);
+  const [aiAutoChatRunning, setAiAutoChatRunning] = useState(false);
+  const [aiAutoChatConfig, setAiAutoChatConfig] = useState<AiAutoChatConfig>(() => ({
+    ...DEFAULT_AI_AUTO_CHAT_CONFIG,
+  }));
+  const [pendingCopyAiToMain, setPendingCopyAiToMain] = useState<{
+    suggestedTitle: string;
+    messages: ChatMessage[];
+    statusEvents: MemberStatusEvent[];
+  } | null>(null);
   const [aiGeneratingName, setAiGeneratingName] = useState<string | null>(null);
   const [showAiOnboarding, setShowAiOnboarding] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -229,6 +248,9 @@ export default function App({ actions }: AppProps) {
 
   const actionsRef = useRef<Partial<NightcordActions>>(actions ?? {});
   const aiBusyRef = useRef(false);
+  const aiAbortControllerRef = useRef<AbortController | null>(null);
+  const aiAutoChatRunningRef = useRef(false);
+  const aiAutoChatTimerRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
   const playbackTimerRef = useRef<number | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -254,6 +276,27 @@ export default function App({ actions }: AppProps) {
     () => characters.find((c) => c.id === activeCharacterId) ?? characters[0],
     [characters, activeCharacterId]
   );
+
+  const latestAutoChatContextRef = useRef({
+    isAiMode,
+    aiActiveConversation,
+    characters,
+    members,
+    aiCharacterConfigs,
+    aiGlobalConfig,
+    aiAutoChatConfig,
+    t,
+  });
+  latestAutoChatContextRef.current = {
+    isAiMode,
+    aiActiveConversation,
+    characters,
+    members,
+    aiCharacterConfigs,
+    aiGlobalConfig,
+    aiAutoChatConfig,
+    t,
+  };
 
   const aiReadyMemberIds = useMemo(
     () =>
@@ -421,7 +464,7 @@ export default function App({ actions }: AppProps) {
   const appendMessageToActive = useCallback(
     (msg: ChatMessage) => {
       const now = new Date();
-      setConversations((prev) =>
+      const updater = (prev: Conversation[]) =>
         prev.map((conv) =>
           conv.id === activeConversation.id
             ? {
@@ -429,10 +472,14 @@ export default function App({ actions }: AppProps) {
                 messages: [...hydrateLegacyMessagesSentAt(conv.messages, now), msg],
               }
             : conv
-        )
-      );
+        );
+      if (isAiMode) {
+        setAiConversations(updater);
+      } else {
+        setConversations(updater);
+      }
     },
-    [activeConversation.id]
+    [activeConversation.id, isAiMode]
   );
 
   const pushMessage = useCallback(
@@ -528,6 +575,11 @@ export default function App({ actions }: AppProps) {
 
   useEffect(() => {
     return () => {
+      aiAutoChatRunningRef.current = false;
+      if (aiAutoChatTimerRef.current !== null) {
+        window.clearTimeout(aiAutoChatTimerRef.current);
+      }
+      aiAbortControllerRef.current?.abort();
       if (toastTimerRef.current !== null) {
         window.clearTimeout(toastTimerRef.current);
       }
@@ -547,6 +599,8 @@ export default function App({ actions }: AppProps) {
         setClearCacheOpen(false);
         setAiCharModalTargetId(null);
         setAiGlobalModalOpen(false);
+        setAiAutoChatOpen(false);
+        setPendingCopyAiToMain(null);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -643,10 +697,33 @@ export default function App({ actions }: AppProps) {
     }
   }, [stopPlayback]);
 
+  const stopAiAutoChat = useCallback(
+    (showStoppedToast: boolean = false) => {
+      if (aiAutoChatTimerRef.current !== null) {
+        window.clearTimeout(aiAutoChatTimerRef.current);
+        aiAutoChatTimerRef.current = null;
+      }
+      aiAutoChatRunningRef.current = false;
+      setAiAutoChatRunning(false);
+      if (aiAbortControllerRef.current) {
+        aiAbortControllerRef.current.abort();
+        aiAbortControllerRef.current = null;
+      }
+      aiBusyRef.current = false;
+      setAiGeneratingName(null);
+      if (showStoppedToast) {
+        showToast(t.aiAutoChatToastStopped);
+      }
+    },
+    [showToast, t.aiAutoChatToastStopped]
+  );
+
   const handleExitAiMode = useCallback(() => {
+    stopAiAutoChat(false);
     stopPlayback();
     setAiCharModalTargetId(null);
     setAiGlobalModalOpen(false);
+    setAiAutoChatOpen(false);
     setServerMenuOpen(false);
     setMobileSidebarOpen(false);
     setActiveView('app');
@@ -662,12 +739,13 @@ export default function App({ actions }: AppProps) {
       window.history.pushState(null, '', url.toString());
     } catch {
     }
-  }, [stopPlayback]);
+  }, [stopAiAutoChat, stopPlayback]);
 
   const handleSwitchStudioMode = () => {
     if (isAiMode) {
       stopPlayback();
       setPlaybackModalOpen(false);
+      setAiAutoChatOpen(false);
       setAiGlobalModalOpen((prev) => !prev);
       return;
     }
@@ -688,6 +766,11 @@ export default function App({ actions }: AppProps) {
       setPlaybackModalOpen(false);
       setAiGlobalModalOpen(false);
       setAiCharModalTargetId(null);
+      if (aiAutoChatRunningRef.current) {
+        stopAiAutoChat(true);
+      } else {
+        setAiAutoChatOpen((prev) => !prev);
+      }
       return;
     }
     if (activeView === 'template') {
@@ -739,6 +822,7 @@ export default function App({ actions }: AppProps) {
 
   const handleSelectConversation = (conversationId: string) => {
     if (isAiMode) {
+      stopAiAutoChat(false);
       setActiveAiConversationId(conversationId);
     } else {
       setActiveConversationId(conversationId);
@@ -754,6 +838,7 @@ export default function App({ actions }: AppProps) {
       return;
     }
     if (isAiMode) {
+      stopAiAutoChat(false);
       if (fromTemplate) {
         created.messages = activeConversation.messages.map((m) => ({ ...m }));
       }
@@ -774,6 +859,7 @@ export default function App({ actions }: AppProps) {
       if (conversationId === AI_TEMPLATE_CONVERSATION_ID) {
         return;
       }
+      stopAiAutoChat(false);
       setAiConversations((prev) => {
         const next = prev.filter((c) => c.id !== conversationId);
         if (activeAiConversationId === conversationId) {
@@ -795,6 +881,59 @@ export default function App({ actions }: AppProps) {
       return next;
     });
     showToast(t.toastConvDeleted);
+  };
+
+  const handleCopyAiToMain = useCallback(() => {
+    const snapshotMessages = aiActiveConversation.messages.map((m) => ({
+      ...m,
+      attachments: m.attachments ? m.attachments.map((a) => ({ ...a })) : undefined,
+      imageMedia: m.imageMedia ? { ...m.imageMedia } : undefined,
+      fileMedia: m.fileMedia ? { ...m.fileMedia } : undefined,
+      voiceMedia: m.voiceMedia ? { ...m.voiceMedia } : undefined,
+      sentAt: m.sentAt ? { ...m.sentAt } : undefined,
+    }));
+    const snapshotEvents = (aiActiveConversation.statusEvents ?? []).map((ev) => ({
+      ...ev,
+      sentAt: { ...ev.sentAt },
+    }));
+    const baseTitle = aiActiveConversation.title.trim() || 'Nightcord';
+    handleExitAiMode();
+    setPendingCopyAiToMain({
+      suggestedTitle: `${baseTitle} (AI)`,
+      messages: snapshotMessages,
+      statusEvents: snapshotEvents,
+    });
+  }, [aiActiveConversation, handleExitAiMode]);
+
+  const handleConfirmCopyAiToMain = (rawTitle: string) => {
+    if (!pendingCopyAiToMain) {
+      return;
+    }
+    const created = createNewConversation(rawTitle, false);
+    if (!created) {
+      return;
+    }
+    const baseStamp = Date.now();
+    const clonedMessages = pendingCopyAiToMain.messages.map((msg, idx) => ({
+      ...msg,
+      id: `msg-copy-${baseStamp}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+    }));
+    const clonedEvents = pendingCopyAiToMain.statusEvents.map((ev, idx) => ({
+      ...ev,
+      id: `st-copy-${baseStamp}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+    }));
+    const filledConversation: Conversation = {
+      ...created,
+      messages: clonedMessages,
+      statusEvents: clonedEvents,
+    };
+    setConversations((prev) => [...prev, filledConversation]);
+    setActiveConversationId(filledConversation.id);
+    setPendingCopyAiToMain(null);
+    setServerMenuOpen(false);
+    setMobileSidebarOpen(false);
+    invokeAction(actionsRef.current, 'onConversationCreate', filledConversation);
+    showToast(t.toastCopiedAiToMain(filledConversation.title));
   };
 
   const handleDeleteMessage = (messageId: string) => {
@@ -843,7 +982,8 @@ export default function App({ actions }: AppProps) {
       speaker: CharacterProfile,
       rawReply: string,
       historySnapshot: ChatMessage[],
-      timeMode: AiGlobalConfig['timeMode']
+      timeMode: AiGlobalConfig['timeMode'],
+      toolSentAt?: MessageDateTime | null
     ): ChatMessage | null => {
       const now = new Date();
       const prevDt = getLastMessageDateTime(historySnapshot, now);
@@ -851,7 +991,8 @@ export default function App({ actions }: AppProps) {
       if (!parsed.text && !parsed.fileMedia) {
         return null;
       }
-      const preferredDt = timeMode === 'ai_inferred' ? parsed.inferredSentAt : undefined;
+      const preferredDt =
+        timeMode === 'ai_inferred' ? (toolSentAt ?? parsed.inferredSentAt) : undefined;
       const resolved = resolveClampedOutgoingTimestamp(historySnapshot, preferredDt, now);
       const createdMsg = parsed.fileMedia
         ? createFileMessage(parsed.fileMedia, speaker, parsed.text, now, {
@@ -882,9 +1023,23 @@ export default function App({ actions }: AppProps) {
     []
   );
 
+  const isAbortErr = (err: unknown): boolean =>
+    (err instanceof DOMException && err.name === 'AbortError') ||
+    (err instanceof Error && err.name === 'AbortError');
+
+  const handleStopAiGeneration = useCallback(() => {
+    if (aiAutoChatRunningRef.current) {
+      stopAiAutoChat(false);
+    } else if (aiAbortControllerRef.current) {
+      aiAbortControllerRef.current.abort();
+      aiAbortControllerRef.current = null;
+    }
+    showToast(t.aiToastAborted);
+  }, [showToast, stopAiAutoChat, t.aiToastAborted]);
+
   const runAiReplyTurn = useCallback(
     async (convId: string, historyBeforeReply: ChatMessage[], triggerText: string) => {
-      const selection = resolveAiResponder(
+      const resolution = resolveAiResponders(
         triggerText,
         characters,
         aiCharacterConfigs,
@@ -892,85 +1047,350 @@ export default function App({ actions }: AppProps) {
         Math.random,
         members
       );
-      if (selection.kind === 'none_online') {
-        showToast(t.aiToastAllOffline);
-        return;
-      }
-      if (selection.kind === 'none_configured') {
-        showToast(t.aiToastNoConfiguredChar);
-        return;
-      }
-      if (selection.kind === 'mentioned_offline') {
-        showToast(t.aiToastCharOffline(selection.character.name));
-        return;
-      }
-      if (selection.kind === 'mentioned_missing_key') {
-        showToast(t.aiToastTargetMissingKey(selection.character.name));
+
+      if (resolution.responders.length === 0) {
+        if (resolution.offlineMentioned.length > 0) {
+          showToast(t.aiToastCharOffline(resolution.offlineMentioned[0].name));
+        } else if (resolution.missingKeyMentioned.length > 0) {
+          showToast(t.aiToastTargetMissingKey(resolution.missingKeyMentioned[0].name));
+        } else if (resolution.fallbackReason === 'none_online') {
+          showToast(t.aiToastAllOffline);
+        } else {
+          showToast(t.aiToastNoConfiguredChar);
+        }
         return;
       }
 
+      if (resolution.offlineMentioned.length > 0) {
+        showToast(
+          t.aiToastPartialOffline(resolution.offlineMentioned.map((c) => c.name).join(', '))
+        );
+      } else if (resolution.missingKeyMentioned.length > 0) {
+        showToast(
+          t.aiToastPartialMissingKey(resolution.missingKeyMentioned.map((c) => c.name).join(', '))
+        );
+      }
+
+      const controller = new AbortController();
+      aiAbortControllerRef.current = controller;
       aiBusyRef.current = true;
-      const firstSpeaker = selection.character;
-      setAiGeneratingName(firstSpeaker.name);
-      try {
-        const replyText = await requestAiCompletion({
-          targetCharacter: firstSpeaker,
-          charConfig: getAiCharacterConfig(aiCharacterConfigs, firstSpeaker.id),
-          globalConfig: aiGlobalConfig,
-          history: historyBeforeReply,
-          allCharacters: characters,
-        });
-        const firstMsg = appendAiCharacterReply(
-          convId,
-          firstSpeaker,
-          replyText,
-          historyBeforeReply,
-          aiGlobalConfig.timeMode
-        );
-        const historyAfterFirst = firstMsg
-          ? [...historyBeforeReply, firstMsg]
-          : historyBeforeReply;
+      let rollingHistory = historyBeforeReply;
+      let lastSpeaker = resolution.responders[0];
+      let lastReplyText = '';
 
-        const secondSpeaker = pickAiFollowUpResponder(
-          firstSpeaker.id,
-          characters,
-          aiCharacterConfigs,
-          aiGlobalConfig,
-          Math.random,
-          members
-        );
-        if (secondSpeaker) {
-          setAiGeneratingName(secondSpeaker.name);
+      try {
+        for (const speaker of resolution.responders) {
+          if (controller.signal.aborted) {
+            break;
+          }
+          lastSpeaker = speaker;
+          setAiGeneratingName(speaker.name);
           try {
-            const followUpText = await requestAiCompletion({
-              targetCharacter: secondSpeaker,
-              charConfig: getAiCharacterConfig(aiCharacterConfigs, secondSpeaker.id),
+            const completion = await requestAiCompletion({
+              targetCharacter: speaker,
+              charConfig: getAiCharacterConfig(aiCharacterConfigs, speaker.id),
               globalConfig: aiGlobalConfig,
-              history: historyAfterFirst,
+              history: rollingHistory,
               allCharacters: characters,
+              members,
+              signal: controller.signal,
             });
-            appendAiCharacterReply(
+            if (controller.signal.aborted) {
+              break;
+            }
+            const nextMsg = appendAiCharacterReply(
               convId,
-              secondSpeaker,
-              followUpText,
-              historyAfterFirst,
-              aiGlobalConfig.timeMode
+              speaker,
+              completion.rawText,
+              rollingHistory,
+              aiGlobalConfig.timeMode,
+              completion.toolSentAt
             );
+            lastReplyText = nextMsg?.text ?? completion.rawText;
+            if (nextMsg) {
+              rollingHistory = [...rollingHistory, nextMsg];
+            }
           } catch (err) {
+            if (isAbortErr(err) || controller.signal.aborted) {
+              break;
+            }
             const reason = err instanceof Error ? err.message : 'Error';
-            showToast(t.aiToastRequestFailed(secondSpeaker.name, reason));
+            showToast(t.aiToastRequestFailed(speaker.name, reason));
           }
         }
-      } catch (err) {
-        const reason = err instanceof Error ? err.message : 'Error';
-        showToast(t.aiToastRequestFailed(firstSpeaker.name, reason));
+
+        if (!controller.signal.aborted && resolution.responders.length === 1) {
+          const secondSpeaker = pickAiFollowUpResponder(
+            lastSpeaker.id,
+            characters,
+            aiCharacterConfigs,
+            aiGlobalConfig,
+            Math.random,
+            members,
+            lastReplyText
+          );
+          if (secondSpeaker) {
+            setAiGeneratingName(secondSpeaker.name);
+            try {
+              const followUp = await requestAiCompletion({
+                targetCharacter: secondSpeaker,
+                charConfig: getAiCharacterConfig(aiCharacterConfigs, secondSpeaker.id),
+                globalConfig: aiGlobalConfig,
+                history: rollingHistory,
+                allCharacters: characters,
+                members,
+                signal: controller.signal,
+              });
+              if (!controller.signal.aborted) {
+                appendAiCharacterReply(
+                  convId,
+                  secondSpeaker,
+                  followUp.rawText,
+                  rollingHistory,
+                  aiGlobalConfig.timeMode,
+                  followUp.toolSentAt
+                );
+              }
+            } catch (err) {
+              if (!isAbortErr(err) && !controller.signal.aborted) {
+                const reason = err instanceof Error ? err.message : 'Error';
+                showToast(t.aiToastRequestFailed(secondSpeaker.name, reason));
+              }
+            }
+          }
+        }
       } finally {
+        if (aiAbortControllerRef.current === controller) {
+          aiAbortControllerRef.current = null;
+        }
         setAiGeneratingName(null);
         aiBusyRef.current = false;
       }
     },
     [aiCharacterConfigs, aiGlobalConfig, appendAiCharacterReply, characters, members, showToast, t]
   );
+
+  const runAutonomousCycle = useCallback(
+    async (lastSpeakerId?: string, overrideCfg?: AiAutoChatConfig) => {
+      if (!aiAutoChatRunningRef.current) {
+        return;
+      }
+      const ctx = latestAutoChatContextRef.current;
+      if (!ctx.isAiMode) {
+        stopAiAutoChat(false);
+        return;
+      }
+      const cfg = overrideCfg ?? ctx.aiAutoChatConfig;
+      const convId = ctx.aiActiveConversation.id;
+      let activeMembers = ctx.members;
+
+      if (cfg.randomPresence && lastSpeakerId !== undefined) {
+        const transition = pickRandomMemberPresenceTransition(
+          activeMembers,
+          ctx.characters,
+          ctx.aiCharacterConfigs,
+          ctx.aiGlobalConfig,
+          Math.random
+        );
+        if (transition.changedMember) {
+          activeMembers = transition.members;
+          setMembers(transition.members);
+          if (transition.kind === 'status' && transition.changedMember.status === 'offline') {
+            setOfflineExpanded(true);
+          } else if (transition.kind === 'status' && transition.changedMember.status === 'voice') {
+            setVoiceExpanded(true);
+          }
+        }
+      }
+
+      const picked = pickAiAutonomousSpeaker(
+        ctx.aiActiveConversation.messages,
+        lastSpeakerId,
+        ctx.characters,
+        ctx.aiCharacterConfigs,
+        ctx.aiGlobalConfig,
+        Math.random,
+        activeMembers
+      );
+      if (!picked.character) {
+        showToast(
+          picked.reason === 'none_online' ? ctx.t.aiToastAllOffline : ctx.t.aiToastNoConfiguredChar
+        );
+        stopAiAutoChat(false);
+        return;
+      }
+
+      const speaker = picked.character;
+      const controller = new AbortController();
+      aiAbortControllerRef.current = controller;
+      aiBusyRef.current = true;
+      setAiGeneratingName(speaker.name);
+      const nextSpeakerAnchor = speaker.id;
+
+      try {
+        const completion = await requestAiCompletion({
+          targetCharacter: speaker,
+          charConfig: getAiCharacterConfig(ctx.aiCharacterConfigs, speaker.id),
+          globalConfig: ctx.aiGlobalConfig,
+          history: ctx.aiActiveConversation.messages,
+          allCharacters: ctx.characters,
+          members: activeMembers,
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted || !aiAutoChatRunningRef.current) {
+          return;
+        }
+        appendAiCharacterReply(
+          convId,
+          speaker,
+          completion.rawText,
+          ctx.aiActiveConversation.messages,
+          ctx.aiGlobalConfig.timeMode,
+          completion.toolSentAt
+        );
+      } catch (err) {
+        if (isAbortErr(err) || controller.signal.aborted || !aiAutoChatRunningRef.current) {
+          return;
+        }
+        const reason = err instanceof Error ? err.message : 'Error';
+        showToast(ctx.t.aiToastRequestFailed(speaker.name, reason));
+      } finally {
+        if (aiAbortControllerRef.current === controller) {
+          aiAbortControllerRef.current = null;
+        }
+        aiBusyRef.current = false;
+        setAiGeneratingName(null);
+      }
+
+      if (!aiAutoChatRunningRef.current) {
+        return;
+      }
+      const latestCfg = latestAutoChatContextRef.current.aiAutoChatConfig;
+      const delayMs = Math.max(2, Math.min(20, latestCfg.intervalSec)) * 1000;
+      aiAutoChatTimerRef.current = window.setTimeout(() => {
+        aiAutoChatTimerRef.current = null;
+        void runAutonomousCycle(nextSpeakerAnchor);
+      }, delayMs);
+    },
+    [appendAiCharacterReply, showToast, stopAiAutoChat]
+  );
+
+  const handleStartAiAutoChat = useCallback(
+    (nextCfg: AiAutoChatConfig) => {
+      setAiAutoChatConfig(nextCfg);
+      const onlineEligible = getEligibleAiCharacters(
+        characters,
+        aiCharacterConfigs,
+        aiGlobalConfig,
+        members
+      );
+      if (onlineEligible.length === 0) {
+        const configuredAny = getEligibleAiCharacters(characters, aiCharacterConfigs, aiGlobalConfig);
+        showToast(configuredAny.length > 0 ? t.aiToastAllOffline : t.aiToastNoConfiguredChar);
+        return;
+      }
+      if (aiBusyRef.current) {
+        showToast(t.aiToastBusy);
+        return;
+      }
+      setAiAutoChatOpen(false);
+      if (aiAutoChatTimerRef.current !== null) {
+        window.clearTimeout(aiAutoChatTimerRef.current);
+        aiAutoChatTimerRef.current = null;
+      }
+      aiAutoChatRunningRef.current = true;
+      setAiAutoChatRunning(true);
+      showToast(t.aiAutoChatToastStarted);
+      void runAutonomousCycle(undefined, nextCfg);
+    },
+    [
+      aiCharacterConfigs,
+      aiGlobalConfig,
+      characters,
+      members,
+      runAutonomousCycle,
+      showToast,
+      t.aiAutoChatToastStarted,
+      t.aiToastAllOffline,
+      t.aiToastBusy,
+      t.aiToastNoConfiguredChar,
+    ]
+  );
+
+  const handleAiContinueTurn = useCallback(async () => {
+    if (!isAiMode) {
+      return;
+    }
+    if (aiBusyRef.current) {
+      showToast(t.aiToastBusy);
+      return;
+    }
+    const conv = activeConversation;
+    const lastNonUser = [...conv.messages]
+      .reverse()
+      .find((m) => m.memberId !== '__user__')?.memberId;
+    const picked = pickAiContinueResponder(
+      lastNonUser,
+      characters,
+      aiCharacterConfigs,
+      aiGlobalConfig,
+      Math.random,
+      members
+    );
+    if (!picked.character) {
+      showToast(
+        picked.reason === 'none_online' ? t.aiToastAllOffline : t.aiToastNoConfiguredChar
+      );
+      return;
+    }
+    const speaker = picked.character;
+    const controller = new AbortController();
+    aiAbortControllerRef.current = controller;
+    aiBusyRef.current = true;
+    setAiGeneratingName(speaker.name);
+    try {
+      const completion = await requestAiCompletion({
+        targetCharacter: speaker,
+        charConfig: getAiCharacterConfig(aiCharacterConfigs, speaker.id),
+        globalConfig: aiGlobalConfig,
+        history: conv.messages,
+        allCharacters: characters,
+        members,
+        signal: controller.signal,
+      });
+      if (!controller.signal.aborted) {
+        appendAiCharacterReply(
+          conv.id,
+          speaker,
+          completion.rawText,
+          conv.messages,
+          aiGlobalConfig.timeMode,
+          completion.toolSentAt
+        );
+      }
+    } catch (err) {
+      if (!isAbortErr(err) && !controller.signal.aborted) {
+        const reason = err instanceof Error ? err.message : 'Error';
+        showToast(t.aiToastRequestFailed(speaker.name, reason));
+      }
+    } finally {
+      if (aiAbortControllerRef.current === controller) {
+        aiAbortControllerRef.current = null;
+      }
+      setAiGeneratingName(null);
+      aiBusyRef.current = false;
+    }
+  }, [
+    activeConversation,
+    aiCharacterConfigs,
+    aiGlobalConfig,
+    appendAiCharacterReply,
+    characters,
+    isAiMode,
+    members,
+    showToast,
+    t,
+  ]);
 
   const handleRegenerateMessage = useCallback(
     async (messageId: string) => {
@@ -1000,26 +1420,36 @@ export default function App({ actions }: AppProps) {
           showToast(t.aiToastTargetMissingKey(speaker.name));
           return;
         }
+        const controller = new AbortController();
+        aiAbortControllerRef.current = controller;
         aiBusyRef.current = true;
         setAiGeneratingName(speaker.name);
         try {
-          const nextReply = await requestAiCompletion({
+          const completion = await requestAiCompletion({
             targetCharacter: speaker,
             charConfig: getAiCharacterConfig(aiCharacterConfigs, speaker.id),
             globalConfig: aiGlobalConfig,
             history: target.historyBeforeTarget,
             allCharacters: characters,
+            members,
+            signal: controller.signal,
           });
+          if (controller.signal.aborted) {
+            return;
+          }
           const now = new Date();
           const prevDt = getLastMessageDateTime(target.historyBeforeTarget, now);
-          const parsed = parseAiModelOutput(nextReply, speaker.name, prevDt, now);
+          const parsed = parseAiModelOutput(completion.rawText, speaker.name, prevDt, now);
           if (!parsed.text && !parsed.fileMedia) {
             throw new Error('EMPTY_RESPONSE');
           }
-          const resolvedTime =
-            aiGlobalConfig.timeMode === 'ai_inferred' && parsed.inferredSentAt
-              ? resolveClampedOutgoingTimestamp(target.historyBeforeTarget, parsed.inferredSentAt, now)
+          const preferredDt =
+            aiGlobalConfig.timeMode === 'ai_inferred'
+              ? (completion.toolSentAt ?? parsed.inferredSentAt)
               : null;
+          const resolvedTime = preferredDt
+            ? resolveClampedOutgoingTimestamp(target.historyBeforeTarget, preferredDt, now)
+            : null;
           setAiConversations((prev) =>
             prev.map((item) =>
               item.id === conv.id
@@ -1047,9 +1477,14 @@ export default function App({ actions }: AppProps) {
           );
           showToast(t.toastMessageUpdated);
         } catch (err) {
-          const reason = err instanceof Error ? err.message : 'Error';
-          showToast(t.aiToastRequestFailed(speaker.name, reason));
+          if (!isAbortErr(err) && !controller.signal.aborted) {
+            const reason = err instanceof Error ? err.message : 'Error';
+            showToast(t.aiToastRequestFailed(speaker.name, reason));
+          }
         } finally {
+          if (aiAbortControllerRef.current === controller) {
+            aiAbortControllerRef.current = null;
+          }
           setAiGeneratingName(null);
           aiBusyRef.current = false;
         }
@@ -1108,6 +1543,7 @@ export default function App({ actions }: AppProps) {
         activeCharacterId: activeCharacter.id,
         aiCharacterConfigs,
         aiGlobalConfig,
+        lang,
         media,
       };
       const jsonBlob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -1134,6 +1570,21 @@ export default function App({ actions }: AppProps) {
     }
   };
 
+  const handleExportAiTranscript = () => {
+    const content = formatAiConversationTranscript(aiActiveConversation);
+    const txtBlob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(txtBlob);
+    const a = document.createElement('a');
+    const safeTitle = (aiActiveConversation.title || 'nightcord-ai').replace(/[/\\:*?"<>|]/g, '_');
+    a.href = url;
+    a.download = `${safeTitle}-ai-chat.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(t.aiToastTranscriptExported);
+  };
+
   const handleImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -1151,11 +1602,16 @@ export default function App({ actions }: AppProps) {
         const blob = base64ToBlob(entry.dataBase64, entry.mimeType);
         await saveLocalMediaBlob(mediaId, blob);
       }
+      stopAiAutoChat(false);
       stopPlayback();
       setAiCharModalTargetId(null);
       setAiGlobalModalOpen(false);
+      setAiAutoChatOpen(false);
+      setPendingCopyAiToMain(null);
       setConversations(parsed.conversations);
+      let importedAiCount = 0;
       if (parsed.aiConversations && parsed.aiConversations.length > 0) {
+        importedAiCount = parsed.aiConversations.length;
         setAiConversations(parsed.aiConversations);
         const importedAiActive =
           parsed.activeAiConversationId &&
@@ -1170,26 +1626,33 @@ export default function App({ actions }: AppProps) {
       if (parsed.aiGlobalConfig) {
         setAiGlobalConfig(parsed.aiGlobalConfig);
       }
+      if (parsed.lang) {
+        setLang(parsed.lang);
+      }
       setCharacters(parsed.characters);
       setMembers(parsed.members);
       setActiveConversationId(parsed.activeConversationId);
       setActiveCharacterId(parsed.activeCharacterId);
       setServerMenuOpen(false);
       setMobileSidebarOpen(false);
-      const nextActive =
-        parsed.conversations.find((c) => c.id === parsed.activeConversationId) ??
-        parsed.conversations[0];
+      const nextActive = isAiMode && parsed.aiConversations?.length
+        ? (parsed.aiConversations.find((c) => c.id === parsed.activeAiConversationId) ??
+          parsed.aiConversations[0])
+        : (parsed.conversations.find((c) => c.id === parsed.activeConversationId) ??
+          parsed.conversations[0]);
       setCustomTime({
         enabled: false,
         ...getSuggestedCustomTime(nextActive.messages),
       });
-      showToast(t.toastImportSuccess(parsed.conversations.length));
+      const nextUiText = getUiText(parsed.lang ?? lang);
+      showToast(nextUiText.toastImportSuccess(parsed.conversations.length, importedAiCount));
     } catch {
       showToast(t.toastImportInvalid);
     }
   };
 
   const handleConfirmClearCache = async () => {
+    stopAiAutoChat(false);
     stopPlayback();
     await clearLocalCacheData();
     const initialConvs = createInitialConversations();
@@ -1200,6 +1663,9 @@ export default function App({ actions }: AppProps) {
     setActiveAiConversationId(AI_TEMPLATE_CONVERSATION_ID);
     setAiCharacterConfigs({});
     setAiGlobalConfig({ ...DEFAULT_AI_GLOBAL_CONFIG });
+    setAiAutoChatConfig({ ...DEFAULT_AI_AUTO_CHAT_CONFIG });
+    setAiAutoChatOpen(false);
+    setPendingCopyAiToMain(null);
     setCharacters(INITIAL_CHARACTERS);
     setActiveCharacterId(INITIAL_CHARACTERS[0].id);
     setMembers(INITIAL_VOICE_MEMBERS);
@@ -1294,7 +1760,7 @@ export default function App({ actions }: AppProps) {
     sentAt: MessageDateTime
   ) => {
     const now = new Date();
-    setConversations((prev) =>
+    const updater = (prev: Conversation[]) =>
       prev.map((conv) => {
         if (conv.id !== activeConversation.id) {
           return conv;
@@ -1312,8 +1778,12 @@ export default function App({ actions }: AppProps) {
           messages: hydratedMessages,
           statusEvents: events,
         };
-      })
-    );
+      });
+    if (isAiMode) {
+      setAiConversations(updater);
+    } else {
+      setConversations(updater);
+    }
     const statusLabel =
       status === 'online'
         ? t.statusOnlineBtn
@@ -1396,6 +1866,7 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleOpenTemplatePage = () => {
+    stopAiAutoChat(false);
     stopPlayback();
     setServerMenuOpen(false);
     setMobileSidebarOpen(false);
@@ -1500,7 +1971,7 @@ export default function App({ actions }: AppProps) {
   };
 
   const openPendingUpload = (file: File | undefined, forcedKind?: FileMediaKind) => {
-    if (!file || mode !== 'studio') {
+    if (!file || (mode !== 'studio' && !isAiMode)) {
       return;
     }
     setPendingUpload({ file, forcedKind });
@@ -1536,14 +2007,42 @@ export default function App({ actions }: AppProps) {
     kind: FileMediaKind;
     displayMode: 'card' | 'image';
   }) => {
-    const resolved = resolveOutgoingTimestamp(activeConversation.messages, customTime);
-    if (!resolved.ok) {
-      showToast(t.timeEarlierError(resolved.minTimestamp));
+    if (isAiMode && aiBusyRef.current) {
+      showToast(t.aiToastBusy);
       return;
+    }
+    const now = new Date();
+    let resolvedStamp: { timestamp: string; sentAt: MessageDateTime; dividerBefore?: string };
+    if (isAiMode) {
+      resolvedStamp = resolveClampedOutgoingTimestamp(activeConversation.messages, undefined, now);
+    } else {
+      const checked = resolveOutgoingTimestamp(activeConversation.messages, customTime, now);
+      if (!checked.ok) {
+        showToast(t.timeEarlierError(checked.minTimestamp));
+        return;
+      }
+      resolvedStamp = checked;
     }
     const mediaId = `${options.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     await saveLocalMediaBlob(mediaId, options.file);
+    let textPreview: string | undefined;
+    if (options.kind === 'text') {
+      const rawText = await options.file.text().catch(() => '');
+      const sliced = rawText.slice(0, 4000).trim();
+      if (sliced) {
+        textPreview = sliced;
+      }
+    }
     const meta = formatNightcordFileMeta(options.file.size, options.filename, options.kind);
+    const sender: CharacterProfile = isAiMode
+      ? {
+          id: '__user__',
+          name: aiGlobalConfig.userDisplayName.trim() || 'あなた',
+          avatarType: aiGlobalConfig.userAvatar || 'k',
+          customAvatarMediaId: aiGlobalConfig.userAvatarMediaId,
+        }
+      : activeCharacter;
+    const caption = inputValue;
     const msg = createFileMessage(
       {
         mediaId,
@@ -1552,21 +2051,30 @@ export default function App({ actions }: AppProps) {
         sizeLabel: meta.sizeLabel,
         fileType: meta.fileType,
         displayMode: options.kind === 'image' ? options.displayMode : 'card',
+        ...(textPreview ? { textPreview } : {}),
       },
-      activeCharacter,
-      inputValue,
-      new Date(),
+      sender,
+      caption,
+      now,
       {
-        timestamp: resolved.timestamp,
-        sentAt: resolved.sentAt,
-        dividerBefore: resolved.dividerBefore,
+        timestamp: resolvedStamp.timestamp,
+        sentAt: resolvedStamp.sentAt,
+        dividerBefore: resolvedStamp.dividerBefore,
       }
     );
+    const updatedHistory = [...activeConversation.messages, msg];
     appendMessageToActive(msg);
     setInputValue('');
     setPendingUpload(null);
     invokeAction(actionsRef.current, 'onSendMessage', msg.text ?? '', msg);
     showToast(t.toastFileSaved);
+    if (isAiMode) {
+      void runAiReplyTurn(
+        activeConversation.id,
+        updatedHistory,
+        `${caption} ${options.filename}`.trim()
+      );
+    }
   };
 
   const handleMentionCharacter = (name: string) => {
@@ -1598,7 +2106,7 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleAttachClick = () => {
-    if (mode !== 'studio') {
+    if (mode !== 'studio' && !isAiMode) {
       return;
     }
     invokeAction(actionsRef.current, 'onAttachClick');
@@ -1657,11 +2165,25 @@ export default function App({ actions }: AppProps) {
           <button
             type="button"
             data-action="mode-immersive"
-            aria-label="没入モード"
-            aria-pressed={mode === 'immersive'}
-            title="没入モード"
+            aria-label={
+              isAiMode
+                ? aiAutoChatRunning
+                  ? t.aiAutoChatHeaderStopBtn
+                  : t.aiAutoChatModalTitle
+                : '没入モード'
+            }
+            aria-pressed={isAiMode ? aiAutoChatRunning : mode === 'immersive'}
+            title={
+              isAiMode
+                ? aiAutoChatRunning
+                  ? t.aiAutoChatHeaderStopBtn
+                  : t.aiAutoChatModalTitle
+                : '没入モード'
+            }
             onClick={handleSwitchImmersiveMode}
-            className="h-[11px] w-[11px] cursor-pointer rounded-full bg-[#F6CE71] transition-transform hover:scale-110 hover:brightness-110"
+            className={`h-[11px] w-[11px] cursor-pointer rounded-full bg-[#F6CE71] transition-transform hover:scale-110 hover:brightness-110 ${
+              isAiMode && aiAutoChatRunning ? 'animate-pulse ring-2 ring-[#F6CE71]/55' : ''
+            }`}
           />
           <button
             type="button"
@@ -1727,6 +2249,7 @@ export default function App({ actions }: AppProps) {
           onOpenTemplatePage={handleOpenTemplatePage}
           onOpenAiMode={handleOpenAiMode}
           onExitAiMode={handleExitAiMode}
+          onCopyAiToMain={handleCopyAiToMain}
           onOpenMemberAiSettings={(member) => {
             setAiCharModalTargetId(member.id);
           }}
@@ -1737,6 +2260,7 @@ export default function App({ actions }: AppProps) {
           mode={mode}
           aiMode={isAiMode}
           aiGeneratingName={aiGeneratingName}
+          aiAutoChatRunning={aiAutoChatRunning}
           aiReadyCount={aiReadyMemberIds.size}
           messages={displayedMessages}
           isPlaying={playbackConfig !== null}
@@ -1753,8 +2277,10 @@ export default function App({ actions }: AppProps) {
           onDeleteMessage={handleDeleteMessage}
           onEditMessage={handleEditMessage}
           onRegenerateMessage={handleRegenerateMessage}
+          onContinueAi={handleAiContinueTurn}
+          onStopAi={handleStopAiGeneration}
+          onStopAiAutoChat={() => stopAiAutoChat(true)}
           onOpenAiGlobalSettings={() => setAiGlobalModalOpen(true)}
-          onOpenAiGuide={() => setShowAiOnboarding(true)}
           onAvatarClick={handleAvatarClick}
           onFileDownload={handleFileDownload}
           onMentionCharacter={handleMentionCharacter}
@@ -1847,6 +2373,7 @@ export default function App({ actions }: AppProps) {
         members={members}
         characterConfigs={aiCharacterConfigs}
         onClose={() => setAiGlobalModalOpen(false)}
+        onExportAiTranscript={handleExportAiTranscript}
         onSave={(nextGlobal, nextCharConfigs) => {
           setAiGlobalConfig(nextGlobal);
           setAiCharacterConfigs(nextCharConfigs);
@@ -1867,6 +2394,25 @@ export default function App({ actions }: AppProps) {
           );
           showToast(t.toastAiGlobalSaved);
         }}
+      />
+
+      <AiAutoChatModal
+        open={aiAutoChatOpen}
+        lang={lang}
+        initialConfig={aiAutoChatConfig}
+        readyCount={aiReadyMemberIds.size}
+        totalCount={characters.length}
+        onClose={() => setAiAutoChatOpen(false)}
+        onStart={handleStartAiAutoChat}
+      />
+
+      <CopyAiToMainModal
+        open={pendingCopyAiToMain !== null}
+        lang={lang}
+        suggestedTitle={pendingCopyAiToMain?.suggestedTitle ?? ''}
+        messageCount={pendingCopyAiToMain?.messages.length ?? 0}
+        onCancel={() => setPendingCopyAiToMain(null)}
+        onConfirm={handleConfirmCopyAiToMain}
       />
 
       <div

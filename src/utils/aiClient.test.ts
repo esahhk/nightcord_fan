@@ -5,23 +5,35 @@ import {
   DEFAULT_AI_GLOBAL_CONFIG,
   buildAiChatPayload,
   createDefaultAiCharacterConfig,
+  describeMemberPresenceStatus,
   editMessageText,
   extractMentionedCharacters,
+  formatAiConversationTranscript,
   getAiCharacterConfig,
   getEligibleAiCharacters,
+  getNightcordCharacterPresetPrompt,
   isMemberOnlineForAi,
   normalizeAiEndpoint,
   parseAiDateTimeTag,
   parseAiModelOutput,
+  pickAiAutonomousSpeaker,
+  pickAiContinueResponder,
   pickAiFollowUpResponder,
+  pickRandomMemberPresenceTransition,
   prepareRegenerateTarget,
+  requestAiCompletion,
   resolveAiResponder,
+  resolveAiResponders,
   resolveEffectiveAiCredentials,
+  sanitizeAiCharacterConfigs,
+  sanitizeAiGlobalConfig,
   stripSpeakerPrefix,
+  testAiConnection,
 } from './aiClient';
 import {
   INITIAL_CHARACTERS,
   INITIAL_VOICE_MEMBERS,
+  createFileMessage,
   createOutgoingMessage,
   setMemberPresenceStatus,
 } from './nightcordState';
@@ -413,8 +425,9 @@ test('buildAiChatPayload injects worldview/userPersona/timeMode and parseAiModel
   assert.ok(payload.systemInstruction.includes('25時にナイトコードで作業中の世界線'));
   assert.ok(payload.systemInstruction.includes('歌詞を担当しているメンバー'));
   assert.ok(payload.systemInstruction.includes('[[FILE:'));
-  assert.ok(payload.systemInstruction.includes('[[TIME:YYYY-MM-DD HH:mm]]'));
+  assert.ok(payload.systemInstruction.includes('set_send_time'));
   assert.ok(payload.systemInstruction.includes('2026/11/22 1:36'));
+  assert.equal(payload.turns.some((t) => t.content.includes('(2026/11/22')), false);
 
   const validTag = parseAiDateTimeTag('2026-11-22 02:05', prevDt, baseNow);
   assert.deepEqual(validTag, { year: 2026, month: 11, day: 22, hour: 2, minute: 5 });
@@ -442,5 +455,531 @@ test('buildAiChatPayload injects worldview/userPersona/timeMode and parseAiModel
   assert.equal(parsedWithFile.fileMedia.filename, 'nightcord_demo_01.mp3');
   assert.equal(parsedWithFile.fileMedia.sizeLabel, '4MB MP3');
   assert.equal(parsedWithFile.fileMedia.fileType, 'MP3');
+});
+
+test('resolveAiResponders queues multiple @mentions sequentially and reports offline/missing-key skips', () => {
+  const configs: Record<string, AiCharacterConfig> = {
+    k: { ...createDefaultAiCharacterConfig(), apiKey: 'k-key' },
+    enanan: { ...createDefaultAiCharacterConfig(), apiKey: 'ena-key' },
+  };
+  const globalOff: AiGlobalConfig = { ...DEFAULT_AI_GLOBAL_CONFIG, useGlobalApi: false };
+  const members = setMemberPresenceStatus(INITIAL_VOICE_MEMBERS, 'enanan', 'offline').members;
+
+  const multi = resolveAiResponders(
+    '@K @えななん @雪 @Amia',
+    INITIAL_CHARACTERS,
+    configs,
+    globalOff,
+    () => 0,
+    members
+  );
+  assert.deepEqual(
+    multi.responders.map((c) => c.id),
+    ['k']
+  );
+  assert.deepEqual(
+    multi.offlineMentioned.map((c) => c.id),
+    ['enanan']
+  );
+  assert.deepEqual(
+    multi.missingKeyMentioned.map((c) => c.id),
+    ['yuki', 'amia']
+  );
+
+  const twoReady = resolveAiResponders(
+    '@Amia と @K',
+    INITIAL_CHARACTERS,
+    {
+      ...configs,
+      amia: { ...createDefaultAiCharacterConfig(), apiKey: 'amia-key' },
+    },
+    globalOff,
+    () => 0
+  );
+  assert.deepEqual(
+    twoReady.responders.map((c) => c.id),
+    ['amia', 'k']
+  );
+});
+
+test('pickAiContinueResponder avoids repeating lastSpeakerId when possible and falls back safely', () => {
+  const configs: Record<string, AiCharacterConfig> = {
+    k: { ...createDefaultAiCharacterConfig(), apiKey: 'k-key' },
+    yuki: { ...createDefaultAiCharacterConfig(), apiKey: 'y-key' },
+  };
+  const globalOff: AiGlobalConfig = { ...DEFAULT_AI_GLOBAL_CONFIG, useGlobalApi: false };
+
+  const pickedOther = pickAiContinueResponder('k', INITIAL_CHARACTERS, configs, globalOff, () => 0);
+  assert.equal(pickedOther.character?.id, 'yuki');
+
+  const onlyKConfigs: Record<string, AiCharacterConfig> = {
+    k: { ...createDefaultAiCharacterConfig(), apiKey: 'k-key' },
+  };
+  const fallbackSame = pickAiContinueResponder(
+    'k',
+    INITIAL_CHARACTERS,
+    onlyKConfigs,
+    globalOff,
+    () => 0
+  );
+  assert.equal(fallbackSame.character?.id, 'k');
+
+  const allOfflineMembers = INITIAL_VOICE_MEMBERS.map((m) => ({
+    ...m,
+    online: false,
+    status: 'offline' as const,
+  }));
+  const noneOnline = pickAiContinueResponder(
+    'k',
+    INITIAL_CHARACTERS,
+    onlyKConfigs,
+    globalOff,
+    () => 0,
+    allOfflineMembers
+  );
+  assert.equal(noneOnline.character, null);
+  assert.equal(noneOnline.reason, 'none_online');
+
+  const noneConfigured = pickAiContinueResponder('k', INITIAL_CHARACTERS, {}, globalOff, () => 0);
+  assert.equal(noneConfigured.character, null);
+  assert.equal(noneConfigured.reason, 'none_configured');
+});
+
+test('getNightcordCharacterPresetPrompt and sanitizeAiGlobalConfig / sanitizeAiCharacterConfigs enforce valid ranges', () => {
+  assert.ok(getNightcordCharacterPresetPrompt('k', 'K', 'ja').includes('宵崎奏'));
+  assert.ok(getNightcordCharacterPresetPrompt('yuki', '雪', 'zh').includes('真冬'));
+  assert.ok(getNightcordCharacterPresetPrompt('enanan', 'えななん', 'en').includes('Ena'));
+  assert.ok(getNightcordCharacterPresetPrompt('custom-1', 'ミク', 'zh').includes('ミク'));
+
+  const g = sanitizeAiGlobalConfig({
+    protocol: 'deepseek',
+    temperature: 99,
+    replyLength: 'short',
+    userAvatar: 'amia',
+  });
+  assert.equal(g.protocol, 'deepseek');
+  assert.equal(g.temperature, 1.5);
+  assert.equal(g.replyLength, 'short');
+  assert.equal(g.userAvatar, 'amia');
+
+  const cMap = sanitizeAiCharacterConfigs({
+    k: {
+      protocol: 'gemini',
+      temperature: -2,
+      apiKey: 'gk',
+    },
+  });
+  assert.equal(cMap.k.protocol, 'gemini');
+  assert.equal(cMap.k.temperature, 0);
+  assert.equal(cMap.k.apiKey, 'gk');
+});
+
+test('buildAiChatPayload respects replyLength & textPreview, formatAiConversationTranscript exports text, and editMessageText clears caption on media', () => {
+  const baseNow = new Date(2026, 10, 22, 2, 0);
+  const k = INITIAL_CHARACTERS[0];
+  const fileMsg = createFileMessage(
+    {
+      mediaId: 'txt-1',
+      kind: 'text',
+      filename: 'draft.txt',
+      sizeLabel: '1KB テキスト',
+      fileType: 'TXT',
+      displayMode: 'card',
+      textPreview: '深夜二時、静かなコード',
+    },
+    k,
+    'これ確認して',
+    baseNow
+  );
+
+  const shortPayload = buildAiChatPayload(k, [fileMsg], '', INITIAL_CHARACTERS, {
+    replyLength: 'short',
+    now: baseNow,
+  });
+  assert.ok(shortPayload.systemInstruction.includes('1–2 crisp Nightcord chat sentences'));
+  assert.ok(
+    shortPayload.turns.some((t) => t.content.includes('深夜二時、静かなコード'))
+  );
+
+  const detailedPayload = buildAiChatPayload(k, [fileMsg], '', INITIAL_CHARACTERS, {
+    replyLength: 'detailed',
+    now: baseNow,
+  });
+  assert.ok(detailedPayload.systemInstruction.includes('3–5 sentences'));
+
+  const clearedFileList = editMessageText([fileMsg], fileMsg.id, '   ');
+  assert.equal(clearedFileList[0].text, undefined);
+  assert.ok(clearedFileList[0].fileMedia);
+
+  const transcript = formatAiConversationTranscript({
+    id: 'ai-1',
+    title: 'ナイトコード会議',
+    messages: [{ ...fileMsg, dividerBefore: '今日' }],
+  });
+  assert.ok(transcript.includes('# ナイトコード会議'));
+  assert.ok(transcript.includes('--- 今日 ---'));
+  assert.ok(transcript.includes('これ確認して [File: draft.txt (1KB テキスト)]'));
+});
+
+test('testAiConnection validates empty key, success latency, HTTP error, and network error', async () => {
+  const emptyRes = await testAiConnection('openai', '', '   ', 'gpt-4o-mini');
+  assert.equal(emptyRes.ok, false);
+  assert.equal(emptyRes.detail, 'NO_API_KEY');
+
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ id: 'chatcmpl-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })) as typeof fetch;
+    const okRes = await testAiConnection('deepseek', '', 'sk-live', 'deepseek-chat');
+    assert.equal(okRes.ok, true);
+    assert.ok(okRes.latencyMs >= 1);
+    assert.equal(okRes.detail, 'deepseek-chat');
+
+    globalThis.fetch = (async () =>
+      new Response('invalid api key', {
+        status: 401,
+      })) as typeof fetch;
+    const errRes = await testAiConnection('openai', '', 'sk-bad', 'gpt-4o-mini');
+    assert.equal(errRes.ok, false);
+    assert.ok(errRes.detail.startsWith('HTTP 401'));
+
+    globalThis.fetch = (async () => {
+      throw new TypeError('Failed to fetch');
+    }) as typeof fetch;
+    const netRes = await testAiConnection('openai', '', 'sk-net', 'gpt-4o-mini');
+    assert.equal(netRes.ok, false);
+    assert.ok(netRes.detail.includes('Failed to fetch'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('buildAiChatPayload injects voice/muted/text/offline member states, webSearch rule, and strips leaked time prefixes', () => {
+  const baseNow = new Date(2026, 10, 24, 1, 20);
+  let members = setMemberPresenceStatus(INITIAL_VOICE_MEMBERS, 'k', 'voice').members;
+  members = members.map((m) => (m.id === 'yuki' ? { ...m, status: 'voice', online: true, muted: true } : m));
+  members = setMemberPresenceStatus(members, 'enanan', 'online').members;
+  members = setMemberPresenceStatus(members, 'amia', 'offline').members;
+
+  assert.ok(describeMemberPresenceStatus(members[0]).includes('Voice call'));
+  assert.ok(describeMemberPresenceStatus(members[1]).includes('muted'));
+  assert.ok(describeMemberPresenceStatus(members[2]).includes('text chat only'));
+  assert.equal(describeMemberPresenceStatus(members[3]), 'Offline');
+
+  const k = INITIAL_CHARACTERS[0];
+  const prevMsg = {
+    ...createOutgoingMessage('みんな作業進んでる？', k, baseNow)!,
+    sentAt: { year: 2026, month: 11, day: 24, hour: 1, minute: 20 },
+  };
+  const payload = buildAiChatPayload(k, [prevMsg], '', INITIAL_CHARACTERS, {
+    members,
+    webSearchEnabled: true,
+    timeMode: 'ai_inferred',
+    now: baseNow,
+  });
+
+  assert.ok(payload.systemInstruction.includes('Current room member presence & voice/mute status'));
+  assert.ok(payload.systemInstruction.includes('Voice call (mic muted'));
+  assert.ok(payload.systemInstruction.includes('Online (text chat only'));
+  assert.ok(payload.systemInstruction.includes('Offline'));
+  assert.ok(payload.systemInstruction.includes('Web search is enabled'));
+  assert.ok(payload.systemInstruction.includes('Contextual file sharing'));
+  assert.equal(payload.turns.some((turn) => turn.content.includes('(2026/11/24')), false);
+
+  const prevDt = { year: 2026, month: 11, day: 24, hour: 1, minute: 20 };
+  const strippedParen = parseAiModelOutput(
+    '(2026/11/24 01:35) 今ちょうどサビのミックス書き出したところ。',
+    'K',
+    prevDt,
+    baseNow
+  );
+  assert.equal(strippedParen.text, '今ちょうどサビのミックス書き出したところ。');
+  assert.deepEqual(strippedParen.inferredSentAt, {
+    year: 2026,
+    month: 11,
+    day: 24,
+    hour: 1,
+    minute: 35,
+  });
+
+  const strippedSingleBracket = parseAiModelOutput(
+    '[TIME: 2026-11-24 01:42] えななん、ラフもうちょい待てる？',
+    'K',
+    prevDt,
+    baseNow
+  );
+  assert.equal(strippedSingleBracket.text, 'えななん、ラフもうちょい待てる？');
+  assert.deepEqual(strippedSingleBracket.inferredSentAt, {
+    year: 2026,
+    month: 11,
+    day: 24,
+    hour: 1,
+    minute: 42,
+  });
+
+  const strippedFullwidth = parseAiModelOutput(
+    '【TIME：2026-11-24 01:48】了解。すぐ送る。',
+    'K',
+    prevDt,
+    baseNow
+  );
+  assert.equal(strippedFullwidth.text, '了解。すぐ送る。');
+  assert.equal(strippedFullwidth.inferredSentAt?.minute, 48);
+
+  const g = sanitizeAiGlobalConfig({ webSearchEnabled: true });
+  assert.equal(g.webSearchEnabled, true);
+});
+
+test('pickAiAutonomousSpeaker prioritizes @mentions and pickRandomMemberPresenceTransition keeps >= 1 configured member online', () => {
+  const configs: Record<string, AiCharacterConfig> = {
+    k: { ...createDefaultAiCharacterConfig(), apiKey: 'k-key' },
+    enanan: { ...createDefaultAiCharacterConfig(), apiKey: 'ena-key' },
+  };
+  const globalOff: AiGlobalConfig = {
+    ...DEFAULT_AI_GLOBAL_CONFIG,
+    useGlobalApi: false,
+    aiFollowUpEnabled: true,
+    aiFollowUpProbability: 100,
+  };
+  const baseNow = new Date(2026, 10, 24, 1, 30);
+  const msgWithMention = createOutgoingMessage('@えななん この配色どう思う？', INITIAL_CHARACTERS[0], baseNow)!;
+
+  const pickedMention = pickAiAutonomousSpeaker(
+    [msgWithMention],
+    'k',
+    INITIAL_CHARACTERS,
+    configs,
+    globalOff,
+    () => 0.9,
+    INITIAL_VOICE_MEMBERS
+  );
+  assert.equal(pickedMention.character?.id, 'enanan');
+
+  const followMention = pickAiFollowUpResponder(
+    'k',
+    INITIAL_CHARACTERS,
+    configs,
+    globalOff,
+    () => 0,
+    INITIAL_VOICE_MEMBERS,
+    '@えななん ねえ聞いて'
+  );
+  assert.equal(followMention?.id, 'enanan');
+
+  let singleOnlineMembers = setMemberPresenceStatus(INITIAL_VOICE_MEMBERS, 'enanan', 'offline').members;
+  singleOnlineMembers = setMemberPresenceStatus(singleOnlineMembers, 'yuki', 'offline').members;
+  singleOnlineMembers = setMemberPresenceStatus(singleOnlineMembers, 'amia', 'offline').members;
+  singleOnlineMembers = setMemberPresenceStatus(singleOnlineMembers, 'k', 'online').members;
+
+  const transition = pickRandomMemberPresenceTransition(
+    singleOnlineMembers,
+    INITIAL_CHARACTERS,
+    configs,
+    globalOff,
+    () => 0
+  );
+  const kAfter = transition.members.find((m) => m.id === 'k');
+  assert.ok(kAfter);
+  assert.notEqual(kAfter.status, 'offline');
+});
+
+test('requestAiCompletion executes set_send_time tool calls, web_search loops, HTTP 400 fallback, Gemini, and Anthropic', async () => {
+  const originalFetch = globalThis.fetch;
+  const k = INITIAL_CHARACTERS[0];
+  const baseNow = new Date(2026, 10, 24, 1, 0);
+  const userMsg = {
+    ...createOutgoingMessage('今の天気と進捗どう？', k, baseNow)!,
+    memberId: '__user__',
+    username: 'あなた',
+    sentAt: { year: 2026, month: 11, day: 24, hour: 1, minute: 0 },
+  };
+  const baseGlobal: AiGlobalConfig = {
+    ...DEFAULT_AI_GLOBAL_CONFIG,
+    useGlobalApi: true,
+    apiKey: 'sk-global',
+    timeMode: 'ai_inferred',
+    webSearchEnabled: true,
+  };
+
+  try {
+    let oaStep = 0;
+    const seenUrls: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      seenUrls.push(url);
+      if (url.includes('wikipedia.org/w/api.php')) {
+        return new Response(
+          JSON.stringify({
+            query: {
+              search: [{ title: 'Nightcord', snippet: 'Late-night music creation circle.' }],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      oaStep += 1;
+      const bodyObj = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+      if (oaStep === 1) {
+        assert.ok(Array.isArray(bodyObj.tools));
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: null,
+                  tool_calls: [
+                    {
+                      id: 'call_time_1',
+                      type: 'function',
+                      function: {
+                        name: 'set_send_time',
+                        arguments: JSON.stringify({ send_time: '2026-11-24 01:18' }),
+                      },
+                    },
+                    {
+                      id: 'call_search_1',
+                      type: 'function',
+                      function: {
+                        name: 'web_search',
+                        arguments: JSON.stringify({ query: 'Nightcord' }),
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '少し調べたよ。トラックの続き詰めよう。',
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }) as typeof fetch;
+
+    const oaResult = await requestAiCompletion({
+      targetCharacter: k,
+      charConfig: createDefaultAiCharacterConfig(),
+      globalConfig: baseGlobal,
+      history: [userMsg],
+      allCharacters: INITIAL_CHARACTERS,
+      members: INITIAL_VOICE_MEMBERS,
+    });
+    assert.equal(oaResult.rawText, '少し調べたよ。トラックの続き詰めよう。');
+    assert.deepEqual(oaResult.toolSentAt, { year: 2026, month: 11, day: 24, hour: 1, minute: 18 });
+    assert.ok(seenUrls.some((u) => u.includes('wikipedia.org/w/api.php')));
+
+    let fallbackCall = 0;
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      fallbackCall += 1;
+      const bodyObj = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+      if (fallbackCall === 1) {
+        assert.ok(bodyObj.tools);
+        return new Response('tools not supported', { status: 400 });
+      }
+      assert.equal(bodyObj.tools, undefined);
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: 'ツール無しフォールバック成功' } }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }) as typeof fetch;
+
+    const fbResult = await requestAiCompletion({
+      targetCharacter: k,
+      charConfig: createDefaultAiCharacterConfig(),
+      globalConfig: { ...baseGlobal, webSearchEnabled: false },
+      history: [userMsg],
+      allCharacters: INITIAL_CHARACTERS,
+    });
+    assert.equal(fbResult.rawText, 'ツール無しフォールバック成功');
+    assert.equal(fbResult.toolSentAt, null);
+
+    let gemBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      gemBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  { functionCall: { name: 'set_send_time', args: { send_time: '2026-11-24 01:25' } } },
+                  { text: 'Geminiの返答だよ' },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }) as typeof fetch;
+
+    const gemResult = await requestAiCompletion({
+      targetCharacter: k,
+      charConfig: createDefaultAiCharacterConfig(),
+      globalConfig: {
+        ...baseGlobal,
+        protocol: 'gemini',
+        baseUrl: AI_PROTOCOL_METAS.gemini.defaultBaseUrl,
+        model: 'gemini-2.5-flash',
+        webSearchEnabled: false,
+      },
+      history: [userMsg],
+      allCharacters: INITIAL_CHARACTERS,
+    });
+    assert.ok(Array.isArray(gemBody.tools));
+    assert.equal(gemResult.rawText, 'Geminiの返答だよ');
+    assert.deepEqual(gemResult.toolSentAt, { year: 2026, month: 11, day: 24, hour: 1, minute: 25 });
+
+    let antBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      antBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({
+          content: [
+            { type: 'tool_use', id: 'tu_1', name: 'set_send_time', input: { send_time: '2026-11-24 01:33' } },
+            { type: 'text', text: 'Claudeの返答だよ' },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }) as typeof fetch;
+
+    const antResult = await requestAiCompletion({
+      targetCharacter: k,
+      charConfig: createDefaultAiCharacterConfig(),
+      globalConfig: {
+        ...baseGlobal,
+        protocol: 'anthropic',
+        baseUrl: AI_PROTOCOL_METAS.anthropic.defaultBaseUrl,
+        model: 'claude-sonnet-4-20250514',
+        webSearchEnabled: true,
+      },
+      history: [userMsg],
+      allCharacters: INITIAL_CHARACTERS,
+    });
+    assert.ok(Array.isArray(antBody.tools));
+    assert.ok(
+      (antBody.tools as Record<string, unknown>[]).some((tool) => tool.type === 'web_search_20250305')
+    );
+    assert.equal(antResult.rawText, 'Claudeの返答だよ');
+    assert.deepEqual(antResult.toolSentAt, { year: 2026, month: 11, day: 24, hour: 1, minute: 33 });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 

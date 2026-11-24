@@ -7,7 +7,7 @@ import type {
   UiLanguage,
   VoiceMember,
 } from '../types/nightcord';
-import { DEFAULT_AI_GLOBAL_CONFIG } from './aiClient';
+import { sanitizeAiCharacterConfigs, sanitizeAiGlobalConfig } from './aiClient';
 
 const STORAGE_KEYS = {
   conversations: 'nightcord_conversations_v1',
@@ -279,11 +279,10 @@ export function saveActiveAiConversationId(id: string): void {
 }
 
 export function loadAiCharacterConfigs(): Record<string, AiCharacterConfig> {
-  const data = readJson<Record<string, AiCharacterConfig>>(STORAGE_KEYS.aiCharacterConfigs);
-  if (!data || typeof data !== 'object' || Array.isArray(data)) {
-    return {};
-  }
-  return data;
+  const data = readJson<Record<string, Partial<AiCharacterConfig>>>(
+    STORAGE_KEYS.aiCharacterConfigs
+  );
+  return sanitizeAiCharacterConfigs(data);
 }
 
 export function saveAiCharacterConfigs(configs: Record<string, AiCharacterConfig>): void {
@@ -292,37 +291,7 @@ export function saveAiCharacterConfigs(configs: Record<string, AiCharacterConfig
 
 export function loadAiGlobalConfig(): AiGlobalConfig {
   const data = readJson<Partial<AiGlobalConfig>>(STORAGE_KEYS.aiGlobalConfig);
-  if (!data || typeof data !== 'object') {
-    return { ...DEFAULT_AI_GLOBAL_CONFIG };
-  }
-  const protocol =
-    data.protocol === 'deepseek' ||
-    data.protocol === 'gemini' ||
-    data.protocol === 'anthropic' ||
-    data.protocol === 'openai'
-      ? data.protocol
-      : DEFAULT_AI_GLOBAL_CONFIG.protocol;
-  const timeMode = data.timeMode === 'ai_inferred' ? 'ai_inferred' : 'realtime';
-  return {
-    ...DEFAULT_AI_GLOBAL_CONFIG,
-    ...data,
-    protocol,
-    timeMode,
-    aiFollowUpProbability:
-      typeof data.aiFollowUpProbability === 'number' && Number.isFinite(data.aiFollowUpProbability)
-        ? Math.min(100, Math.max(0, data.aiFollowUpProbability))
-        : DEFAULT_AI_GLOBAL_CONFIG.aiFollowUpProbability,
-    userDisplayName:
-      typeof data.userDisplayName === 'string' && data.userDisplayName.trim()
-        ? data.userDisplayName
-        : DEFAULT_AI_GLOBAL_CONFIG.userDisplayName,
-    userAvatarMediaId:
-      typeof data.userAvatarMediaId === 'string' && data.userAvatarMediaId.trim()
-        ? data.userAvatarMediaId
-        : undefined,
-    userPersona: typeof data.userPersona === 'string' ? data.userPersona : '',
-    worldviewPrompt: typeof data.worldviewPrompt === 'string' ? data.worldviewPrompt : '',
-  };
+  return sanitizeAiGlobalConfig(data);
 }
 
 export function saveAiGlobalConfig(config: AiGlobalConfig): void {

@@ -54,6 +54,7 @@ export interface ChatFileMedia {
   fileType: string;
   kind: FileMediaKind;
   displayMode?: 'card' | 'image';
+  textPreview?: string;
 }
 
 export interface ChatImageMedia {
@@ -113,12 +114,15 @@ export type AiProtocol = 'openai' | 'deepseek' | 'gemini' | 'anthropic';
 
 export type AiTimeMode = 'realtime' | 'ai_inferred';
 
+export type AiReplyLength = 'short' | 'normal' | 'detailed';
+
 export interface AiCharacterConfig {
   protocol: AiProtocol;
   baseUrl: string;
   apiKey: string;
   model: string;
   systemPrompt: string;
+  temperature?: number;
 }
 
 export interface AiGlobalConfig {
@@ -135,6 +139,14 @@ export interface AiGlobalConfig {
   userPersona: string;
   worldviewPrompt: string;
   timeMode: AiTimeMode;
+  replyLength: AiReplyLength;
+  temperature: number;
+  webSearchEnabled: boolean;
+}
+
+export interface AiAutoChatConfig {
+  randomPresence: boolean;
+  intervalSec: number;
 }
 
 export interface NightcordBackupMediaEntry {
@@ -145,6 +157,7 @@ export interface NightcordBackupMediaEntry {
 export interface NightcordBackupPayload {
   version: 1;
   exportedAt: string;
+  lang?: UiLanguage;
   conversations: Conversation[];
   aiConversations?: Conversation[];
   characters: CharacterProfile[];

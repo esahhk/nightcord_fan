@@ -609,5 +609,113 @@ test('resolveClampedOutgoingTimestamp clamps earlier dates and collectReferenced
   assert.ok(ids.includes('ai-user-avatar-1'));
 });
 
+test('parseNightcordBackup preserves aiConversations with statusEvents, sanitized AI configs, lang, and collectReferencedMediaIds captures AI media', () => {
+  const baseNow = new Date(2026, 10, 22, 1, 20);
+  const convs = createInitialConversations();
+  const k = INITIAL_CHARACTERS[0];
+  const aiMsg = createFileMessage(
+    {
+      mediaId: 'ai-file-1',
+      kind: 'text',
+      filename: 'lyrics_v2.txt',
+      sizeLabel: '1KB テキスト',
+      fileType: 'TXT',
+      displayMode: 'card',
+      textPreview: '夜明けのメロディ',
+    },
+    k,
+    '仮歌詞',
+    baseNow
+  );
+  const aiConv = {
+    id: 'ai-conv-room',
+    title: '深夜AIルーム',
+    isTemplate: false,
+    messages: [aiMsg],
+    statusEvents: [
+      {
+        id: 'stat-ai-1',
+        memberId: 'enanan',
+        status: 'offline' as const,
+        sentAt: { year: 2026, month: 11, day: 22, hour: 1, minute: 25 },
+      },
+    ],
+  };
+
+  const referencedIds = collectReferencedMediaIds(
+    [...convs, aiConv],
+    INITIAL_CHARACTERS,
+    INITIAL_VOICE_MEMBERS,
+    ['ai-user-av-77']
+  );
+  assert.ok(referencedIds.includes('ai-file-1'));
+  assert.ok(referencedIds.includes('ai-user-av-77'));
+
+  const backupJson = JSON.stringify({
+    version: 1,
+    exportedAt: '2026-11-22T01:30:00.000Z',
+    conversations: convs,
+    aiConversations: [aiConv],
+    characters: INITIAL_CHARACTERS,
+    members: INITIAL_VOICE_MEMBERS,
+    activeConversationId: convs[0].id,
+    activeAiConversationId: aiConv.id,
+    activeCharacterId: 'k',
+    lang: 'zh',
+    aiCharacterConfigs: {
+      k: {
+        protocol: 'deepseek',
+        baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'ds-char-key',
+        model: 'deepseek-chat',
+        systemPrompt: '静かな作曲家',
+        temperature: 4.5,
+      },
+    },
+    aiGlobalConfig: {
+      useGlobalApi: true,
+      protocol: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'global-key',
+      model: 'gpt-4o-mini',
+      aiFollowUpEnabled: true,
+      aiFollowUpProbability: 65,
+      userDisplayName: '奏ファン',
+      userAvatar: 'amia',
+      userAvatarMediaId: 'ai-user-av-77',
+      userPersona: '深夜作词同伴',
+      worldviewPrompt: '25時にナイトコードで作業する世界',
+      timeMode: 'ai_inferred',
+      replyLength: 'detailed',
+      temperature: -1,
+    },
+    media: {
+      'ai-file-1': { mimeType: 'text/plain', dataBase64: 'SGVsbG8=' },
+      'ai-user-av-77': { mimeType: 'image/png', dataBase64: 'AAAA' },
+    },
+  });
+
+  const parsed = parseNightcordBackup(backupJson);
+  assert.ok(parsed);
+  assert.equal(parsed.lang, 'zh');
+  assert.equal(parsed.activeAiConversationId, 'ai-conv-room');
+  assert.equal(parsed.aiConversations?.length, 1);
+  assert.equal(parsed.aiConversations?.[0].messages.length, 1);
+  assert.equal(parsed.aiConversations?.[0].statusEvents?.length, 1);
+  assert.equal(parsed.aiConversations?.[0].statusEvents?.[0].memberId, 'enanan');
+  assert.equal(parsed.aiConversations?.[0].statusEvents?.[0].status, 'offline');
+  assert.equal(parsed.aiCharacterConfigs?.k.protocol, 'deepseek');
+  assert.equal(parsed.aiCharacterConfigs?.k.temperature, 1.5);
+  assert.equal(parsed.aiGlobalConfig?.userAvatar, 'amia');
+  assert.equal(parsed.aiGlobalConfig?.userAvatarMediaId, 'ai-user-av-77');
+  assert.equal(parsed.aiGlobalConfig?.replyLength, 'detailed');
+  assert.equal(parsed.aiGlobalConfig?.temperature, 0);
+  assert.equal(parsed.aiGlobalConfig?.timeMode, 'ai_inferred');
+  assert.equal(parsed.aiGlobalConfig?.worldviewPrompt, '25時にナイトコードで作業する世界');
+  assert.equal(parsed.aiGlobalConfig?.userPersona, '深夜作词同伴');
+  assert.equal(parsed.media['ai-file-1'].mimeType, 'text/plain');
+  assert.equal(parsed.media['ai-user-av-77'].mimeType, 'image/png');
+});
+
 
 

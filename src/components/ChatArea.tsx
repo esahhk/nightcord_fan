@@ -59,11 +59,14 @@ interface ChatAreaProps {
   animatedFromIndex?: number | null;
   aiMode?: boolean;
   aiGeneratingName?: string | null;
+  aiAutoChatRunning?: boolean;
   aiReadyCount?: number;
   onEditMessage?: (messageId: string, nextText: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
+  onContinueAi?: () => void;
+  onStopAi?: () => void;
+  onStopAiAutoChat?: () => void;
   onOpenAiGlobalSettings?: () => void;
-  onOpenAiGuide?: () => void;
 }
 
 export function ChatArea({
@@ -100,11 +103,14 @@ export function ChatArea({
   animatedFromIndex = null,
   aiMode = false,
   aiGeneratingName = null,
+  aiAutoChatRunning = false,
   aiReadyCount = 0,
   onEditMessage,
   onRegenerateMessage,
+  onContinueAi,
+  onStopAi,
+  onStopAiAutoChat,
   onOpenAiGlobalSettings,
-  onOpenAiGuide,
 }: ChatAreaProps) {
   const t = getUiText(lang);
   const canCompose = mode === 'studio' || aiMode;
@@ -239,20 +245,63 @@ export function ChatArea({
           </button>
         </div>
 
-        {aiMode && onOpenAiGuide && (
-          <button
-            type="button"
-            data-action="ai-header-open-guide"
-            aria-label={t.aiOpenGuideBtn}
-            title={t.aiOpenGuideBtn}
-            onClick={onOpenAiGuide}
-            className="flex h-[28px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[6px] border border-[#524468] bg-[#2E243D] px-2.5 text-[11.5px] font-semibold text-[#DCD7E5] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#3A2D50] hover:text-white"
-          >
-            <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#64D2E6]/20 text-[10px] font-bold text-[#64D2E6]">
-              ?
-            </span>
-            <span>{t.aiHeaderGuideBtn}</span>
-          </button>
+        {aiMode && (
+          <div className="flex shrink-0 items-center gap-2">
+            {aiGeneratingName && onStopAi ? (
+              <button
+                type="button"
+                data-action="ai-header-stop"
+                aria-label={t.aiHeaderStopBtn}
+                title={t.aiHeaderStopBtn}
+                onClick={onStopAi}
+                className="flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-[#EB7F97]/65 bg-[#3A2233] px-2.5 text-[12px] font-semibold text-[#FFB6C7] transition-colors hover:border-[#EB7F97] hover:bg-[#4B293E] hover:text-white"
+              >
+                <span className="h-2 w-2 rounded-[2px] bg-[#EB7F97]" />
+                <span>{t.aiHeaderStopBtn}</span>
+              </button>
+            ) : aiAutoChatRunning && onStopAiAutoChat ? (
+              <button
+                type="button"
+                data-action="ai-header-stop-auto"
+                aria-label={t.aiAutoChatHeaderStopBtn}
+                title={t.aiAutoChatHeaderStopBtn}
+                onClick={onStopAiAutoChat}
+                className="flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-[#F6CE71]/60 bg-[#3B3022] px-2.5 text-[12px] font-semibold text-[#F6CE71] transition-colors hover:border-[#F6CE71] hover:bg-[#4D3D2A] hover:text-white"
+              >
+                <span className="h-2 w-2 animate-pulse rounded-full bg-[#F6CE71]" />
+                <span>{t.aiAutoChatHeaderStopBtn}</span>
+              </button>
+            ) : (
+              onContinueAi && (
+                <button
+                  type="button"
+                  data-action="ai-header-continue"
+                  aria-label={t.aiHeaderContinueBtn}
+                  title={t.aiHeaderContinueBtn}
+                  onClick={onContinueAi}
+                  className="flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-[#524468] bg-[#2E243D] px-2.5 text-[12px] font-semibold text-[#64D2E6] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#3A2D50] hover:text-white"
+                >
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+                    <path d="M2.5 2L9.5 6L2.5 10V2Z" />
+                  </svg>
+                  <span>{t.aiHeaderContinueBtn}</span>
+                </button>
+              )
+            )}
+            {onOpenAiGlobalSettings && (
+              <button
+                type="button"
+                data-action="ai-header-open-settings"
+                aria-label={t.aiHeaderSettingsBtn}
+                title={t.aiGlobalModalTitle}
+                onClick={onOpenAiGlobalSettings}
+                className="flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-[#524468] bg-[#2E243D] px-2.5 text-[12px] font-semibold text-[#DCD7E5] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#3A2D50] hover:text-white"
+              >
+                <span className="h-2 w-2 shrink-0 rounded-full bg-[#64D2E6]" />
+                <span>{t.aiHeaderSettingsBtn}</span>
+              </button>
+            )}
+          </div>
         )}
       </header>
 
@@ -282,29 +331,19 @@ export function ChatArea({
                   >
                     {t.aiEmptyReadySummary(aiReadyCount, characters.length)}
                   </span>
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    {onOpenAiGlobalSettings && (
+                  {onOpenAiGlobalSettings && (
+                    <div className="flex flex-wrap items-center justify-center gap-2">
                       <button
                         type="button"
                         data-action="ai-empty-open-global"
                         onClick={onOpenAiGlobalSettings}
-                        className="flex h-[32px] cursor-pointer items-center gap-1.5 rounded-[7px] border border-[#64D2E6]/50 bg-[#2E243D] px-3 text-[12px] font-semibold text-[#EFEBF5] transition-colors hover:border-[#64D2E6] hover:bg-[#3A2D50] hover:text-white"
+                        className="flex h-[34px] cursor-pointer items-center gap-2 rounded-[7px] border border-[#64D2E6]/50 bg-[#2E243D] px-3.5 text-[12.5px] font-semibold text-[#EFEBF5] transition-colors hover:border-[#64D2E6] hover:bg-[#3A2D50] hover:text-white"
                       >
                         <span className="h-2 w-2 rounded-full bg-[#64D2E6]" />
                         <span>{t.aiOpenGlobalQuickBtn}</span>
                       </button>
-                    )}
-                    {onOpenAiGuide && (
-                      <button
-                        type="button"
-                        data-action="ai-empty-open-guide"
-                        onClick={onOpenAiGuide}
-                        className="flex h-[32px] cursor-pointer items-center gap-1.5 rounded-[7px] border border-[#524468] bg-[#2E243D] px-3 text-[12px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#3A2D50] hover:text-white"
-                      >
-                        <span>{t.aiOpenGuideBtn}</span>
-                      </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -312,6 +351,9 @@ export function ChatArea({
         ) : (
           messages.map((msg, idx) => {
             const shouldAnimate = animatedFromIndex !== null && idx >= animatedFromIndex;
+            const hasMedia = Boolean(
+              msg.fileMedia || msg.imageMedia || msg.voiceMedia || (msg.attachments && msg.attachments.length > 0)
+            );
             return (
               <Fragment key={msg.id}>
                 {msg.dividerBefore && (
@@ -559,7 +601,7 @@ export function ChatArea({
                             }
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault();
-                              if (editingDraft.trim() && onEditMessage) {
+                              if ((editingDraft.trim() || hasMedia) && onEditMessage) {
                                 onEditMessage(msg.id, editingDraft);
                               }
                               setEditingMsgId(null);
@@ -581,7 +623,7 @@ export function ChatArea({
                             type="button"
                             data-action={`edit-message-save-${msg.id}`}
                             onClick={() => {
-                              if (editingDraft.trim() && onEditMessage) {
+                              if ((editingDraft.trim() || hasMedia) && onEditMessage) {
                                 onEditMessage(msg.id, editingDraft);
                               }
                               setEditingMsgId(null);
@@ -632,23 +674,21 @@ export function ChatArea({
                             {t.regenerateMessageBtn}
                           </button>
                         )}
-                        {aiMode &&
-                          onEditMessage &&
-                          (typeof msg.text === 'string' && msg.text.length > 0) && (
-                            <button
-                              type="button"
-                              data-action={`edit-message-${msg.id}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingMsgId(msg.id);
-                                setEditingDraft(msg.text ?? '');
-                                setDeleteMenuMsgId(null);
-                              }}
-                              className="w-full cursor-pointer rounded-[6px] px-2.5 py-1.5 text-left text-[12px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#342947] hover:text-white"
-                            >
-                              {t.editMessageBtn}
-                            </button>
-                          )}
+                        {aiMode && onEditMessage && (
+                          <button
+                            type="button"
+                            data-action={`edit-message-${msg.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingMsgId(msg.id);
+                              setEditingDraft(msg.text ?? '');
+                              setDeleteMenuMsgId(null);
+                            }}
+                            className="w-full cursor-pointer rounded-[6px] px-2.5 py-1.5 text-left text-[12px] font-medium text-[#DCD7E5] transition-colors hover:bg-[#342947] hover:text-white"
+                          >
+                            {t.editMessageBtn}
+                          </button>
+                        )}
                         <button
                           type="button"
                           data-action={`delete-message-${msg.id}`}
@@ -825,7 +865,7 @@ export function ChatArea({
               title="ファイルを添付"
               onClick={onAttachClick}
               className={`flex items-center justify-center bg-transparent p-0 text-[#B4A9C6] transition-colors ${
-                mode === 'studio' && !aiMode ? 'cursor-pointer hover:text-white' : 'cursor-default'
+                canCompose ? 'cursor-pointer hover:text-white' : 'cursor-default'
               }`}
             >
               <svg width="15" height="16" viewBox="0 0 16 18" fill="none" aria-hidden="true">

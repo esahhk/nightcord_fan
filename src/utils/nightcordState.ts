@@ -13,9 +13,10 @@ import type {
   MemberStatusEvent,
   MessageDateTime,
   NightcordActions,
+  UiLanguage,
   VoiceMember,
 } from '../types/nightcord';
-import { DEFAULT_AI_GLOBAL_CONFIG } from './aiClient';
+import { sanitizeAiCharacterConfigs, sanitizeAiGlobalConfig } from './aiClient';
 
 export const INITIAL_VOICE_MEMBERS: VoiceMember[] = [
   { id: 'k', name: 'K', avatar: 'k-pink', muted: false, online: true, status: 'voice' },
@@ -874,6 +875,45 @@ export function collectReferencedMediaIds(
   return Array.from(ids);
 }
 
+function parseStatusEventsList(rawEvents: unknown): MemberStatusEvent[] {
+  const parsedEvents: MemberStatusEvent[] = [];
+  if (!Array.isArray(rawEvents)) {
+    return parsedEvents;
+  }
+  for (const evItem of rawEvents) {
+    if (!evItem || typeof evItem !== 'object') {
+      continue;
+    }
+    const ev = evItem as Record<string, unknown>;
+    const dt = ev.sentAt as Record<string, unknown> | undefined;
+    if (
+      typeof ev.id === 'string' &&
+      typeof ev.memberId === 'string' &&
+      (ev.status === 'online' || ev.status === 'voice' || ev.status === 'offline') &&
+      dt &&
+      typeof dt.year === 'number' &&
+      typeof dt.month === 'number' &&
+      typeof dt.day === 'number' &&
+      typeof dt.hour === 'number' &&
+      typeof dt.minute === 'number'
+    ) {
+      parsedEvents.push({
+        id: ev.id,
+        memberId: ev.memberId,
+        status: ev.status,
+        sentAt: {
+          year: dt.year,
+          month: dt.month,
+          day: dt.day,
+          hour: dt.hour,
+          minute: dt.minute,
+        },
+      });
+    }
+  }
+  return parsedEvents;
+}
+
 export function parseNightcordBackup(rawText: string): {
   conversations: Conversation[];
   aiConversations?: Conversation[];
@@ -884,6 +924,7 @@ export function parseNightcordBackup(rawText: string): {
   activeCharacterId: string;
   aiCharacterConfigs?: Record<string, AiCharacterConfig>;
   aiGlobalConfig?: AiGlobalConfig;
+  lang?: UiLanguage;
   media: Record<string, { mimeType: string; dataBase64: string }>;
 } | null {
   try {
@@ -908,40 +949,7 @@ export function parseNightcordBackup(rawText: string): {
         conv.title.trim() &&
         Array.isArray(conv.messages)
       ) {
-        const parsedEvents: MemberStatusEvent[] = [];
-        if (Array.isArray(conv.statusEvents)) {
-          for (const evItem of conv.statusEvents) {
-            if (!evItem || typeof evItem !== 'object') {
-              continue;
-            }
-            const ev = evItem as Record<string, unknown>;
-            const dt = ev.sentAt as Record<string, unknown> | undefined;
-            if (
-              typeof ev.id === 'string' &&
-              typeof ev.memberId === 'string' &&
-              (ev.status === 'online' || ev.status === 'voice' || ev.status === 'offline') &&
-              dt &&
-              typeof dt.year === 'number' &&
-              typeof dt.month === 'number' &&
-              typeof dt.day === 'number' &&
-              typeof dt.hour === 'number' &&
-              typeof dt.minute === 'number'
-            ) {
-              parsedEvents.push({
-                id: ev.id,
-                memberId: ev.memberId,
-                status: ev.status,
-                sentAt: {
-                  year: dt.year,
-                  month: dt.month,
-                  day: dt.day,
-                  hour: dt.hour,
-                  minute: dt.minute,
-                },
-              });
-            }
-          }
-        }
+        const parsedEvents = parseStatusEventsList(conv.statusEvents);
         validConversations.push({
           id: conv.id,
           title: conv.title,
@@ -1062,11 +1070,13 @@ export function parseNightcordBackup(rawText: string): {
           conv.title.trim() &&
           Array.isArray(conv.messages)
         ) {
+          const parsedEvents = parseStatusEventsList(conv.statusEvents);
           validAi.push({
             id: conv.id,
             title: conv.title,
             isTemplate: Boolean(conv.isTemplate),
             messages: conv.messages as ChatMessage[],
+            statusEvents: parsedEvents.length > 0 ? parsedEvents : undefined,
           });
         }
       }
@@ -1086,14 +1096,21 @@ export function parseNightcordBackup(rawText: string): {
       parsed.aiCharacterConfigs &&
       typeof parsed.aiCharacterConfigs === 'object' &&
       !Array.isArray(parsed.aiCharacterConfigs)
-        ? (parsed.aiCharacterConfigs as Record<string, AiCharacterConfig>)
+        ? sanitizeAiCharacterConfigs(
+            parsed.aiCharacterConfigs as Record<string, Partial<AiCharacterConfig>>
+          )
         : undefined;
 
     const aiGlobalConfig =
       parsed.aiGlobalConfig &&
       typeof parsed.aiGlobalConfig === 'object' &&
       !Array.isArray(parsed.aiGlobalConfig)
-        ? { ...DEFAULT_AI_GLOBAL_CONFIG, ...(parsed.aiGlobalConfig as Partial<AiGlobalConfig>) }
+        ? sanitizeAiGlobalConfig(parsed.aiGlobalConfig as Partial<AiGlobalConfig>)
+        : undefined;
+
+    const lang: UiLanguage | undefined =
+      parsed.lang === 'zh' || parsed.lang === 'en' || parsed.lang === 'ja'
+        ? parsed.lang
         : undefined;
 
     return {
@@ -1106,6 +1123,7 @@ export function parseNightcordBackup(rawText: string): {
       activeCharacterId,
       aiCharacterConfigs,
       aiGlobalConfig,
+      lang,
       media,
     };
   } catch {

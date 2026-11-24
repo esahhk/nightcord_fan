@@ -63,6 +63,7 @@ interface SidebarProps {
   onOpenTemplatePage: () => void;
   onOpenAiMode?: () => void;
   onExitAiMode?: () => void;
+  onCopyAiToMain?: () => void;
   onOpenMemberAiSettings?: (member: VoiceMember) => void;
 }
 
@@ -104,6 +105,7 @@ export function Sidebar({
   onOpenTemplatePage,
   onOpenAiMode,
   onExitAiMode,
+  onCopyAiToMain,
   onOpenMemberAiSettings,
 }: SidebarProps) {
   const t = getUiText(lang);
@@ -534,13 +536,13 @@ export function Sidebar({
             setMemberMenuId(null);
           }
         }}
-        className={`fixed bottom-0 left-0 top-[28px] z-40 flex w-[238px] max-w-[82vw] shrink-0 flex-col border-r border-[#241B30] bg-[#2E243D] transition-transform duration-200 md:relative md:top-0 md:z-40 md:w-[228px] md:translate-x-0 ${
+        className={`fixed bottom-0 left-0 top-[28px] z-40 flex w-[258px] max-w-[86vw] shrink-0 flex-col border-r border-[#241B30] bg-[#2E243D] transition-transform duration-200 md:relative md:top-0 md:z-40 md:w-[244px] md:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          className="relative flex h-[54px] shrink-0 items-center border-b border-[#241B30] px-4"
+          className="relative z-50 flex h-[54px] shrink-0 items-center border-b border-[#241B30] px-4"
         >
           <button
             type="button"
@@ -576,7 +578,7 @@ export function Sidebar({
               role="menu"
               data-testid="server-dropdown"
               onClick={(e) => e.stopPropagation()}
-              className="nc-modal-enter nc-scroll absolute left-2 right-2 top-[56px] z-50 max-h-[calc(100dvh-96px)] rounded-[10px] border border-[#46385C] bg-[#241C32] p-3 shadow-[0_18px_42px_rgba(0,0,0,0.62)]"
+              className="nc-modal-enter nc-scroll absolute left-2 right-2 top-[56px] z-50 max-h-[calc(100dvh-90px)] rounded-[10px] border border-[#46385C] bg-[#241C32] p-3 shadow-[0_18px_42px_rgba(0,0,0,0.72)]"
             >
               <div className="mb-2 flex items-center justify-between gap-1 px-0.5">
                 <span className="truncate text-[11px] font-medium tracking-[0.04em] text-[#9E93B3]">
@@ -673,26 +675,44 @@ export function Sidebar({
               )}
 
               {aiMode ? (
-                <a
-                  href="#/"
-                  data-action="back-main-mode"
-                  onClick={(e) => {
-                    if (onExitAiMode) {
-                      e.preventDefault();
-                      onExitAiMode();
-                    }
-                  }}
-                  className="mt-2.5 flex h-[34px] w-full cursor-pointer items-center justify-between rounded-[8px] border border-[#64D2E6]/50 bg-[#352A4A] px-2.5 text-[12px] font-semibold text-white transition-colors hover:border-[#64D2E6] hover:bg-[#42345B]"
-                >
-                  <span className="flex items-center gap-2 truncate">
-                    <span className="h-2 w-2 shrink-0 rounded-full bg-[#64D2E6]" />
-                    <span className="truncate">{t.aiModeBtn}</span>
-                    <span className="shrink-0 rounded bg-[#64D2E6]/20 px-1.5 py-0.5 text-[9.5px] text-[#64D2E6]">
+                <div className="mt-2.5 space-y-2">
+                  <a
+                    href="#/"
+                    data-action="back-main-mode"
+                    onClick={(e) => {
+                      if (onExitAiMode) {
+                        e.preventDefault();
+                        onExitAiMode();
+                      }
+                    }}
+                    className="flex min-h-[36px] w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-[#64D2E6]/50 bg-[#352A4A] px-2.5 py-1.5 text-[12px] font-semibold text-white transition-colors hover:border-[#64D2E6] hover:bg-[#42345B]"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-[#64D2E6]" />
+                      <span className="truncate">{t.aiModeBackBtn}</span>
+                    </span>
+                    <span className="shrink-0 rounded bg-[#64D2E6]/20 px-1.5 py-0.5 text-[9.5px] font-medium text-[#64D2E6]">
                       {t.aiModeActiveBadge}
                     </span>
-                  </span>
-                  <span className="shrink-0 text-[10.5px] text-[#CFC7DD]">{t.aiModeBackBtn} →</span>
-                </a>
+                  </a>
+                  {onCopyAiToMain && (
+                    <button
+                      type="button"
+                      data-action="copy-ai-conv-to-main"
+                      onClick={onCopyAiToMain}
+                      className="flex min-h-[36px] w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-[#4D3F66] bg-[#2E2440] px-2.5 py-1.5 text-left text-[12px] font-medium text-[#EFEBF5] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#3C2F54] hover:text-white"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="shrink-0 text-[#64D2E6]" aria-hidden="true">
+                          <rect x="5" y="2.5" width="8.5" height="9.5" rx="1.6" stroke="currentColor" strokeWidth="1.4" />
+                          <path d="M3 5.5V12.5C3 13.3 3.7 14 4.5 14H10.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                        </svg>
+                        <span className="truncate">{t.aiCopyToMainBtn}</span>
+                      </span>
+                      <span className="shrink-0 text-[11px] text-[#64D2E6]">→</span>
+                    </button>
+                  )}
+                </div>
               ) : (
                 <a
                   href="#ai"
@@ -703,7 +723,7 @@ export function Sidebar({
                       onOpenAiMode();
                     }
                   }}
-                  className="mt-2.5 flex h-[34px] w-full cursor-pointer items-center justify-between rounded-[8px] border border-[#4A3C63] bg-[#312645] px-2.5 text-[12px] font-semibold text-[#EFEBF5] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#3E3156] hover:text-white"
+                  className="mt-2.5 flex min-h-[36px] w-full cursor-pointer items-center justify-between rounded-[8px] border border-[#4A3C63] bg-[#312645] px-2.5 py-1.5 text-[12px] font-semibold text-[#EFEBF5] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#3E3156] hover:text-white"
                 >
                   <span className="flex items-center gap-2 truncate">
                     <span className="h-2 w-2 shrink-0 rounded-full bg-[#64D2E6]" />
@@ -713,7 +733,7 @@ export function Sidebar({
                 </a>
               )}
 
-              <div className="mt-2.5 space-y-2.5 rounded-[9px] border border-[#362B49] bg-[#2C223C]/80 p-2.5">
+              <div className="mt-2.5 space-y-2.5 rounded-[9px] border border-[#362B49] bg-[#2C223C] p-2.5">
                 <div className="space-y-1.5">
                   <span className="block text-[10.5px] font-medium text-[#A499B8]">
                     {t.langLabel}
@@ -801,7 +821,7 @@ export function Sidebar({
                   type="button"
                   data-action="clear-local-cache"
                   onClick={onRequestClearCache}
-                  className="flex h-[28px] w-full cursor-pointer items-center justify-center gap-1.5 rounded-[6px] border border-[#5B354B]/70 bg-[#352030]/60 text-[11px] font-medium text-[#E7A3B4] transition-colors hover:border-[#EB7F97]/60 hover:bg-[#48273B] hover:text-[#FFD2DC]"
+                  className="flex h-[30px] w-full cursor-pointer items-center justify-center gap-1.5 rounded-[6px] border border-[#5B354B] bg-[#352030] text-[11px] font-medium text-[#E7A3B4] transition-colors hover:border-[#EB7F97]/70 hover:bg-[#48273B] hover:text-[#FFD2DC]"
                 >
                   <span>{t.clearCacheBtn}</span>
                 </button>
@@ -813,12 +833,12 @@ export function Sidebar({
                   target="_blank"
                   rel="noopener noreferrer"
                   data-action="link-github"
-                  className="flex flex-col items-center justify-center gap-1.5 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-2 py-2.5 text-[#DCD7E5] transition-colors hover:border-[#594A75] hover:bg-[#3A2D50] hover:text-white"
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-[8px] border border-[#382D4C] bg-[#2D233E] px-2 py-2.5 text-[#DCD7E5] transition-colors hover:border-[#594A75] hover:bg-[#3A2D50] hover:text-white"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M12 2C6.48 2 2 6.58 2 12.23c0 4.52 2.87 8.35 6.84 9.7.5.1.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.08 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05A9.38 9.38 0 0 1 12 6.84c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.64 1.03 2.76 0 3.95-2.34 4.82-4.57 5.07.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .27.18.6.69.49A10.22 10.22 0 0 0 22 12.23C22 6.58 17.52 2 12 2Z" />
                   </svg>
-                  <span className="text-[10.5px] font-medium leading-none text-[#BEB5D0]">
+                  <span className="text-center text-[10.5px] font-medium leading-[1.2] text-[#BEB5D0]">
                     {t.githubLabel}
                   </span>
                 </a>
@@ -828,7 +848,7 @@ export function Sidebar({
                   target="_blank"
                   rel="noopener noreferrer"
                   data-action="link-bilibili"
-                  className="flex flex-col items-center justify-center gap-1.5 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-2 py-2.5 text-[#DCD7E5] transition-colors hover:border-[#EB7F97]/55 hover:bg-[#3A2D50] hover:text-white"
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-[8px] border border-[#382D4C] bg-[#2D233E] px-2 py-2.5 text-[#DCD7E5] transition-colors hover:border-[#EB7F97]/55 hover:bg-[#3A2D50] hover:text-white"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path
@@ -853,7 +873,7 @@ export function Sidebar({
                       strokeLinecap="round"
                     />
                   </svg>
-                  <span className="text-[10.5px] font-medium leading-none text-[#BEB5D0]">
+                  <span className="text-center text-[10.5px] font-medium leading-[1.2] text-[#BEB5D0]">
                     {t.bilibiliLabel}
                   </span>
                 </a>
@@ -863,7 +883,7 @@ export function Sidebar({
                   target="_blank"
                   rel="noopener noreferrer"
                   data-action="link-homepage"
-                  className="flex flex-col items-center justify-center gap-1.5 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-2 py-2.5 text-[#DCD7E5] transition-colors hover:border-[#594A75] hover:bg-[#3A2D50] hover:text-white"
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-[8px] border border-[#382D4C] bg-[#2D233E] px-2 py-2.5 text-[#DCD7E5] transition-colors hover:border-[#594A75] hover:bg-[#3A2D50] hover:text-white"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.75" />
@@ -875,7 +895,7 @@ export function Sidebar({
                       strokeLinejoin="round"
                     />
                   </svg>
-                  <span className="text-[10.5px] font-medium leading-none text-[#BEB5D0]">
+                  <span className="text-center text-[10.5px] font-medium leading-[1.2] text-[#BEB5D0]">
                     {t.homepageLabel}
                   </span>
                 </a>
@@ -884,7 +904,7 @@ export function Sidebar({
                   type="button"
                   data-action="open-tutorial"
                   onClick={onOpenTutorial}
-                  className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-2 py-2.5 text-[#DCD7E5] transition-colors hover:border-[#64D2E6]/60 hover:bg-[#3A2D50] hover:text-white"
+                  className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[8px] border border-[#382D4C] bg-[#2D233E] px-1.5 py-2.5 text-[#DCD7E5] transition-colors hover:border-[#64D2E6]/60 hover:bg-[#3A2D50] hover:text-white"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path
@@ -900,8 +920,8 @@ export function Sidebar({
                       strokeLinejoin="round"
                     />
                   </svg>
-                  <span className="text-[10.5px] font-medium leading-none text-[#BEB5D0]">
-                    {t.tutorialLabel}
+                  <span className="text-center text-[10.5px] font-medium leading-[1.2] text-[#BEB5D0]">
+                    {aiMode ? t.aiGuideMenuBtn : t.tutorialLabel}
                   </span>
                 </button>
               </div>
@@ -910,7 +930,7 @@ export function Sidebar({
                 type="button"
                 data-action="open-ui-template"
                 onClick={onOpenTemplatePage}
-                className="mt-2 flex h-[32px] w-full cursor-pointer items-center justify-between rounded-[8px] border border-[#382D4C] bg-[#2D233E]/85 px-2.5 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:border-[#64D2E6]/60 hover:bg-[#3A2D50] hover:text-white"
+                className="mt-2 flex h-[34px] w-full cursor-pointer items-center justify-between rounded-[8px] border border-[#382D4C] bg-[#2D233E] px-2.5 text-[11.5px] font-medium text-[#DCD7E5] transition-colors hover:border-[#64D2E6]/60 hover:bg-[#3A2D50] hover:text-white"
               >
                 <span className="flex items-center gap-2 truncate">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">

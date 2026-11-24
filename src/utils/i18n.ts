@@ -84,7 +84,7 @@ export interface UiText {
   clearStep2Desc: string;
   clearStep2Confirm: string;
   toastExportSuccess: string;
-  toastImportSuccess: (count: number) => string;
+  toastImportSuccess: (count: number, aiCount?: number) => string;
   toastImportInvalid: string;
   toastCacheCleared: string;
   timeBtnLabel: string;
@@ -270,6 +270,47 @@ export interface UiText {
   regenerateMessageBtn: string;
   saveEditBtn: string;
   toastMessageUpdated: string;
+  aiHeaderContinueBtn: string;
+  aiHeaderStopBtn: string;
+  aiHeaderSettingsBtn: string;
+  aiUserAvatarPresetLabel: string;
+  aiReplyLengthLabel: string;
+  aiReplyLengthShort: string;
+  aiReplyLengthNormal: string;
+  aiReplyLengthDetailed: string;
+  aiTemperatureLabel: (temp: number) => string;
+  aiCharTempUseGlobalBtn: string;
+  aiFillPresetBtn: string;
+  aiToastPresetFilled: (name: string) => string;
+  aiTestConnBtn: string;
+  aiTestingConnBtn: string;
+  aiTestConnOk: (latencyMs: number, model: string) => string;
+  aiTestConnFail: (detail: string) => string;
+  aiExportTranscriptBtn: string;
+  aiToastTranscriptExported: string;
+  aiToastAborted: string;
+  aiToastPartialOffline: (names: string) => string;
+  aiToastPartialMissingKey: (names: string) => string;
+  aiWebSearchToggle: string;
+  aiWebSearchDesc: string;
+  aiGuideMenuBtn: string;
+  aiCopyToMainBtn: string;
+  copyAiToMainModalTitle: string;
+  copyAiToMainModalSub: string;
+  copyAiToMainLabel: string;
+  copyAiToMainPlaceholder: string;
+  copyAiToMainSummary: (count: number) => string;
+  copyAiToMainConfirm: string;
+  toastCopiedAiToMain: (title: string) => string;
+  aiAutoChatModalTitle: string;
+  aiAutoChatModalSub: string;
+  aiAutoChatRandomPresenceToggle: string;
+  aiAutoChatRandomPresenceDesc: string;
+  aiAutoChatIntervalLabel: (sec: number) => string;
+  aiAutoChatStartBtn: string;
+  aiAutoChatToastStarted: string;
+  aiAutoChatToastStopped: string;
+  aiAutoChatHeaderStopBtn: string;
 }
 
 const JA_TEXT: UiText = {
@@ -304,7 +345,7 @@ const JA_TEXT: UiText = {
   step5Label: '自動再生モード',
   step6Title: 'AIチャットモード（完全ローカル直連）',
   step6Desc:
-    'メニューの「AIチャットモード」に入ると、没入モードのまま直接送信してAIキャラと会話できます。DeepSeek等のAPI設定、世界観・自分のプロフィール／アバター、送信時刻ルール（リアルタイム／AI推定）、オンライン限定返信、ダミーファイル送信、画面上部のガイドボタンを備えています。',
+    'メニューの「AIチャットモード」に入ると、没入モードのまま直接送信してAIキャラと会話できます。DeepSeek等のAPI設定、Web検索、通話/テキスト/ミュート状態連動、自分のプロフィール＆世界観、AI時刻ツール、自律ファイル＆@送信、黄色い点での自動フリートーク、通常モードへの会話コピーを備えています。',
   step6Label: 'AIチャットモード',
   skip: 'スキップ',
   back: '戻る',
@@ -371,8 +412,11 @@ const JA_TEXT: UiText = {
   clearStep2Desc:
     'この操作は取り消せません。必要なデータがある場合は、先に「ファイルに書き出し」でバックアップしてください。',
   clearStep2Confirm: '完全に消去する',
-  toastExportSuccess: 'ローカルデータをファイルに書き出しました',
-  toastImportSuccess: (count) => `ローカルデータを読み込みました（${count}件の会話）`,
+  toastExportSuccess: '会話・AI設定・ローカルメディアをバックアップファイルに書き出しました',
+  toastImportSuccess: (count, aiCount = 0) =>
+    aiCount > 0
+      ? `ローカルデータを読み込みました（通常 ${count}件 / AI ${aiCount}件）`
+      : `ローカルデータを読み込みました（${count}件の会話）`,
   toastImportInvalid: 'ファイルの形式が正しくありません',
   toastCacheCleared: 'ローカルキャッシュを消去しました',
   timeBtnLabel: '時刻',
@@ -533,7 +577,7 @@ const JA_TEXT: UiText = {
   aiConfiguredCharsCount: (ready, total) => `オンライン返信可能：${ready} / ${total} 名`,
   toastAiGlobalSaved: 'AIグローバル設定をローカルに保存しました',
   aiEmptyTitle: (title) => `「${title}」空白 AIチャットテンプレート`,
-  aiEmptySub: '下の入力欄から直接送信できます。オンライン＆API設定済みキャラからランダム返信、@キャラ名で指名返信、デモ曲などのファイルカード送信にも対応します。',
+  aiEmptySub: '下の入力欄から直接送信できます。オンライン設定済みキャラの自動応答、@指名、状況に応じたファイル送信や黄色い点でのAI自動会話に対応しています。',
   aiEmptyReadySummary: (ready, total) => `現在の返信可能（オンライン）キャラ：${ready} / ${total} 名`,
   aiOpenGlobalQuickBtn: 'AI グローバル設定を開く',
   aiOpenGuideBtn: '使い方ガイドを見る',
@@ -548,29 +592,70 @@ const JA_TEXT: UiText = {
   aiToastCharOffline: (name) => `「${name}」は現在オフラインのため返信できません`,
   aiToastTargetMissingKey: (name) => `「${name}」はAPI Key未設定のため返信できません`,
   aiToastRequestFailed: (name, reason) => `${name} のAI返信に失敗しました（${reason}）`,
-  aiGuideTitle: 'AIチャットモード ガイド',
+  aiGuideTitle: 'AI初心者ガイド',
   aiGuideBadges: ['ガイド 1 / 5', 'ガイド 2 / 5', 'ガイド 3 / 5', 'ガイド 4 / 5', 'ガイド 5 / 5'],
-  aiGuideStep1Title: '完全静的直連・自分のプロフィール＆世界観',
+  aiGuideStep1Title: '完全静的直連・自分の設定・世界観・Web検索',
   aiGuideStep1Desc:
-    '元のNightcordUIのまま、ブラウザからAPIへ直接リクエストします。右上の青い点（グローバル設定）で「自分の名前・アバター・設定」と全AI共通の「世界観」を設定できます。',
-  aiGuideStep1Note: '※ 画面右上の「ガイド」ボタンや左上メニューからいつでもこの説明を開けます。',
+    '右上の青い点（1番目）から「自分の名前・アバター・設定」、共通「世界観」、そして「Web検索」オン／オフを一括設定できます。リクエストはすべてブラウザから直接送信されます。',
+  aiGuideStep1Note: '※ 案内は右上のUIを邪魔せず、左上の「25時、ナイトコードで。▾」メニュー内の「AI初心者ガイド」からいつでも見直せます。',
   aiGuideStep2Title: 'DeepSeekプリセット＆キャラ別フルAPI設定',
   aiGuideStep2Desc:
-    '左メンバー長押し（右クリック）でもグローバル設定内でも、OpenAI互換・DeepSeek公式プリセット・Gemini・Claudeの全プロトコル、URL、API Key、モデル取得、プロンプトを個別に設定できます。',
-  aiGuideStep3Title: 'オフライン状態連動＆AI時刻モード',
+    '左メンバー長押し（右クリック）でもグローバル設定内でも、OpenAI互換・DeepSeek公式・Gemini・Claudeの全プロトコル、URL、API Key、モデル、プロンプトを個別に設定でき、データはリアルタイム同期します。',
+  aiGuideStep3Title: '通話/ミュート状態連動＆時刻ツール制御',
   aiGuideStep3Desc:
-    '左側で「オフライン」になっているキャラは自動抽選・追撃・@指名のいずれでも返信しません。また返信時刻は「ローカル実時刻」か「AIが会話に合わせて推定（直前より前にはならない）」から選べます。',
-  aiGuideStep4Title: '直接送信・@指名・AIファイル送信カード',
+    '左側のオフラインは返信対象外となり、さらに各メンバーがボイス通話中／ミュート中／テキストのみかもAIへ共有されます。AI時刻推論は専用ツール経由で入力されるため、本文に時刻文字列が漏れる心配がありません。',
+  aiGuideStep4Title: '自律ファイル送信・自然な@メンション・自動会話',
   aiGuideStep4Desc:
-    '下部から直接送信し、@キャラ名 で指名できます。たとえば「@K デモ作って送って」と頼むとAIが「.mp3」などのファイル風カード（表示専用ダミー）も会話に送信できます。',
-  aiGuideStep5Title: 'メッセージ長押しで再生成・編集・削除',
+    'AIは会話の流れから必要に応じて自律的にファイルカードや時折の@メンションを送ります。さらに右上の黄色い点（2番目）を押すと「ランダム発言パネル」が開き、ランダムな上下線切替付きでAI同士を連続会話させられます（再度黄色い点で停止）。',
+  aiGuideStep5Title: '長押し編集／再生成＆通常ページへ会話コピー',
   aiGuideStep5Desc:
-    '送信済みの発言は長押し（右クリック）で「再生成」「編集」「削除」が可能。AI同士の確率追撃返信をオンにすれば、返信後に別のオンラインキャラが自動で一言反応します。',
+    '発言は長押しで「再生成」「編集」「削除」が可能。また左上「25時、ナイトコードで。▾」内の「会話を通常ページへコピー」でAIログを通常モードの新規会話へ丸ごと複製できます。このガイドはいつでも左上「25時▾」メニューの「AI初心者ガイド」から再表示できます。',
   aiGuideOpenConfigBtn: '今すぐAIグローバル設定を開く',
   editMessageBtn: '編集',
   regenerateMessageBtn: '再生成',
   saveEditBtn: '保存',
   toastMessageUpdated: 'メッセージを更新しました',
+  aiHeaderContinueBtn: '続話',
+  aiHeaderStopBtn: '停止',
+  aiHeaderSettingsBtn: 'AI設定',
+  aiUserAvatarPresetLabel: '既定アバター切替',
+  aiReplyLengthLabel: '返信の長さ',
+  aiReplyLengthShort: '短め',
+  aiReplyLengthNormal: '標準',
+  aiReplyLengthDetailed: '詳しめ',
+  aiTemperatureLabel: (temp) => `生成温度 (Temperature)：${temp.toFixed(2)}`,
+  aiCharTempUseGlobalBtn: '全体設定に戻す',
+  aiFillPresetBtn: 'Nightcord定型プロンプトを挿入',
+  aiToastPresetFilled: (name) => `${name} のプリセット設定を挿入しました`,
+  aiTestConnBtn: '接続テスト',
+  aiTestingConnBtn: 'テスト中...',
+  aiTestConnOk: (latencyMs, model) => `接続成功（${latencyMs}ms · ${model}）`,
+  aiTestConnFail: (detail) => `接続失敗：${detail}`,
+  aiExportTranscriptBtn: 'AI会話を書き出し (.txt)',
+  aiToastTranscriptExported: 'AI会話ログをテキストで書き出しました',
+  aiToastAborted: 'AI生成を中断しました',
+  aiToastPartialOffline: (names) => `オフラインのためスキップ：${names}`,
+  aiToastPartialMissingKey: (names) => `API Key未設定のためスキップ：${names}`,
+  aiWebSearchToggle: 'AI Web検索を有効にする',
+  aiWebSearchDesc: 'オンにすると、事実確認や最新情報が必要な場面でAIが検索ツール／検索機能を参照できます。',
+  aiGuideMenuBtn: 'AI初心者ガイド',
+  aiCopyToMainBtn: '会話を通常ページへコピー',
+  copyAiToMainModalTitle: '通常ページへ新会話としてコピー',
+  copyAiToMainModalSub: '現在のAI会話ログと状態切替を、通常モードの新しい会話にコピーします。',
+  copyAiToMainLabel: '新しい会話名',
+  copyAiToMainPlaceholder: '例：深夜の打ち合わせログ',
+  copyAiToMainSummary: (count) => `コピー対象：メッセージ ${count} 件`,
+  copyAiToMainConfirm: '作成してコピー',
+  toastCopiedAiToMain: (title) => `AI会話を通常会話「${title}」としてコピーしました`,
+  aiAutoChatModalTitle: 'AI ランダム自動会話パネル',
+  aiAutoChatModalSub: 'オンライン＆API設定済みのAI同士が順番に自然なグループ会話を続けます。実行中は右上の黄色い点をもう一度押すと停止します。',
+  aiAutoChatRandomPresenceToggle: 'ランダムにメンバー上下線／通話状態を切替',
+  aiAutoChatRandomPresenceDesc: '発言の合間にキャラのオンライン・ボイスチャット・ミュート・オフラインをランダムに切り替え、AIにも状態を共有します（最低1名はオンライン維持）。',
+  aiAutoChatIntervalLabel: (sec) => `発言間隔：${sec} 秒`,
+  aiAutoChatStartBtn: '自動会話を開始',
+  aiAutoChatToastStarted: 'AIランダム自動会話を開始しました（黄色い点をもう一度押すと終了）',
+  aiAutoChatToastStopped: 'AIランダム自動会話を終了しました',
+  aiAutoChatHeaderStopBtn: '自動会話停止',
 };
 
 const ZH_TEXT: UiText = {
@@ -597,7 +682,7 @@ const ZH_TEXT: UiText = {
   step5Label: '自动播放模式',
   step6Title: 'AI 对话模式（纯静态本地直连）',
   step6Desc:
-    '在左侧菜单点击「AI 对话模式」进入全新对话页。内置 DeepSeek 等多协议预设，可点击右上角小蓝点设置自己的名字/头像/人设、全局世界观、发送时间模式（本地实时或 AI 推演）与完整单角色 API；支持离线角色屏蔽回复、AI 发送文件空壳卡片（如 .mp3），页面顶部还配有独立使用引导。',
+    '在左侧菜单点击「AI 对话模式」进入全新对话页。支持 DeepSeek 等多协议预设、联网搜索、语音/文字/静音状态同步、个人设定与世界观、AI 调用工具写发送时间、自主发文件与 @人、小黄点控制自动互动，以及一键将 AI 会话复制到主页面；可随时在左上角「25時」菜单重看 AI 新手引导。',
   step6Label: 'AI 对话模式',
   skip: '跳过',
   back: '上一步',
@@ -664,8 +749,11 @@ const ZH_TEXT: UiText = {
   clearStep2Desc:
     '此操作无法撤销。如需保留记录，请先在菜单中使用「导出本地文件」进行备份。',
   clearStep2Confirm: '确认清空',
-  toastExportSuccess: '已将本地对话与消息导出为文件',
-  toastImportSuccess: (count) => `已导入本地文件（共 ${count} 个对话）`,
+  toastExportSuccess: '已将对话、AI 设定与本地媒体完整导出为文件',
+  toastImportSuccess: (count, aiCount = 0) =>
+    aiCount > 0
+      ? `已导入本地备份（普通对话 ${count} 个 / AI 对话 ${aiCount} 个）`
+      : `已导入本地文件（共 ${count} 个对话）`,
   toastImportInvalid: '导入失败：文件格式无效',
   toastCacheCleared: '已清空本地缓存并恢复默认模板',
   timeBtnLabel: '时间',
@@ -826,7 +914,7 @@ const ZH_TEXT: UiText = {
   aiConfiguredCharsCount: (ready, total) => `在线可回复：${ready} / ${total}`,
   toastAiGlobalSaved: '已保存 AI 全局设置',
   aiEmptyTitle: (title) => `「${title}」空白 AI 对话模板`,
-  aiEmptySub: '底部可直接发送消息！在线且已就绪的角色会参与随机回复，输入 @角色名 可指定回复，AI 还能发出 .mp3/.mp4 等文件卡片空壳。',
+  aiEmptySub: '底部可直接发送消息！在线且已就绪的角色会参与回应，输入 @角色名 可点名，点击右上角小黄点还能开启角色自动自由互动。',
   aiEmptyReadySummary: (ready, total) => `当前在线可回复角色：${ready} / ${total}`,
   aiOpenGlobalQuickBtn: '打开 AI 全局设置',
   aiOpenGuideBtn: '查看使用引导',
@@ -841,29 +929,70 @@ const ZH_TEXT: UiText = {
   aiToastCharOffline: (name) => `角色「${name}」目前处于离线状态，不会回复`,
   aiToastTargetMissingKey: (name) => `角色「${name}」尚未填写 API Key，无法回复`,
   aiToastRequestFailed: (name, reason) => `${name} 请求 AI 失败（${reason}）`,
-  aiGuideTitle: 'AI 对话模式使用引导',
+  aiGuideTitle: 'AI 新手引导',
   aiGuideBadges: ['引导 1 / 5', '引导 2 / 5', '引导 3 / 5', '引导 4 / 5', '引导 5 / 5'],
-  aiGuideStep1Title: '纯静态直连 · 我的设定与全局世界观',
+  aiGuideStep1Title: '纯静态直连 · 我的设定 · 联网搜索',
   aiGuideStep1Desc:
-    '保留原版 Nightcord 界面并开放底部直发，请求全部由浏览器本地直连发出。点右上角第 1 个小蓝点即可设置「我的名字、头像、人设」和共享给所有 AI 的「全局世界观」。',
-  aiGuideStep1Note: '※ 聊天标题栏右上角随时提供「使用引导」按钮，也可从左上菜单返回主页面。',
+    '保留干净的 Nightcord 聊天界面并开放底部直发，请求全部由浏览器直接发出。点击右上角第 1 个小蓝点即可配置「我的名字、头像、人设」、「全局世界观」以及「AI 联网搜索」开关。',
+  aiGuideStep1Note: '※ 界面右上角保持简洁无引导干扰，随时可在左上角「25時、ナイトコードで。▾」下拉框点击「AI 新手引导」重看。',
   aiGuideStep2Title: 'DeepSeek 预设 · 完整单角色 API 设置',
   aiGuideStep2Desc:
-    '无论是长按（右键）左侧角色，还是在右上小蓝点全局面板内切换角色，都可以完整设置协议（OpenAI / DeepSeek 官方预设 / Gemini / Claude）、链接地址、API Key、拉取模型与预设提示词，两边数据实时互通。',
-  aiGuideStep3Title: '离线角色不回复 · 两种时间控制模式',
+    '无论是长按（右键）左侧角色，还是在右上小蓝点全局面板切换角色，均可完整配置协议（OpenAI / DeepSeek 官方 / Gemini / Claude）、链接地址、API Key、模型与预设提示词，两边数据实时互通。',
+  aiGuideStep3Title: '语音/文字/静音状态感知 · 工具写发送时间',
   aiGuideStep3Desc:
-    '左侧栏处于「离线」状态的角色不会参与随机抽选、概率追击或 @点名回复。时间方面可在全局面板选择「本地实时时间」或「AI 推演合适时间」，系统会保证任何新消息都不早于上一条。',
-  aiGuideStep4Title: '直接发消息 · @点名 · AI 发送文件卡片',
+    '左侧离线角色不会参与回复，且各角色当前在「语音通话 / 静音 / 仅文字在线 / 离线」也会同步发给 AI 作为对话依据。开启 AI 决定发送时间后，AI 会通过工具写入时间而不会把时间当明文发出来。',
+  aiGuideStep4Title: '自主发文件 · 偶尔 @人 · 小黄点自动群聊',
   aiGuideStep4Desc:
-    '直接发消息可 @角色名 定向对话；当你让角色“做完 demo 发群里”时，AI 会自动在聊天中发出一张 Nightcord 风格的 .mp3 / .txt / .mp4 文件卡片空壳（纯展示，无需真实文件）。',
-  aiGuideStep5Title: '长按消息重生成／编辑 · 概率接话',
+    'AI 会结合语境自主判断是否需要发文件（如 .mp3/.txt/.jpg）及偶尔 @别人（不会每条都 @）。点击右上角第 2 个小黄点可打开「随机发言控制面板」，勾选是否随机上下线并点击开始，让 AI 们连续自然聊天；再点一下小黄点即可结束互动。',
+  aiGuideStep5Title: '长按消息编辑／重生成 · 复制会话到主页面',
   aiGuideStep5Desc:
-    '长按或右键任意一条消息可选择「重新生成」、「编辑」或「删除」。开启全局「概率接话」后，每条 AI 回复还有机会触发另一位在线角色顺口接一句。',
+    '长按或右键消息可「重新生成」「编辑」「删除」。左上角「25時、ナイトコードで。▾」菜单里还支持「会话复制到主页面」，跳转回主页面后输入新名称即可拷贝整段 AI 聊天记录；之后若想重温引导，随时到该左上角「25時」下拉框点击「AI 新手引导」即可。',
   aiGuideOpenConfigBtn: '立即打开 AI 全局设置',
   editMessageBtn: '编辑',
   regenerateMessageBtn: '重新生成',
   saveEditBtn: '保存修改',
   toastMessageUpdated: '已保存消息修改',
+  aiHeaderContinueBtn: '续聊',
+  aiHeaderStopBtn: '停止',
+  aiHeaderSettingsBtn: 'AI 设置',
+  aiUserAvatarPresetLabel: '默认头像预设',
+  aiReplyLengthLabel: '回复长度倾向',
+  aiReplyLengthShort: '简短',
+  aiReplyLengthNormal: '适中',
+  aiReplyLengthDetailed: '详细',
+  aiTemperatureLabel: (temp) => `生成随机度 (Temperature)：${temp.toFixed(2)}`,
+  aiCharTempUseGlobalBtn: '跟随全局',
+  aiFillPresetBtn: '填入 Nightcord 预设人设',
+  aiToastPresetFilled: (name) => `已填入「${name}」的 Nightcord 预设人设`,
+  aiTestConnBtn: '测试连接',
+  aiTestingConnBtn: '测试中...',
+  aiTestConnOk: (latencyMs, model) => `连接成功（${latencyMs}ms · ${model}）`,
+  aiTestConnFail: (detail) => `连接失败：${detail}`,
+  aiExportTranscriptBtn: '导出 AI 对话文本 (.txt)',
+  aiToastTranscriptExported: '已导出当前 AI 对话文本',
+  aiToastAborted: '已中止 AI 生成',
+  aiToastPartialOffline: (names) => `以下角色处于离线已跳过：${names}`,
+  aiToastPartialMissingKey: (names) => `以下角色未填 Key 已跳过：${names}`,
+  aiWebSearchToggle: '开启 AI 联网搜索',
+  aiWebSearchDesc: '开启后，AI 在遇到时事、资料考据或不确定事实问题时可调用搜索工具或联网能力查询参考。',
+  aiGuideMenuBtn: 'AI 新手引导',
+  aiCopyToMainBtn: '会话复制到主页面',
+  copyAiToMainModalTitle: '复制 AI 会话到主页面',
+  copyAiToMainModalSub: '已返回主页面。输入新对话名称，即可把刚才的 AI 聊天记录完整拷贝为一条新的普通会话。',
+  copyAiToMainLabel: '新会话名称',
+  copyAiToMainPlaceholder: '例：深夜灵感讨论记录',
+  copyAiToMainSummary: (count) => `将复制 ${count} 条会话消息`,
+  copyAiToMainConfirm: '创建并拷贝记录',
+  toastCopiedAiToMain: (title) => `已将 AI 会话复制到主页面对话「${title}」`,
+  aiAutoChatModalTitle: 'AI 角色随机发言控制面板',
+  aiAutoChatModalSub: '点击开始后，在线且已配置 Key 的角色会持续自由互动聊天；互动期间再次点击右上角小黄点即可结束。',
+  aiAutoChatRandomPresenceToggle: '随机切换角色上下线与通话状态',
+  aiAutoChatRandomPresenceDesc: '每轮对话间隙随机让成员切换在线、语音通话、静音或离线，并实时同步给 AI（至少保留 1 名配置角色在线）。',
+  aiAutoChatIntervalLabel: (sec) => `发言节奏间隔：${sec} 秒`,
+  aiAutoChatStartBtn: '开始自动互动',
+  aiAutoChatToastStarted: '已开启 AI 自由互动（再点一下右上角小黄点可结束）',
+  aiAutoChatToastStopped: '已停止 AI 自动互动聊天',
+  aiAutoChatHeaderStopBtn: '结束互动',
 };
 
 const EN_TEXT: UiText = {
@@ -891,7 +1020,7 @@ const EN_TEXT: UiText = {
   step5Label: 'Auto-Playback Mode',
   step6Title: 'AI Chat Mode (Direct Browser Fetch)',
   step6Desc:
-    'Open "AI Chat Mode" from the server menu to chat directly in Immersive Mode. Supports DeepSeek & multi-protocol presets, your avatar/name/persona, shared worldview, full per-character API settings, online-only gating, realtime or AI-inferred timestamps, dummy file cards (e.g. .mp3), and a standalone top-bar guide.',
+    'Open "AI Chat Mode" from the server menu to chat directly in Immersive Mode. Includes DeepSeek presets, web search toggle, voice/text/mute status awareness, profile & worldview, tool-called AI timestamps, autonomous file cards & @mentions, yellow-dot auto group chat, and copy-to-main chat export.',
   step6Label: 'AI Chat Mode',
   skip: 'Skip',
   back: 'Back',
@@ -959,8 +1088,11 @@ const EN_TEXT: UiText = {
   clearStep2Desc:
     'This action cannot be undone. Export a backup first if you want to keep your conversations.',
   clearStep2Confirm: 'Confirm & Clear',
-  toastExportSuccess: 'Exported local backup file',
-  toastImportSuccess: (count) => `Imported local backup (${count} conversations)`,
+  toastExportSuccess: 'Exported chats, AI settings & media backup',
+  toastImportSuccess: (count, aiCount = 0) =>
+    aiCount > 0
+      ? `Imported backup (${count} chats, ${aiCount} AI chats)`
+      : `Imported local backup (${count} conversations)`,
   toastImportInvalid: 'Import failed: invalid backup file',
   toastCacheCleared: 'Local cache cleared and template restored',
   timeBtnLabel: 'Time',
@@ -1123,7 +1255,7 @@ const EN_TEXT: UiText = {
   aiConfiguredCharsCount: (ready, total) => `Online & ready: ${ready} / ${total}`,
   toastAiGlobalSaved: 'Saved AI global settings',
   aiEmptyTitle: (title) => `Blank AI Chat Template · ${title}`,
-  aiEmptySub: 'Send messages directly below! Online & configured roles reply randomly unless @mentioned, and can send Nightcord-style file shells (e.g. .mp3 demos).',
+  aiEmptySub: 'Send messages directly below! Online & configured roles reply cleanly, accept @mentions, and can run autonomous group chats via the top-right yellow dot.',
   aiEmptyReadySummary: (ready, total) => `Online & ready roles: ${ready} / ${total}`,
   aiOpenGlobalQuickBtn: 'Open AI Global Settings',
   aiOpenGuideBtn: 'Usage Guide',
@@ -1138,29 +1270,70 @@ const EN_TEXT: UiText = {
   aiToastCharOffline: (name) => `Character "${name}" is currently Offline and cannot reply`,
   aiToastTargetMissingKey: (name) => `Character "${name}" has no API Key configured`,
   aiToastRequestFailed: (name, reason) => `${name} failed to reply (${reason})`,
-  aiGuideTitle: 'AI Chat Mode Guide',
+  aiGuideTitle: 'AI Beginner Guide',
   aiGuideBadges: ['Guide 1 / 5', 'Guide 2 / 5', 'Guide 3 / 5', 'Guide 4 / 5', 'Guide 5 / 5'],
-  aiGuideStep1Title: 'Direct Browser Fetch · Profile & Worldview',
+  aiGuideStep1Title: 'Direct Browser Fetch · Profile & Web Search',
   aiGuideStep1Desc:
-    'Chat inside the authentic Nightcord UI with direct browser API requests. Click the 1st cyan dot (top-right) to set your Name, Avatar, Persona, and the shared Worldview passed to every AI character.',
-  aiGuideStep1Note: '* Open this guide anytime via the "Guide" button in the top chat header or return home from the server menu.',
+    'Chat inside the clean Nightcord UI with direct browser API requests. Click the 1st cyan dot (top-right) to set your Name, Avatar, Persona, shared Worldview, and toggle AI Web Search.',
+  aiGuideStep1Note: '* Kept out of the chat header: reopen this "AI Beginner Guide" anytime from the top-left "25時、ナイトコードで。▾" menu.',
   aiGuideStep2Title: 'DeepSeek Preset & Complete Per-Character APIs',
   aiGuideStep2Desc:
     'Both sidebar long-press and the Global Settings panel let you configure full Protocol (OpenAI / DeepSeek Official / Gemini / Anthropic), Base URL, API Key, Model fetch, and Prompt—kept in live sync.',
-  aiGuideStep3Title: 'Offline Gating & Two Timestamp Modes',
+  aiGuideStep3Title: 'Voice / Text / Mute Awareness & Tool Timestamps',
   aiGuideStep3Desc:
-    'Sidebar members marked Offline cannot be picked, @mentioned, or triggered for follow-ups. Pick Local Real-Time or AI-Inferred timestamps (clamped never to precede the previous message).',
-  aiGuideStep4Title: 'Direct Send · @Mention · AI File Card Shells',
+    'Sidebar Offline gating stays enforced, and each character’s Voice / Muted / Text-only state is shared with the AI. AI-inferred timestamps use a callable tool so raw timestamps never leak into chat bubbles.',
+  aiGuideStep4Title: 'Contextual Files, @Mentions & Yellow-Dot Auto Chat',
   aiGuideStep4Desc:
-    'Send directly below or @mention a role. Asking someone to share a demo (e.g. @K send the demo mp3) lets the AI post a non-clickable Nightcord file card shell right in the chat.',
-  aiGuideStep5Title: 'Long-Press to Regenerate, Edit & Follow-Up',
+    'AI decides from context when to attach file cards or occasionally @mention peers. Click the 2nd yellow dot (top-right) to open the Autonomous Group Chat panel (with optional random presence transitions) and click the yellow dot again to stop.',
+  aiGuideStep5Title: 'Long-Press Edit/Regen & Copy Chat to Main',
   aiGuideStep5Desc:
-    'Long-press (or right-click) any message to Regenerate, Edit, or Delete. Enable probabilistic follow-ups in Global Settings so another online role may chime in automatically.',
+    'Long-press any message to Regenerate, Edit, or Delete. Use "Copy Chat to Main" inside the top-left "25時、ナイトコードで。▾" menu to clone AI history into a new Main conversation—and revisit this AI Beginner Guide from that same menu anytime.',
   aiGuideOpenConfigBtn: 'Open AI Settings Now',
   editMessageBtn: 'Edit',
   regenerateMessageBtn: 'Regenerate',
   saveEditBtn: 'Save',
   toastMessageUpdated: 'Message updated',
+  aiHeaderContinueBtn: 'Continue',
+  aiHeaderStopBtn: 'Stop',
+  aiHeaderSettingsBtn: 'Settings',
+  aiUserAvatarPresetLabel: 'Preset Avatar',
+  aiReplyLengthLabel: 'Reply Length',
+  aiReplyLengthShort: 'Short',
+  aiReplyLengthNormal: 'Normal',
+  aiReplyLengthDetailed: 'Detailed',
+  aiTemperatureLabel: (temp) => `Temperature: ${temp.toFixed(2)}`,
+  aiCharTempUseGlobalBtn: 'Use Global',
+  aiFillPresetBtn: 'Fill Nightcord Preset',
+  aiToastPresetFilled: (name) => `Filled Nightcord preset for ${name}`,
+  aiTestConnBtn: 'Test Connection',
+  aiTestingConnBtn: 'Testing...',
+  aiTestConnOk: (latencyMs, model) => `Connected (${latencyMs}ms · ${model})`,
+  aiTestConnFail: (detail) => `Failed: ${detail}`,
+  aiExportTranscriptBtn: 'Export AI Chat (.txt)',
+  aiToastTranscriptExported: 'Exported AI conversation transcript',
+  aiToastAborted: 'Stopped AI generation',
+  aiToastPartialOffline: (names) => `Skipped offline roles: ${names}`,
+  aiToastPartialMissingKey: (names) => `Skipped unconfigured roles: ${names}`,
+  aiWebSearchToggle: 'Enable AI Web Search',
+  aiWebSearchDesc: 'Allow AI models to call web search or native search grounding when verifying facts or current information.',
+  aiGuideMenuBtn: 'AI Beginner Guide',
+  aiCopyToMainBtn: 'Copy Chat to Main',
+  copyAiToMainModalTitle: 'Copy AI Chat to Main Page',
+  copyAiToMainModalSub: 'Returned to the main workspace. Name the new conversation to copy your AI chat history into it.',
+  copyAiToMainLabel: 'New Conversation Name',
+  copyAiToMainPlaceholder: 'e.g. Late Night AI Session',
+  copyAiToMainSummary: (count) => `Ready to copy ${count} message(s)`,
+  copyAiToMainConfirm: 'Create & Copy',
+  toastCopiedAiToMain: (title) => `Copied AI chat into main conversation "${title}"`,
+  aiAutoChatModalTitle: 'Autonomous AI Group Chat',
+  aiAutoChatModalSub: 'Online configured characters converse continuously turn by turn. Click the top-right yellow dot again anytime to stop.',
+  aiAutoChatRandomPresenceToggle: 'Randomly toggle online / voice / mute status',
+  aiAutoChatRandomPresenceDesc: 'Occasionally switches member status between Online, Voice, Muted, and Offline between turns (always keeping at least 1 ready role online).',
+  aiAutoChatIntervalLabel: (sec) => `Turn interval: ${sec}s`,
+  aiAutoChatStartBtn: 'Start Auto Chat',
+  aiAutoChatToastStarted: 'Started autonomous AI group chat (click yellow dot again to stop)',
+  aiAutoChatToastStopped: 'Stopped autonomous AI group chat',
+  aiAutoChatHeaderStopBtn: 'Stop Auto',
 };
 
 export function getUiText(lang: UiLanguage): UiText {
