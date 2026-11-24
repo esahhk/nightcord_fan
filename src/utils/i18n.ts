@@ -273,6 +273,9 @@ export interface UiText {
   aiHeaderContinueBtn: string;
   aiHeaderStopBtn: string;
   aiHeaderSettingsBtn: string;
+  aiDropdownSettingsBtn: string;
+  aiDropdownContinueBtn: string;
+  aiDropdownAutoChatBtn: string;
   aiUserAvatarPresetLabel: string;
   aiReplyLengthLabel: string;
   aiReplyLengthShort: string;
@@ -311,6 +314,57 @@ export interface UiText {
   aiAutoChatToastStarted: string;
   aiAutoChatToastStopped: string;
   aiAutoChatHeaderStopBtn: string;
+  aiTimeFrequencyLabel: string;
+  aiTimeFreqHigh: string;
+  aiTimeFreqHighDesc: string;
+  aiTimeFreqSomewhatHigh: string;
+  aiTimeFreqSomewhatHighDesc: string;
+  aiTimeFreqBalanced: string;
+  aiTimeFreqBalancedDesc: string;
+  aiTimeFreqSomewhatLow: string;
+  aiTimeFreqSomewhatLowDesc: string;
+  aiTimeFreqLow: string;
+  aiTimeFreqLowDesc: string;
+  aiOutputLanguageLabel: string;
+  aiOutputLanguageHint: string;
+  aiOutputLangAuto: string;
+  aiOutputLangZhCn: string;
+  aiOutputLangZhTw: string;
+  aiOutputLangEn: string;
+  aiOutputLangJa: string;
+  aiUsageBtn: string;
+  aiUsageModalTitle: string;
+  aiUsageModalSub: string;
+  aiUsageSessionTitle: string;
+  aiUsageHistoryTitle: string;
+  aiUsageResetSessionBtn: string;
+  closeModal: string;
+  aiUsageToastSessionReset: string;
+  aiUsageRequestsLabel: string;
+  aiUsageKnownRequestsLabel: string;
+  aiUsageUnknownRequestsLabel: string;
+  aiUsageInputLabel: string;
+  aiUsageOutputLabel: string;
+  aiUsageTotalLabel: string;
+  aiUsageThinkingLabel: string;
+  aiUsageCachedLabel: string;
+  aiUsageExtraLabel: string;
+  aiUsageUnknown: string;
+  aiUsagePartialUnknownNote: (unknownCount: number) => string;
+  aiUsageCostNotice: string;
+  aiUsageBreakdownTitle: string;
+  aiUsageFilterSession: string;
+  aiUsageFilterHistory: string;
+  aiUsageNoRecords: string;
+  aiUsageStatusOk: string;
+  aiUsageStatusError: string;
+  aiUsagePurposeChat: string;
+  aiUsagePurposeFollowUp: string;
+  aiUsagePurposeAutoChat: string;
+  aiUsagePurposeContinue: string;
+  aiUsagePurposeRegenerate: string;
+  aiUsagePurposeTimeAnalysis: string;
+  aiUsagePurposeTest: string;
 }
 
 const JA_TEXT: UiText = {
@@ -345,7 +399,7 @@ const JA_TEXT: UiText = {
   step5Label: '自動再生モード',
   step6Title: 'AIチャットモード（完全ローカル直連）',
   step6Desc:
-    'メニューの「AIチャットモード」に入ると、没入モードのまま直接送信してAIキャラと会話できます。DeepSeek等のAPI設定、Web検索、通話/テキスト/ミュート状態連動、自分のプロフィール＆世界観、AI時刻ツール、自律ファイル＆@送信、黄色い点での自動フリートーク、通常モードへの会話コピーを備えています。',
+    'メニューの「AIチャットモード」に入ると、没入モードのまま直接送信してAIキャラと会話できます。DeepSeek等のAPI設定、Web検索、通話/テキスト/ミュート状態連動、自分のプロフィール＆世界観、頻度別AI時刻ツール、出力言語切替、API使用量モニター、黄色い点での自動フリートーク、通常モードへの会話コピーを備えています。',
   step6Label: 'AIチャットモード',
   skip: 'スキップ',
   back: '戻る',
@@ -577,7 +631,7 @@ const JA_TEXT: UiText = {
   aiConfiguredCharsCount: (ready, total) => `オンライン返信可能：${ready} / ${total} 名`,
   toastAiGlobalSaved: 'AIグローバル設定をローカルに保存しました',
   aiEmptyTitle: (title) => `「${title}」空白 AIチャットテンプレート`,
-  aiEmptySub: '下の入力欄から直接送信できます。オンライン設定済みキャラの自動応答、@指名、状況に応じたファイル送信や黄色い点でのAI自動会話に対応しています。',
+  aiEmptySub: '下の入力欄から直接送信できます。左上の「25時、ナイトコードで。▾」メニューや右上の青い点・黄色い点からAI設定・自動会話を行えます。',
   aiEmptyReadySummary: (ready, total) => `現在の返信可能（オンライン）キャラ：${ready} / ${total} 名`,
   aiOpenGlobalQuickBtn: 'AI グローバル設定を開く',
   aiOpenGuideBtn: '使い方ガイドを見る',
@@ -587,7 +641,7 @@ const JA_TEXT: UiText = {
   aiOfflineStatusBadge: 'オフライン中（返信対象外）',
   aiGeneratingStatus: (name) => `${name} が入力中...`,
   aiToastBusy: 'AIが返信を生成中です。少しお待ちください',
-  aiToastNoConfiguredChar: 'API Key設定済みかつオンラインのキャラがいません。左のキャラ長押しまたは右上の青い点から設定してください。',
+  aiToastNoConfiguredChar: 'API Key設定済みかつオンラインのキャラがいません。左のキャラ長押しまたは「25時▾」内のAIグローバル設定から設定してください。',
   aiToastAllOffline: '設定済みのキャラがすべてオフラインです。左メンバー長押しで「オンライン」または「通話中」にすると返信できます。',
   aiToastCharOffline: (name) => `「${name}」は現在オフラインのため返信できません`,
   aiToastTargetMissingKey: (name) => `「${name}」はAPI Key未設定のため返信できません`,
@@ -596,20 +650,20 @@ const JA_TEXT: UiText = {
   aiGuideBadges: ['ガイド 1 / 5', 'ガイド 2 / 5', 'ガイド 3 / 5', 'ガイド 4 / 5', 'ガイド 5 / 5'],
   aiGuideStep1Title: '完全静的直連・自分の設定・世界観・Web検索',
   aiGuideStep1Desc:
-    '右上の青い点（1番目）から「自分の名前・アバター・設定」、共通「世界観」、そして「Web検索」オン／オフを一括設定できます。リクエストはすべてブラウザから直接送信されます。',
-  aiGuideStep1Note: '※ 案内は右上のUIを邪魔せず、左上の「25時、ナイトコードで。▾」メニュー内の「AI初心者ガイド」からいつでも見直せます。',
+    'チャット画面は通常版と同じクリーンなまま、左上の「25時、ナイトコードで。▾」メニューまたは右上の青い点から「自分の設定」「共通世界観」「Web検索」を設定できます。',
+  aiGuideStep1Note: '※ AI操作やガイドはすべて左上の「25時、ナイトコードで。▾」ドロップダウン内にまとまっています。',
   aiGuideStep2Title: 'DeepSeekプリセット＆キャラ別フルAPI設定',
   aiGuideStep2Desc:
     '左メンバー長押し（右クリック）でもグローバル設定内でも、OpenAI互換・DeepSeek公式・Gemini・Claudeの全プロトコル、URL、API Key、モデル、プロンプトを個別に設定でき、データはリアルタイム同期します。',
-  aiGuideStep3Title: '通話/ミュート状態連動＆時刻ツール制御',
+  aiGuideStep3Title: '通話/ミュート状態連動＆頻度制御時刻ツール',
   aiGuideStep3Desc:
-    '左側のオフラインは返信対象外となり、さらに各メンバーがボイス通話中／ミュート中／テキストのみかもAIへ共有されます。AI時刻推論は専用ツール経由で入力されるため、本文に時刻文字列が漏れる心配がありません。',
-  aiGuideStep4Title: '自律ファイル送信・自然な@メンション・自動会話',
+    '左側のオフラインは返信対象外となり、通話中／ミュート中／テキストのみかもAIへ共有されます。AI時刻推論は5段階の会話頻度傾向と専用構造化ツール経由で入力されるため、本文に時刻文字列が混ざることはありません。',
+  aiGuideStep4Title: '出力言語切替・自律ファイル・自動会話',
   aiGuideStep4Desc:
-    'AIは会話の流れから必要に応じて自律的にファイルカードや時折の@メンションを送ります。さらに右上の黄色い点（2番目）を押すと「ランダム発言パネル」が開き、ランダムな上下線切替付きでAI同士を連続会話させられます（再度黄色い点で停止）。',
-  aiGuideStep5Title: '長押し編集／再生成＆通常ページへ会話コピー',
+    'キャラの性格を保ったまま出力言語（自動／簡体字／繁体字／EN／日本語）を指定可能。AIは状況に応じてファイルや@メンションを自律送信し、黄色い点またはメニューから連続自動会話を開けます。',
+  aiGuideStep5Title: 'API使用量モニター・長押し編集＆通常コピー',
   aiGuideStep5Desc:
-    '発言は長押しで「再生成」「編集」「削除」が可能。また左上「25時、ナイトコードで。▾」内の「会話を通常ページへコピー」でAIログを通常モードの新規会話へ丸ごと複製できます。このガイドはいつでも左上「25時▾」メニューの「AI初心者ガイド」から再表示できます。',
+    '「25時▾」内の「API使用量モニター」で今セッションと累計の実トークン統計（不明時は未知表示）を確認可能。発言は長押しで編集・再生成・削除、さらに「通常会話へコピー」やこのガイドの再表示も行えます。',
   aiGuideOpenConfigBtn: '今すぐAIグローバル設定を開く',
   editMessageBtn: '編集',
   regenerateMessageBtn: '再生成',
@@ -618,6 +672,9 @@ const JA_TEXT: UiText = {
   aiHeaderContinueBtn: '続話',
   aiHeaderStopBtn: '停止',
   aiHeaderSettingsBtn: 'AI設定',
+  aiDropdownSettingsBtn: 'AI グローバル設定',
+  aiDropdownContinueBtn: '続話',
+  aiDropdownAutoChatBtn: '自動会話',
   aiUserAvatarPresetLabel: '既定アバター切替',
   aiReplyLengthLabel: '返信の長さ',
   aiReplyLengthShort: '短め',
@@ -639,7 +696,7 @@ const JA_TEXT: UiText = {
   aiWebSearchToggle: 'AI Web検索を有効にする',
   aiWebSearchDesc: 'オンにすると、事実確認や最新情報が必要な場面でAIが検索ツール／検索機能を参照できます。',
   aiGuideMenuBtn: 'AI初心者ガイド',
-  aiCopyToMainBtn: '会話を通常ページへコピー',
+  aiCopyToMainBtn: '通常会話へコピー',
   copyAiToMainModalTitle: '通常ページへ新会話としてコピー',
   copyAiToMainModalSub: '現在のAI会話ログと状態切替を、通常モードの新しい会話にコピーします。',
   copyAiToMainLabel: '新しい会話名',
@@ -656,6 +713,57 @@ const JA_TEXT: UiText = {
   aiAutoChatToastStarted: 'AIランダム自動会話を開始しました（黄色い点をもう一度押すと終了）',
   aiAutoChatToastStopped: 'AIランダム自動会話を終了しました',
   aiAutoChatHeaderStopBtn: '自動会話停止',
+  aiTimeFrequencyLabel: '会話頻度の傾向（AI時刻間隔の疎密）',
+  aiTimeFreqHigh: '高頻度',
+  aiTimeFreqHighDesc: '数分内の連続チャットが中心（まれに短い休止）。',
+  aiTimeFreqSomewhatHigh: 'やや高頻度',
+  aiTimeFreqSomewhatHighDesc: '短い間隔が多めで、時々数十分〜数時間の間が空きます。',
+  aiTimeFreqBalanced: 'バランス',
+  aiTimeFreqBalancedDesc: '連続返信・数十分の余白・数時間後の再開が自然に混在します。',
+  aiTimeFreqSomewhatLow: 'やや低頻度',
+  aiTimeFreqSomewhatLowDesc: '数十分〜数時間の間隔が多めで、たまに連続で話します。',
+  aiTimeFreqLow: '低頻度',
+  aiTimeFreqLowDesc: '会話の波が少なめで、数時間以上の間隔が頻繁に入ります。',
+  aiOutputLanguageLabel: 'モデル出力言語（UI言語とは独立）',
+  aiOutputLanguageHint: 'キャラクターの性格・口調を保ったまま、生成される返信本文の言語のみを制御します。',
+  aiOutputLangAuto: '自動',
+  aiOutputLangZhCn: '简体中文',
+  aiOutputLangZhTw: '繁體中文',
+  aiOutputLangEn: 'English',
+  aiOutputLangJa: '日本語',
+  aiUsageBtn: 'API 使用量モニター',
+  aiUsageModalTitle: 'API 使用量モニター',
+  aiUsageModalSub: '実際のAPI応答から返されたトークン統計を記録します（追加APIリクエストは発生しません）。',
+  aiUsageSessionTitle: '現在のセッション累計',
+  aiUsageHistoryTitle: '履歴累計（更新後も保持）',
+  aiUsageResetSessionBtn: '現在セッションをリセット',
+  closeModal: '閉じる',
+  aiUsageToastSessionReset: '現在セッションのAPI統計をリセットしました（履歴累計は保持）',
+  aiUsageRequestsLabel: 'API リクエスト数',
+  aiUsageKnownRequestsLabel: '統計取得済み',
+  aiUsageUnknownRequestsLabel: '使用量不明',
+  aiUsageInputLabel: '入力トークン',
+  aiUsageOutputLabel: '出力トークン',
+  aiUsageTotalLabel: '合計トークン',
+  aiUsageThinkingLabel: '思考トークン',
+  aiUsageCachedLabel: 'キャッシュトークン',
+  aiUsageExtraLabel: 'その他追加トークン',
+  aiUsageUnknown: '未知',
+  aiUsagePartialUnknownNote: (unknownCount) => `内 ${unknownCount} 件は使用量未返却`,
+  aiUsageCostNotice: '表示されている数値は各プロバイダが返した実トークン数であり、課金額や費用見積もりとは別管理です。使用量フィールドを返さないAPIは推測せず「未知」と表示します。',
+  aiUsageBreakdownTitle: 'リクエスト別明細',
+  aiUsageFilterSession: '現在セッション',
+  aiUsageFilterHistory: '履歴全体',
+  aiUsageNoRecords: 'まだAPIリクエスト履歴がありません。',
+  aiUsageStatusOk: '成功',
+  aiUsageStatusError: 'エラー',
+  aiUsagePurposeChat: 'チャット返信',
+  aiUsagePurposeFollowUp: '追撃返信',
+  aiUsagePurposeAutoChat: '自動会話',
+  aiUsagePurposeContinue: '続話',
+  aiUsagePurposeRegenerate: '再生成',
+  aiUsagePurposeTimeAnalysis: '時刻推論',
+  aiUsagePurposeTest: '接続テスト',
 };
 
 const ZH_TEXT: UiText = {
@@ -682,7 +790,7 @@ const ZH_TEXT: UiText = {
   step5Label: '自动播放模式',
   step6Title: 'AI 对话模式（纯静态本地直连）',
   step6Desc:
-    '在左侧菜单点击「AI 对话模式」进入全新对话页。支持 DeepSeek 等多协议预设、联网搜索、语音/文字/静音状态同步、个人设定与世界观、AI 调用工具写发送时间、自主发文件与 @人、小黄点控制自动互动，以及一键将 AI 会话复制到主页面；可随时在左上角「25時」菜单重看 AI 新手引导。',
+    '在左侧菜单点击「AI 对话模式」进入全新对话页。支持 DeepSeek 等多协议预设、联网搜索、语音/文字/静音状态同步、个人设定与世界观、5 档聊天频率 AI 时间、模型输出语言切换、API 用量监测、小黄点自动互动，以及复制会话到主页面；可随时在左上角「25時」重看 AI 新手引导。',
   step6Label: 'AI 对话模式',
   skip: '跳过',
   back: '上一步',
@@ -914,7 +1022,7 @@ const ZH_TEXT: UiText = {
   aiConfiguredCharsCount: (ready, total) => `在线可回复：${ready} / ${total}`,
   toastAiGlobalSaved: '已保存 AI 全局设置',
   aiEmptyTitle: (title) => `「${title}」空白 AI 对话模板`,
-  aiEmptySub: '底部可直接发送消息！在线且已就绪的角色会参与回应，输入 @角色名 可点名，点击右上角小黄点还能开启角色自动自由互动。',
+  aiEmptySub: '底部可直接发送消息，支持 @点名角色；AI 设置、续聊、随机发言群聊与会话复制均收纳在左上角「25時、ナイトコードで。▾」下拉栏中。',
   aiEmptyReadySummary: (ready, total) => `当前在线可回复角色：${ready} / ${total}`,
   aiOpenGlobalQuickBtn: '打开 AI 全局设置',
   aiOpenGuideBtn: '查看使用引导',
@@ -924,29 +1032,29 @@ const ZH_TEXT: UiText = {
   aiOfflineStatusBadge: '当前离线（不会回复）',
   aiGeneratingStatus: (name) => `${name} 正在思考回复...`,
   aiToastBusy: 'AI 正在生成回复，请稍候…',
-  aiToastNoConfiguredChar: '当前没有在线且已填 API Key 的角色，请长按左侧角色或点击右上角小蓝点设置。',
+  aiToastNoConfiguredChar: '当前没有在线且已填 API Key 的角色，请长按左侧角色或打开「25時▾」中的 AI 全局设置。',
   aiToastAllOffline: '已填 Key 的角色目前全部处于离线状态，请在左侧切换为「在线」或「语音中」后再试。',
   aiToastCharOffline: (name) => `角色「${name}」目前处于离线状态，不会回复`,
   aiToastTargetMissingKey: (name) => `角色「${name}」尚未填写 API Key，无法回复`,
   aiToastRequestFailed: (name, reason) => `${name} 请求 AI 失败（${reason}）`,
   aiGuideTitle: 'AI 新手引导',
   aiGuideBadges: ['引导 1 / 5', '引导 2 / 5', '引导 3 / 5', '引导 4 / 5', '引导 5 / 5'],
-  aiGuideStep1Title: '纯静态直连 · 我的设定 · 联网搜索',
+  aiGuideStep1Title: '原版纯净界面 · 个人设定 · 联网搜索',
   aiGuideStep1Desc:
-    '保留干净的 Nightcord 聊天界面并开放底部直发，请求全部由浏览器直接发出。点击右上角第 1 个小蓝点即可配置「我的名字、头像、人设」、「全局世界观」以及「AI 联网搜索」开关。',
-  aiGuideStep1Note: '※ 界面右上角保持简洁无引导干扰，随时可在左上角「25時、ナイトコードで。▾」下拉框点击「AI 新手引导」重看。',
+    '主界面保持干净的原版 Nightcord 观感并开放底部直发。展开左上角「25時、ナイトコードで。▾」下拉栏或点击右上角小蓝点，即可设置「我的名字/头像/人设」「全局世界观」与「AI 联网搜索」。',
+  aiGuideStep1Note: '※ 全部 AI 控制台按钮已整齐收纳在左上角「25時、ナイトコードで。▾」下拉栏中，可随时点此处的「AI 新手引导」重看。',
   aiGuideStep2Title: 'DeepSeek 预设 · 完整单角色 API 设置',
   aiGuideStep2Desc:
-    '无论是长按（右键）左侧角色，还是在右上小蓝点全局面板切换角色，均可完整配置协议（OpenAI / DeepSeek 官方 / Gemini / Claude）、链接地址、API Key、模型与预设提示词，两边数据实时互通。',
-  aiGuideStep3Title: '语音/文字/静音状态感知 · 工具写发送时间',
+    '无论是长按（右键）左侧角色，还是在全局设置里切换角色，均可完整配置协议（OpenAI / DeepSeek 官方 / Gemini / Claude）、链接地址、API Key、模型与预设提示词，两边数据实时互通。',
+  aiGuideStep3Title: '状态感知 · AI 自主决定发送时间与频率倾向',
   aiGuideStep3Desc:
-    '左侧离线角色不会参与回复，且各角色当前在「语音通话 / 静音 / 仅文字在线 / 离线」也会同步发给 AI 作为对话依据。开启 AI 决定发送时间后，AI 会通过工具写入时间而不会把时间当明文发出来。',
-  aiGuideStep4Title: '自主发文件 · 偶尔 @人 · 小黄点自动群聊',
+    '左侧离线角色不会回复，语音通话/静音/文字状态会实时同步给 AI。开启 AI 时间推演后支持 5 档频率倾向，并通过结构化工具写入真实消息时间戳，绝不输出到消息正文中。',
+  aiGuideStep4Title: '模型输出语言切换 · 自主发文件 · 自动群聊',
   aiGuideStep4Desc:
-    'AI 会结合语境自主判断是否需要发文件（如 .mp3/.txt/.jpg）及偶尔 @别人（不会每条都 @）。点击右上角第 2 个小黄点可打开「随机发言控制面板」，勾选是否随机上下线并点击开始，让 AI 们连续自然聊天；再点一下小黄点即可结束互动。',
-  aiGuideStep5Title: '长按消息编辑／重生成 · 复制会话到主页面',
+    '可独立指定 AI 回复语言（自动/简中/繁中/EN/日本語）而不改变角色性格与网页界面语言。AI 还会按语境发文件或偶尔 @人，点击小黄点可开启自动群聊互动。',
+  aiGuideStep5Title: 'API 用量监测 · 长按重生成 · 复制到主页面',
   aiGuideStep5Desc:
-    '长按或右键消息可「重新生成」「编辑」「删除」。左上角「25時、ナイトコードで。▾」菜单里还支持「会话复制到主页面」，跳转回主页面后输入新名称即可拷贝整段 AI 聊天记录；之后若想重温引导，随时到该左上角「25時」下拉框点击「AI 新手引导」即可。',
+    '在左上角「25時▾」菜单可打开「API 用量监测」查看当前会话与历史累计真实 Token 统计（无数据时标注未知）；长按消息可编辑/重生成/删除，也可把会话一键复制到主页面。',
   aiGuideOpenConfigBtn: '立即打开 AI 全局设置',
   editMessageBtn: '编辑',
   regenerateMessageBtn: '重新生成',
@@ -955,6 +1063,9 @@ const ZH_TEXT: UiText = {
   aiHeaderContinueBtn: '续聊',
   aiHeaderStopBtn: '停止',
   aiHeaderSettingsBtn: 'AI 设置',
+  aiDropdownSettingsBtn: 'AI 全局设置',
+  aiDropdownContinueBtn: '续聊',
+  aiDropdownAutoChatBtn: '随机发言',
   aiUserAvatarPresetLabel: '默认头像预设',
   aiReplyLengthLabel: '回复长度倾向',
   aiReplyLengthShort: '简短',
@@ -993,6 +1104,57 @@ const ZH_TEXT: UiText = {
   aiAutoChatToastStarted: '已开启 AI 自由互动（再点一下右上角小黄点可结束）',
   aiAutoChatToastStopped: '已停止 AI 自动互动聊天',
   aiAutoChatHeaderStopBtn: '结束互动',
+  aiTimeFrequencyLabel: '聊天频率倾向（影响时间间隔疏密）',
+  aiTimeFreqHigh: '高频',
+  aiTimeFreqHighDesc: '以几分钟内的连续对话为主，仅偶尔出现短暂停顿。',
+  aiTimeFreqSomewhatHigh: '偏高频',
+  aiTimeFreqSomewhatHighDesc: '短间隔连续聊天较多，偶尔会出现几十分钟到数小时空隙。',
+  aiTimeFreqBalanced: '均衡',
+  aiTimeFreqBalancedDesc: '连续聊天、几十分钟间隔与跨数小时休息自然混合分布。',
+  aiTimeFreqSomewhatLow: '偏低频',
+  aiTimeFreqSomewhatLowDesc: '以几十分钟至数小时的中长间隔为主，偶尔连续互动几句。',
+  aiTimeFreqLow: '低频',
+  aiTimeFreqLowDesc: '对话时段较少，经常间隔数小时甚至半天后再继续。',
+  aiOutputLanguageLabel: '模型输出语言选择',
+  aiOutputLanguageHint: '仅控制 AI 生成回复正文使用的语言，不影响角色性格、表达风格与网页自身界面语言。',
+  aiOutputLangAuto: '自动',
+  aiOutputLangZhCn: '简体中文',
+  aiOutputLangZhTw: '繁体中文',
+  aiOutputLangEn: 'English',
+  aiOutputLangJa: '日本語',
+  aiUsageBtn: 'API 用量监测',
+  aiUsageModalTitle: 'API 用量监测',
+  aiUsageModalSub: '直接统计实际 API 响应返回的真实用量，不发送额外测算请求。',
+  aiUsageSessionTitle: '当前会话累计用量',
+  aiUsageHistoryTitle: '历史累计用量（刷新保留）',
+  aiUsageResetSessionBtn: '重置当前会话统计',
+  closeModal: '关闭',
+  aiUsageToastSessionReset: '已重置当前会话统计（历史累计已保留）',
+  aiUsageRequestsLabel: 'API 请求次数',
+  aiUsageKnownRequestsLabel: '有明确用量',
+  aiUsageUnknownRequestsLabel: '未返回用量',
+  aiUsageInputLabel: '输入 Token',
+  aiUsageOutputLabel: '输出 Token',
+  aiUsageTotalLabel: '总 Token',
+  aiUsageThinkingLabel: '思考 Token',
+  aiUsageCachedLabel: '缓存 Token',
+  aiUsageExtraLabel: '其他额外 Token',
+  aiUsageUnknown: '未知',
+  aiUsagePartialUnknownNote: (unknownCount) => `含 ${unknownCount} 次未返回用量`,
+  aiUsageCostNotice: '此处仅展示供应商 API 返回的真实 Token 用量，与费用估算完全分离；若接口未提供对应统计字段，将明确显示为“未知”而不会估算或伪造。',
+  aiUsageBreakdownTitle: '每次请求用量明细',
+  aiUsageFilterSession: '当前会话',
+  aiUsageFilterHistory: '历史明细',
+  aiUsageNoRecords: '暂无 API 请求记录。',
+  aiUsageStatusOk: '成功',
+  aiUsageStatusError: '失败',
+  aiUsagePurposeChat: '对话回复',
+  aiUsagePurposeFollowUp: '概率接话',
+  aiUsagePurposeAutoChat: '随机发言',
+  aiUsagePurposeContinue: '续聊',
+  aiUsagePurposeRegenerate: '重新生成',
+  aiUsagePurposeTimeAnalysis: '时间推算',
+  aiUsagePurposeTest: '连接测试',
 };
 
 const EN_TEXT: UiText = {
@@ -1020,7 +1182,7 @@ const EN_TEXT: UiText = {
   step5Label: 'Auto-Playback Mode',
   step6Title: 'AI Chat Mode (Direct Browser Fetch)',
   step6Desc:
-    'Open "AI Chat Mode" from the server menu to chat directly in Immersive Mode. Includes DeepSeek presets, web search toggle, voice/text/mute status awareness, profile & worldview, tool-called AI timestamps, autonomous file cards & @mentions, yellow-dot auto group chat, and copy-to-main chat export.',
+    'Open "AI Chat Mode" from the server menu to chat directly in Immersive Mode. Includes DeepSeek presets, web search toggle, voice/text/mute awareness, profile & worldview, 5-tier chat frequency AI timestamps, output language switch, API usage monitor, yellow-dot auto group chat, and copy-to-main.',
   step6Label: 'AI Chat Mode',
   skip: 'Skip',
   back: 'Back',
@@ -1255,7 +1417,7 @@ const EN_TEXT: UiText = {
   aiConfiguredCharsCount: (ready, total) => `Online & ready: ${ready} / ${total}`,
   toastAiGlobalSaved: 'Saved AI global settings',
   aiEmptyTitle: (title) => `Blank AI Chat Template · ${title}`,
-  aiEmptySub: 'Send messages directly below! Online & configured roles reply cleanly, accept @mentions, and can run autonomous group chats via the top-right yellow dot.',
+  aiEmptySub: 'Send messages below and @mention characters. Open the top-left "25時、ナイトコードで。▾" menu or use the cyan/yellow titlebar dots for AI controls.',
   aiEmptyReadySummary: (ready, total) => `Online & ready roles: ${ready} / ${total}`,
   aiOpenGlobalQuickBtn: 'Open AI Global Settings',
   aiOpenGuideBtn: 'Usage Guide',
@@ -1265,29 +1427,29 @@ const EN_TEXT: UiText = {
   aiOfflineStatusBadge: 'Offline (will not reply)',
   aiGeneratingStatus: (name) => `${name} is typing...`,
   aiToastBusy: 'AI is generating a reply, please wait...',
-  aiToastNoConfiguredChar: 'No online character has an API Key configured yet. Long-press a sidebar role or click the cyan dot.',
+  aiToastNoConfiguredChar: 'No online character has an API Key configured yet. Long-press a sidebar role or open AI Global Settings in the top-left menu.',
   aiToastAllOffline: 'All configured characters are currently Offline. Switch a member Online or to Voice in the sidebar.',
   aiToastCharOffline: (name) => `Character "${name}" is currently Offline and cannot reply`,
   aiToastTargetMissingKey: (name) => `Character "${name}" has no API Key configured`,
   aiToastRequestFailed: (name, reason) => `${name} failed to reply (${reason})`,
   aiGuideTitle: 'AI Beginner Guide',
   aiGuideBadges: ['Guide 1 / 5', 'Guide 2 / 5', 'Guide 3 / 5', 'Guide 4 / 5', 'Guide 5 / 5'],
-  aiGuideStep1Title: 'Direct Browser Fetch · Profile & Web Search',
+  aiGuideStep1Title: 'Original Clean UI · Profile & Web Search',
   aiGuideStep1Desc:
-    'Chat inside the clean Nightcord UI with direct browser API requests. Click the 1st cyan dot (top-right) to set your Name, Avatar, Persona, shared Worldview, and toggle AI Web Search.',
-  aiGuideStep1Note: '* Kept out of the chat header: reopen this "AI Beginner Guide" anytime from the top-left "25時、ナイトコードで。▾" menu.',
+    'The main view stays identical to the original Nightcord layout with direct bottom input. Open the top-left "25時、ナイトコードで。▾" menu (or cyan dot) for your Profile, Shared Worldview, and AI Web Search.',
+  aiGuideStep1Note: '* All AI actions and this "AI Beginner Guide" stay neatly organized inside the top-left "25時、ナイトコードで。▾" dropdown.',
   aiGuideStep2Title: 'DeepSeek Preset & Complete Per-Character APIs',
   aiGuideStep2Desc:
     'Both sidebar long-press and the Global Settings panel let you configure full Protocol (OpenAI / DeepSeek Official / Gemini / Anthropic), Base URL, API Key, Model fetch, and Prompt—kept in live sync.',
-  aiGuideStep3Title: 'Voice / Text / Mute Awareness & Tool Timestamps',
+  aiGuideStep3Title: 'Presence Sync & Frequency-Guided Structured Timestamps',
   aiGuideStep3Desc:
-    'Sidebar Offline gating stays enforced, and each character’s Voice / Muted / Text-only state is shared with the AI. AI-inferred timestamps use a callable tool so raw timestamps never leak into chat bubbles.',
-  aiGuideStep4Title: 'Contextual Files, @Mentions & Yellow-Dot Auto Chat',
+    'Offline gating and Voice / Muted / Text-only states sync live to the AI. Autonomous timestamps use a 5-tier chat frequency setting and structured tool/JSON delivery so timestamps never appear in message text.',
+  aiGuideStep4Title: 'Output Language Switch, Files & Auto Chat',
   aiGuideStep4Desc:
-    'AI decides from context when to attach file cards or occasionally @mention peers. Click the 2nd yellow dot (top-right) to open the Autonomous Group Chat panel (with optional random presence transitions) and click the yellow dot again to stop.',
-  aiGuideStep5Title: 'Long-Press Edit/Regen & Copy Chat to Main',
+    'Set AI output language (Auto / 简体中文 / 繁體中文 / English / 日本語) without altering character personality or UI language. AI shares contextual files or @mentions, and the yellow dot opens Auto Chat.',
+  aiGuideStep5Title: 'API Usage Monitor, Edit/Regen & Copy to Main',
   aiGuideStep5Desc:
-    'Long-press any message to Regenerate, Edit, or Delete. Use "Copy Chat to Main" inside the top-left "25時、ナイトコードで。▾" menu to clone AI history into a new Main conversation—and revisit this AI Beginner Guide from that same menu anytime.',
+    'Open "API Usage Monitor" in the top-left menu to inspect Session and Historical token counts ("Unknown" when providers omit them). Long-press messages to Edit/Regenerate/Delete, or Copy Chat to Main.',
   aiGuideOpenConfigBtn: 'Open AI Settings Now',
   editMessageBtn: 'Edit',
   regenerateMessageBtn: 'Regenerate',
@@ -1296,6 +1458,9 @@ const EN_TEXT: UiText = {
   aiHeaderContinueBtn: 'Continue',
   aiHeaderStopBtn: 'Stop',
   aiHeaderSettingsBtn: 'Settings',
+  aiDropdownSettingsBtn: 'AI Global Settings',
+  aiDropdownContinueBtn: 'Continue',
+  aiDropdownAutoChatBtn: 'Auto Chat',
   aiUserAvatarPresetLabel: 'Preset Avatar',
   aiReplyLengthLabel: 'Reply Length',
   aiReplyLengthShort: 'Short',
@@ -1334,6 +1499,57 @@ const EN_TEXT: UiText = {
   aiAutoChatToastStarted: 'Started autonomous AI group chat (click yellow dot again to stop)',
   aiAutoChatToastStopped: 'Stopped autonomous AI group chat',
   aiAutoChatHeaderStopBtn: 'Stop Auto',
+  aiTimeFrequencyLabel: 'Chat Frequency Preference (Time Gap Pacing)',
+  aiTimeFreqHigh: 'High',
+  aiTimeFreqHighDesc: 'Mostly rapid bursts within minutes with occasional brief pauses.',
+  aiTimeFreqSomewhatHigh: 'Moderately High',
+  aiTimeFreqSomewhatHighDesc: 'Frequent short gaps with occasional longer breaks.',
+  aiTimeFreqBalanced: 'Balanced',
+  aiTimeFreqBalancedDesc: 'Natural mix of quick replies, medium pauses, and multi-hour gaps.',
+  aiTimeFreqSomewhatLow: 'Moderately Low',
+  aiTimeFreqSomewhatLowDesc: 'Mostly medium-to-long gaps with occasional short bursts.',
+  aiTimeFreqLow: 'Low',
+  aiTimeFreqLowDesc: 'Fewer chat sessions, commonly separated by several hours.',
+  aiOutputLanguageLabel: 'Model Output Language',
+  aiOutputLanguageHint: 'Guides only the language of AI message text without altering character personality, speaking style, or the webpage UI language.',
+  aiOutputLangAuto: 'Auto',
+  aiOutputLangZhCn: '简体中文',
+  aiOutputLangZhTw: '繁體中文',
+  aiOutputLangEn: 'English',
+  aiOutputLangJa: '日本語',
+  aiUsageBtn: 'API Usage Monitor',
+  aiUsageModalTitle: 'API Usage Monitor',
+  aiUsageModalSub: 'Tracks real provider-reported token usage from actual API requests without sending extra queries.',
+  aiUsageSessionTitle: 'Current Session Cumulative',
+  aiUsageHistoryTitle: 'Historical Cumulative (Persisted)',
+  aiUsageResetSessionBtn: 'Reset Current Session',
+  closeModal: 'Close',
+  aiUsageToastSessionReset: 'Reset current session API usage (historical totals preserved)',
+  aiUsageRequestsLabel: 'API Requests',
+  aiUsageKnownRequestsLabel: 'Usage reported',
+  aiUsageUnknownRequestsLabel: 'Unknown usage',
+  aiUsageInputLabel: 'Input Tokens',
+  aiUsageOutputLabel: 'Output Tokens',
+  aiUsageTotalLabel: 'Total Tokens',
+  aiUsageThinkingLabel: 'Thinking Tokens',
+  aiUsageCachedLabel: 'Cached Tokens',
+  aiUsageExtraLabel: 'Extra Tokens',
+  aiUsageUnknown: 'Unknown',
+  aiUsagePartialUnknownNote: (unknownCount) => `+${unknownCount} unknown`,
+  aiUsageCostNotice: 'Displays actual token counts returned by providers only, strictly separate from billing/cost estimates. When a provider omits usage fields, metrics are explicitly marked Unknown rather than estimated.',
+  aiUsageBreakdownTitle: 'Per-Request Breakdown',
+  aiUsageFilterSession: 'Session',
+  aiUsageFilterHistory: 'History',
+  aiUsageNoRecords: 'No API requests recorded yet.',
+  aiUsageStatusOk: 'OK',
+  aiUsageStatusError: 'Error',
+  aiUsagePurposeChat: 'Chat Reply',
+  aiUsagePurposeFollowUp: 'Follow-up',
+  aiUsagePurposeAutoChat: 'Auto Chat',
+  aiUsagePurposeContinue: 'Continue',
+  aiUsagePurposeRegenerate: 'Regenerate',
+  aiUsagePurposeTimeAnalysis: 'Time Inference',
+  aiUsagePurposeTest: 'Conn Test',
 };
 
 export function getUiText(lang: UiLanguage): UiText {

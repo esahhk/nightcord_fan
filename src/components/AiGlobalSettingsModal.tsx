@@ -3,8 +3,11 @@ import type { ChangeEvent, FormEvent } from 'react';
 import type {
   AiCharacterConfig,
   AiGlobalConfig,
+  AiOutputLanguage,
   AiProtocol,
   AiReplyLength,
+  AiTimeFrequency,
+  AiUsageRecord,
   AvatarType,
   CharacterProfile,
   UiLanguage,
@@ -36,6 +39,8 @@ interface AiGlobalSettingsModalProps {
   characterConfigs: Record<string, AiCharacterConfig>;
   onClose: () => void;
   onExportAiTranscript?: () => void;
+  onUsageRecord?: (record: AiUsageRecord) => void;
+  onOpenUsageModal?: () => void;
   onSave: (
     nextGlobal: AiGlobalConfig,
     nextCharacterConfigs: Record<string, AiCharacterConfig>
@@ -51,6 +56,8 @@ export function AiGlobalSettingsModal({
   characterConfigs,
   onClose,
   onExportAiTranscript,
+  onUsageRecord,
+  onOpenUsageModal,
   onSave,
 }: AiGlobalSettingsModalProps) {
   const t = getUiText(lang);
@@ -202,7 +209,8 @@ export function AiGlobalSettingsModal({
         draftGlobal.protocol,
         draftGlobal.baseUrl,
         draftGlobal.apiKey,
-        draftGlobal.model
+        draftGlobal.model,
+        onUsageRecord
       );
       if (res.ok) {
         setGlobalConnStatus({ ok: true, text: t.aiTestConnOk(res.latencyMs, res.detail) });
@@ -230,7 +238,13 @@ export function AiGlobalSettingsModal({
     setTestingCharConn(true);
     setCharConnStatus(null);
     try {
-      const res = await testAiConnection(testProtocol, testUrl, effectiveKey, testModel);
+      const res = await testAiConnection(
+        testProtocol,
+        testUrl,
+        effectiveKey,
+        testModel,
+        onUsageRecord
+      );
       if (res.ok) {
         setCharConnStatus({ ok: true, text: t.aiTestConnOk(res.latencyMs, res.detail) });
       } else {
@@ -347,14 +361,14 @@ export function AiGlobalSettingsModal({
         onClick={(e) => e.stopPropagation()}
         className="nc-modal-enter flex max-h-[92dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-[12px] border border-[#524468] bg-[#241C32] shadow-[0_22px_54px_rgba(0,0,0,0.72)]"
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#372B4A] bg-[#211A2C] px-5 py-3.5">
-          <div className="min-w-0">
+        <div className="flex shrink-0 flex-wrap items-start justify-between gap-2 border-b border-[#372B4A] bg-[#211A2C] px-4 py-3 sm:flex-nowrap sm:px-5 sm:py-3.5">
+          <div className="min-w-0 flex-1">
             <h2 className="text-[15px] font-bold text-[#EFEBF5]">{t.aiGlobalModalTitle}</h2>
             <p className="mt-1 text-[11.5px] leading-[1.5] text-[#9E93B3]">
               {t.aiGlobalModalSub}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 self-end sm:self-start">
             <span className="rounded-[6px] bg-[#362B4A] px-2.5 py-1 text-[11px] font-medium text-[#64D2E6]">
               {t.aiConfiguredCharsCount(readyCharacters.length, characters.length)}
             </span>
@@ -381,7 +395,7 @@ export function AiGlobalSettingsModal({
                 customAvatarMediaId={draftGlobal.userAvatarMediaId}
                 size={40}
               />
-              <div className="min-w-[160px] flex-1 space-y-1.5">
+              <div className="min-w-0 flex-1 space-y-1.5">
                 <input
                   type="text"
                   data-action="global-ai-user-name"
@@ -519,10 +533,100 @@ export function AiGlobalSettingsModal({
                 </span>
               </button>
             </div>
+
+            {draftGlobal.timeMode === 'ai_inferred' && (
+              <div className="space-y-1.5 border-t border-[#3E3156] pt-2.5">
+                <div className="text-[11.5px] font-semibold text-[#D6CFE3]">
+                  {t.aiTimeFrequencyLabel}
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
+                  {(
+                    [
+                      { id: 'high', label: t.aiTimeFreqHigh, desc: t.aiTimeFreqHighDesc },
+                      {
+                        id: 'somewhat_high',
+                        label: t.aiTimeFreqSomewhatHigh,
+                        desc: t.aiTimeFreqSomewhatHighDesc,
+                      },
+                      { id: 'balanced', label: t.aiTimeFreqBalanced, desc: t.aiTimeFreqBalancedDesc },
+                      {
+                        id: 'somewhat_low',
+                        label: t.aiTimeFreqSomewhatLow,
+                        desc: t.aiTimeFreqSomewhatLowDesc,
+                      },
+                      { id: 'low', label: t.aiTimeFreqLow, desc: t.aiTimeFreqLowDesc },
+                    ] as { id: AiTimeFrequency; label: string; desc: string }[]
+                  ).map((freq) => (
+                    <button
+                      key={freq.id}
+                      type="button"
+                      data-action={`global-ai-freq-${freq.id}`}
+                      onClick={() =>
+                        setDraftGlobal((prev) => ({ ...prev, timeFrequency: freq.id }))
+                      }
+                      className={`cursor-pointer rounded-[6px] border px-1.5 py-1.5 text-[11px] font-medium transition-colors ${
+                        draftGlobal.timeFrequency === freq.id
+                          ? 'border-[#64D2E6] bg-[#3B2E52] text-white'
+                          : 'border-[#46385C] bg-[#241C32] text-[#CFC7DD] hover:bg-[#322745]'
+                      }`}
+                    >
+                      {freq.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10.5px] leading-[1.4] text-[#9E93B3]">
+                  {draftGlobal.timeFrequency === 'high'
+                    ? t.aiTimeFreqHighDesc
+                    : draftGlobal.timeFrequency === 'somewhat_high'
+                      ? t.aiTimeFreqSomewhatHighDesc
+                      : draftGlobal.timeFrequency === 'somewhat_low'
+                        ? t.aiTimeFreqSomewhatLowDesc
+                        : draftGlobal.timeFrequency === 'low'
+                          ? t.aiTimeFreqLowDesc
+                          : t.aiTimeFreqBalancedDesc}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2.5 rounded-[9px] border border-[#3E3156] bg-[#2C223D] p-3">
             <div className="space-y-1.5">
+              <div className="text-[12.5px] font-semibold text-[#EFEBF5]">
+                {t.aiOutputLanguageLabel}
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
+                {(
+                  [
+                    { id: 'auto', label: t.aiOutputLangAuto },
+                    { id: 'zh-CN', label: t.aiOutputLangZhCn },
+                    { id: 'zh-TW', label: t.aiOutputLangZhTw },
+                    { id: 'en', label: t.aiOutputLangEn },
+                    { id: 'ja', label: t.aiOutputLangJa },
+                  ] as { id: AiOutputLanguage; label: string }[]
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    data-action={`global-ai-output-lang-${item.id}`}
+                    onClick={() =>
+                      setDraftGlobal((prev) => ({ ...prev, outputLanguage: item.id }))
+                    }
+                    className={`cursor-pointer rounded-[6px] border px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                      draftGlobal.outputLanguage === item.id
+                        ? 'border-[#64D2E6] bg-[#3B2E52] text-white'
+                        : 'border-[#46385C] bg-[#241C32] text-[#CFC7DD] hover:bg-[#322745]'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10.5px] leading-[1.4] text-[#9E93B3]">
+                {t.aiOutputLanguageHint}
+              </p>
+            </div>
+
+            <div className="space-y-1.5 border-t border-[#3E3156] pt-2.5">
               <div className="text-[12.5px] font-semibold text-[#EFEBF5]">
                 {t.aiReplyLengthLabel}
               </div>
@@ -1097,7 +1201,7 @@ export function AiGlobalSettingsModal({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-[#372B4A] bg-[#211A2C] px-4 py-3">
-          <div className="flex items-center">
+          <div className="flex flex-wrap items-center gap-2">
             {onExportAiTranscript && (
               <button
                 type="button"
@@ -1106,6 +1210,19 @@ export function AiGlobalSettingsModal({
                 className="h-[34px] cursor-pointer rounded-[7px] border border-[#4D3F66] bg-[#2D233E] px-3 text-[11.5px] font-medium text-[#64D2E6] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#3A2D50] hover:text-white"
               >
                 {t.aiExportTranscriptBtn}
+              </button>
+            )}
+            {onOpenUsageModal && (
+              <button
+                type="button"
+                data-action="global-ai-open-usage"
+                onClick={() => {
+                  onClose();
+                  onOpenUsageModal();
+                }}
+                className="h-[34px] cursor-pointer rounded-[7px] border border-[#4D3F66] bg-[#2D233E] px-3 text-[11.5px] font-medium text-[#55D8C1] transition-colors hover:border-[#55D8C1]/70 hover:bg-[#3A2D50] hover:text-white"
+              >
+                {t.aiUsageBtn}
               </button>
             )}
           </div>

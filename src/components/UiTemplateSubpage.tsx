@@ -103,8 +103,8 @@ export function UiTemplateSubpage({
       data-testid="ui-template-subpage"
       className="flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#231B30] text-[#EFEBF5]"
     >
-      <header className="flex h-[54px] shrink-0 items-center justify-between gap-2 border-b border-[#322745] bg-[#211A2C] px-2.5 sm:gap-3 sm:px-6">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+      <header className="flex min-h-[54px] shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#322745] bg-[#211A2C] px-2.5 py-2 sm:h-[54px] sm:flex-nowrap sm:gap-3 sm:px-6 sm:py-0">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <button
             type="button"
             data-action="template-back"
@@ -175,7 +175,7 @@ export function UiTemplateSubpage({
       </header>
 
       <div className="nc-scroll flex-1 px-4 py-5 sm:px-8 sm:py-7">
-        <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-6">
+        <div className="mx-auto flex w-full max-w-[1040px] min-w-0 flex-col gap-6">
           <section className="rounded-[12px] border border-[#433659] bg-[#2B223B] p-4 sm:p-5">
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
               <div>
@@ -377,7 +377,7 @@ export function UiTemplateSubpage({
             </div>
           </section>
 
-          <section className="flex flex-col gap-3 rounded-[12px] border border-[#433659] bg-[#2B223B] p-4 sm:p-5">
+          <section className="flex min-w-0 flex-col gap-3 rounded-[12px] border border-[#433659] bg-[#2B223B] p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-[14px] font-bold text-white">{t.templateCodeTitle}</h2>

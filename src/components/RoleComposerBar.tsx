@@ -69,9 +69,11 @@ export function RoleComposerBar({
   const [editorMode, setEditorMode] = useState<'closed' | 'edit' | 'create'>('closed');
   const [timePanelOpen, setTimePanelOpen] = useState(false);
   const [charMenuId, setCharMenuId] = useState<string | null>(null);
+  const [charMenuLeft, setCharMenuLeft] = useState(10);
   const [draftName, setDraftName] = useState('');
   const [draftAvatarType, setDraftAvatarType] = useState<AvatarType>('k');
   const [draftCustomMediaId, setDraftCustomMediaId] = useState<string | undefined>(undefined);
+  const barContainerRef = useRef<HTMLDivElement | null>(null);
   const avatarFileRef = useRef<HTMLInputElement | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
 
@@ -109,14 +111,32 @@ export function RoleComposerBar({
     }
   };
 
-  const startCharLongPress = (charId: string, x: number, y: number) => {
+  const openCharMenuForTarget = (charId: string, targetEl: HTMLElement | null) => {
+    if (targetEl && barContainerRef.current) {
+      const barRect = barContainerRef.current.getBoundingClientRect();
+      const btnRect = targetEl.getBoundingClientRect();
+      const maxLeft = Math.max(8, barRect.width - 156);
+      const desired = btnRect.left - barRect.left;
+      setCharMenuLeft(Math.max(8, Math.min(desired, maxLeft)));
+    } else {
+      setCharMenuLeft(10);
+    }
+    setCharMenuId(charId);
+  };
+
+  const startCharLongPress = (
+    charId: string,
+    x: number,
+    y: number,
+    targetEl: HTMLElement | null
+  ) => {
     clearLongPress();
     longPressTriggeredRef.current = false;
     pressOriginRef.current = { x, y };
     longPressTimerRef.current = window.setTimeout(() => {
       window.getSelection?.()?.removeAllRanges();
       longPressTriggeredRef.current = true;
-      setCharMenuId(charId);
+      openCharMenuForTarget(charId, targetEl);
       pressOriginRef.current = null;
     }, 450);
   };
@@ -191,8 +211,40 @@ export function RoleComposerBar({
     });
   };
 
+  const menuTargetChar = charMenuId ? characters.find((c) => c.id === charMenuId) ?? null : null;
+
   return (
-    <div className="mb-2 flex flex-col gap-2 rounded-[8px] border border-[#4D3F66] bg-[#2E243D] p-2.5">
+    <div
+      ref={barContainerRef}
+      className="relative mb-2 flex flex-col gap-2 rounded-[8px] border border-[#4D3F66] bg-[#2E243D] p-2.5"
+    >
+      {menuTargetChar && (
+        <>
+          <button
+            type="button"
+            aria-label="閉じる"
+            onClick={() => setCharMenuId(null)}
+            className="fixed inset-0 z-40 cursor-default bg-transparent"
+          />
+          <div
+            style={{ left: `${charMenuLeft}px` }}
+            className="nc-modal-enter absolute bottom-[calc(100%-6px)] z-50 min-w-[124px] max-w-[calc(100vw-48px)] rounded-[8px] border border-[#524468] bg-[#211A2C] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.55)]"
+          >
+            <button
+              type="button"
+              data-action={`char-mention-${menuTargetChar.id}`}
+              onClick={() => {
+                onMentionCharacter(menuTargetChar.name);
+                setCharMenuId(null);
+              }}
+              className="w-full cursor-pointer truncate rounded-[6px] px-2.5 py-1.5 text-left text-[12px] font-medium text-[#EFEBF5] transition-colors hover:bg-[#473A5C]"
+            >
+              {t.mentionTargetBtn(menuTargetChar.name)}
+            </button>
+          </div>
+        </>
+      )}
+
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex w-full min-w-0 items-center gap-1.5 overflow-x-auto pb-0.5 lg:w-auto lg:flex-1">
           {characters.map((char) => {
@@ -203,7 +255,9 @@ export function RoleComposerBar({
                   type="button"
                   data-action={`select-char-${char.id}`}
                   aria-pressed={active}
-                  onPointerDown={(e) => startCharLongPress(char.id, e.clientX, e.clientY)}
+                  onPointerDown={(e) =>
+                    startCharLongPress(char.id, e.clientX, e.clientY, e.currentTarget)
+                  }
                   onPointerMove={(e) => handleCharPointerMove(e.clientX, e.clientY)}
                   onPointerUp={clearLongPress}
                   onPointerLeave={clearLongPress}
@@ -211,7 +265,7 @@ export function RoleComposerBar({
                   onContextMenu={(e) => {
                     e.preventDefault();
                     window.getSelection?.()?.removeAllRanges();
-                    setCharMenuId(char.id);
+                    openCharMenuForTarget(char.id, e.currentTarget);
                   }}
                   onClick={() => {
                     if (longPressTriggeredRef.current) {
@@ -233,29 +287,6 @@ export function RoleComposerBar({
                   />
                   <span className="max-w-[90px] truncate">{char.name}</span>
                 </button>
-                {charMenuId === char.id && (
-                  <>
-                    <button
-                      type="button"
-                      aria-label="閉じる"
-                      onClick={() => setCharMenuId(null)}
-                      className="fixed inset-0 z-40 cursor-default bg-transparent"
-                    />
-                    <div className="nc-modal-enter absolute bottom-[34px] left-0 z-50 min-w-[116px] rounded-[8px] border border-[#524468] bg-[#211A2C] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.55)]">
-                      <button
-                        type="button"
-                        data-action={`char-mention-${char.id}`}
-                        onClick={() => {
-                          onMentionCharacter(char.name);
-                          setCharMenuId(null);
-                        }}
-                        className="w-full cursor-pointer rounded-[6px] px-2.5 py-1.5 text-left text-[12px] font-medium text-[#EFEBF5] transition-colors hover:bg-[#473A5C]"
-                      >
-                        {t.mentionTargetBtn(char.name)}
-                      </button>
-                    </div>
-                  </>
-                )}
               </div>
             );
           })}
@@ -454,7 +485,7 @@ export function RoleComposerBar({
               onChange={(e) => setDraftName(e.target.value)}
               aria-label={t.charNamePlaceholder}
               placeholder={t.charNamePlaceholder}
-              className="min-w-[140px] flex-1 rounded-[6px] border border-[#453859] bg-[#332844] px-2.5 py-1.5 text-[13px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
+              className="min-w-0 flex-1 rounded-[6px] border border-[#453859] bg-[#332844] px-2.5 py-1.5 text-[13px] text-[#EFEBF5] outline-none focus:border-[#64D2E6]"
             />
             <input
               ref={avatarFileRef}

@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { AiAutoChatModal } from './components/AiAutoChatModal';
 import { AiGlobalSettingsModal } from './components/AiGlobalSettingsModal';
 import { AiOnboardingModal } from './components/AiOnboardingModal';
+import { AiUsageModal } from './components/AiUsageModal';
 import { CharacterAiModal } from './components/CharacterAiModal';
 import { ChatArea } from './components/ChatArea';
 import { ClearCacheModal } from './components/ClearCacheModal';
@@ -17,10 +18,13 @@ import type {
   AiAutoChatConfig,
   AiCharacterConfig,
   AiGlobalConfig,
+  AiUsageRecord,
+  AiUsageState,
   AppMode,
   AvatarType,
   CharacterProfile,
   ChatAttachment,
+  ChatFileMedia,
   ChatMessage,
   Conversation,
   CustomMessageTime,
@@ -37,6 +41,8 @@ import type {
 import {
   DEFAULT_AI_AUTO_CHAT_CONFIG,
   DEFAULT_AI_GLOBAL_CONFIG,
+  appendUsageRecordToState,
+  createEmptyUsageState,
   editMessageText,
   formatAiConversationTranscript,
   getAiCharacterConfig,
@@ -49,6 +55,7 @@ import {
   pickRandomMemberPresenceTransition,
   prepareRegenerateTarget,
   requestAiCompletion,
+  resetSessionUsageState,
   resolveAiResponders,
   resolveEffectiveAiCredentials,
 } from './utils/aiClient';
@@ -64,6 +71,7 @@ import {
   loadActiveConversationId,
   loadAiCharacterConfigs,
   loadAiGlobalConfig,
+  loadAiUsageState,
   loadLocalMediaBlob,
   loadSavedAiConversations,
   loadSavedCharacters,
@@ -78,6 +86,7 @@ import {
   saveAiCharacterConfigs,
   saveAiConversations,
   saveAiGlobalConfig,
+  saveAiUsageState,
   saveCharacters,
   saveConversations,
   saveLanguage,
@@ -222,6 +231,8 @@ export default function App({ actions }: AppProps) {
   const [toastText, setToastText] = useState<string | null>(null);
   const [aiCharModalTargetId, setAiCharModalTargetId] = useState<string | null>(null);
   const [aiGlobalModalOpen, setAiGlobalModalOpen] = useState(false);
+  const [aiUsageModalOpen, setAiUsageModalOpen] = useState(false);
+  const [aiUsageState, setAiUsageState] = useState<AiUsageState>(() => loadAiUsageState());
   const [aiAutoChatOpen, setAiAutoChatOpen] = useState(false);
   const [aiAutoChatRunning, setAiAutoChatRunning] = useState(false);
   const [aiAutoChatConfig, setAiAutoChatConfig] = useState<AiAutoChatConfig>(() => ({
@@ -426,6 +437,10 @@ export default function App({ actions }: AppProps) {
   }, [aiGlobalConfig]);
 
   useEffect(() => {
+    saveAiUsageState(aiUsageState);
+  }, [aiUsageState]);
+
+  useEffect(() => {
     saveCharacters(characters);
   }, [characters]);
 
@@ -460,6 +475,15 @@ export default function App({ actions }: AppProps) {
       setToastText(null);
     }, 2400);
   }, []);
+
+  const handleRecordAiUsage = useCallback((record: AiUsageRecord) => {
+    setAiUsageState((prev) => appendUsageRecordToState(prev, record));
+  }, []);
+
+  const handleResetAiSessionUsage = useCallback(() => {
+    setAiUsageState((prev) => resetSessionUsageState(prev));
+    showToast(t.aiUsageToastSessionReset);
+  }, [showToast, t.aiUsageToastSessionReset]);
 
   const appendMessageToActive = useCallback(
     (msg: ChatMessage) => {
@@ -599,8 +623,11 @@ export default function App({ actions }: AppProps) {
         setClearCacheOpen(false);
         setAiCharModalTargetId(null);
         setAiGlobalModalOpen(false);
+        setAiUsageModalOpen(false);
         setAiAutoChatOpen(false);
         setPendingCopyAiToMain(null);
+        setShowOnboarding(false);
+        setShowAiOnboarding(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -723,6 +750,7 @@ export default function App({ actions }: AppProps) {
     stopPlayback();
     setAiCharModalTargetId(null);
     setAiGlobalModalOpen(false);
+    setAiUsageModalOpen(false);
     setAiAutoChatOpen(false);
     setServerMenuOpen(false);
     setMobileSidebarOpen(false);
@@ -741,10 +769,23 @@ export default function App({ actions }: AppProps) {
     }
   }, [stopAiAutoChat, stopPlayback]);
 
+  useEffect(() => {
+    if (activeView !== 'ai') {
+      stopAiAutoChat(false);
+      setAiCharModalTargetId(null);
+      setAiGlobalModalOpen(false);
+      setAiUsageModalOpen(false);
+      setAiAutoChatOpen(false);
+    }
+  }, [activeView, stopAiAutoChat]);
+
   const handleSwitchStudioMode = () => {
+    setServerMenuOpen(false);
+    setMobileSidebarOpen(false);
     if (isAiMode) {
       stopPlayback();
       setPlaybackModalOpen(false);
+      setAiUsageModalOpen(false);
       setAiAutoChatOpen(false);
       setAiGlobalModalOpen((prev) => !prev);
       return;
@@ -761,10 +802,13 @@ export default function App({ actions }: AppProps) {
   };
 
   const handleSwitchImmersiveMode = () => {
+    setServerMenuOpen(false);
+    setMobileSidebarOpen(false);
     if (isAiMode) {
       stopPlayback();
       setPlaybackModalOpen(false);
       setAiGlobalModalOpen(false);
+      setAiUsageModalOpen(false);
       setAiCharModalTargetId(null);
       if (aiAutoChatRunningRef.current) {
         stopAiAutoChat(true);
@@ -780,7 +824,6 @@ export default function App({ actions }: AppProps) {
     setPlaybackModalOpen(false);
     setPendingUpload(null);
     setMode('immersive');
-    setServerMenuOpen(false);
     invokeAction(actionsRef.current, 'onWindowMaximize');
     invokeAction(actionsRef.current, 'onModeChange', 'immersive');
   };
@@ -983,19 +1026,19 @@ export default function App({ actions }: AppProps) {
       rawReply: string,
       historySnapshot: ChatMessage[],
       timeMode: AiGlobalConfig['timeMode'],
-      toolSentAt?: MessageDateTime | null
+      toolSentAt?: MessageDateTime | null,
+      structuredFileMedia?: ChatFileMedia
     ): ChatMessage | null => {
       const now = new Date();
-      const prevDt = getLastMessageDateTime(historySnapshot, now);
-      const parsed = parseAiModelOutput(rawReply, speaker.name, prevDt, now);
-      if (!parsed.text && !parsed.fileMedia) {
+      const parsed = parseAiModelOutput(rawReply, speaker.name);
+      const effectiveFileMedia = structuredFileMedia ?? parsed.fileMedia;
+      if (!parsed.text && !effectiveFileMedia) {
         return null;
       }
-      const preferredDt =
-        timeMode === 'ai_inferred' ? (toolSentAt ?? parsed.inferredSentAt) : undefined;
+      const preferredDt = timeMode === 'ai_inferred' ? (toolSentAt ?? undefined) : undefined;
       const resolved = resolveClampedOutgoingTimestamp(historySnapshot, preferredDt, now);
-      const createdMsg = parsed.fileMedia
-        ? createFileMessage(parsed.fileMedia, speaker, parsed.text, now, {
+      const createdMsg = effectiveFileMedia
+        ? createFileMessage(effectiveFileMedia, speaker, parsed.text, now, {
             timestamp: resolved.timestamp,
             sentAt: resolved.sentAt,
             dividerBefore: resolved.dividerBefore,
@@ -1094,6 +1137,8 @@ export default function App({ actions }: AppProps) {
               allCharacters: characters,
               members,
               signal: controller.signal,
+              purpose: 'chat',
+              onUsageRecord: handleRecordAiUsage,
             });
             if (controller.signal.aborted) {
               break;
@@ -1104,7 +1149,8 @@ export default function App({ actions }: AppProps) {
               completion.rawText,
               rollingHistory,
               aiGlobalConfig.timeMode,
-              completion.toolSentAt
+              completion.toolSentAt,
+              completion.structuredFileMedia
             );
             lastReplyText = nextMsg?.text ?? completion.rawText;
             if (nextMsg) {
@@ -1140,6 +1186,8 @@ export default function App({ actions }: AppProps) {
                 allCharacters: characters,
                 members,
                 signal: controller.signal,
+                purpose: 'follow_up',
+                onUsageRecord: handleRecordAiUsage,
               });
               if (!controller.signal.aborted) {
                 appendAiCharacterReply(
@@ -1148,7 +1196,8 @@ export default function App({ actions }: AppProps) {
                   followUp.rawText,
                   rollingHistory,
                   aiGlobalConfig.timeMode,
-                  followUp.toolSentAt
+                  followUp.toolSentAt,
+                  followUp.structuredFileMedia
                 );
               }
             } catch (err) {
@@ -1167,12 +1216,30 @@ export default function App({ actions }: AppProps) {
         aiBusyRef.current = false;
       }
     },
-    [aiCharacterConfigs, aiGlobalConfig, appendAiCharacterReply, characters, members, showToast, t]
+    [
+      aiCharacterConfigs,
+      aiGlobalConfig,
+      appendAiCharacterReply,
+      characters,
+      handleRecordAiUsage,
+      members,
+      showToast,
+      t,
+    ]
   );
 
   const runAutonomousCycle = useCallback(
     async (lastSpeakerId?: string, overrideCfg?: AiAutoChatConfig) => {
       if (!aiAutoChatRunningRef.current) {
+        return;
+      }
+      if (aiBusyRef.current) {
+        const latestCfg = latestAutoChatContextRef.current.aiAutoChatConfig;
+        const retryMs = Math.max(2, Math.min(20, latestCfg.intervalSec)) * 1000;
+        aiAutoChatTimerRef.current = window.setTimeout(() => {
+          aiAutoChatTimerRef.current = null;
+          void runAutonomousCycle(lastSpeakerId);
+        }, retryMs);
         return;
       }
       const ctx = latestAutoChatContextRef.current;
@@ -1236,6 +1303,8 @@ export default function App({ actions }: AppProps) {
           allCharacters: ctx.characters,
           members: activeMembers,
           signal: controller.signal,
+          purpose: 'auto_chat',
+          onUsageRecord: handleRecordAiUsage,
         });
         if (controller.signal.aborted || !aiAutoChatRunningRef.current) {
           return;
@@ -1246,7 +1315,8 @@ export default function App({ actions }: AppProps) {
           completion.rawText,
           ctx.aiActiveConversation.messages,
           ctx.aiGlobalConfig.timeMode,
-          completion.toolSentAt
+          completion.toolSentAt,
+          completion.structuredFileMedia
         );
       } catch (err) {
         if (isAbortErr(err) || controller.signal.aborted || !aiAutoChatRunningRef.current) {
@@ -1272,7 +1342,7 @@ export default function App({ actions }: AppProps) {
         void runAutonomousCycle(nextSpeakerAnchor);
       }, delayMs);
     },
-    [appendAiCharacterReply, showToast, stopAiAutoChat]
+    [appendAiCharacterReply, handleRecordAiUsage, showToast, stopAiAutoChat]
   );
 
   const handleStartAiAutoChat = useCallback(
@@ -1321,7 +1391,7 @@ export default function App({ actions }: AppProps) {
     if (!isAiMode) {
       return;
     }
-    if (aiBusyRef.current) {
+    if (aiBusyRef.current || aiAutoChatRunningRef.current) {
       showToast(t.aiToastBusy);
       return;
     }
@@ -1357,6 +1427,8 @@ export default function App({ actions }: AppProps) {
         allCharacters: characters,
         members,
         signal: controller.signal,
+        purpose: 'continue',
+        onUsageRecord: handleRecordAiUsage,
       });
       if (!controller.signal.aborted) {
         appendAiCharacterReply(
@@ -1365,7 +1437,8 @@ export default function App({ actions }: AppProps) {
           completion.rawText,
           conv.messages,
           aiGlobalConfig.timeMode,
-          completion.toolSentAt
+          completion.toolSentAt,
+          completion.structuredFileMedia
         );
       }
     } catch (err) {
@@ -1386,6 +1459,7 @@ export default function App({ actions }: AppProps) {
     aiGlobalConfig,
     appendAiCharacterReply,
     characters,
+    handleRecordAiUsage,
     isAiMode,
     members,
     showToast,
@@ -1397,7 +1471,7 @@ export default function App({ actions }: AppProps) {
       if (!isAiMode) {
         return;
       }
-      if (aiBusyRef.current) {
+      if (aiBusyRef.current || aiAutoChatRunningRef.current) {
         showToast(t.aiToastBusy);
         return;
       }
@@ -1433,20 +1507,20 @@ export default function App({ actions }: AppProps) {
             allCharacters: characters,
             members,
             signal: controller.signal,
+            purpose: 'regenerate',
+            onUsageRecord: handleRecordAiUsage,
           });
           if (controller.signal.aborted) {
             return;
           }
           const now = new Date();
-          const prevDt = getLastMessageDateTime(target.historyBeforeTarget, now);
-          const parsed = parseAiModelOutput(completion.rawText, speaker.name, prevDt, now);
-          if (!parsed.text && !parsed.fileMedia) {
+          const parsed = parseAiModelOutput(completion.rawText, speaker.name);
+          const effectiveFileMedia = completion.structuredFileMedia ?? parsed.fileMedia;
+          if (!parsed.text && !effectiveFileMedia) {
             throw new Error('EMPTY_RESPONSE');
           }
           const preferredDt =
-            aiGlobalConfig.timeMode === 'ai_inferred'
-              ? (completion.toolSentAt ?? parsed.inferredSentAt)
-              : null;
+            aiGlobalConfig.timeMode === 'ai_inferred' ? completion.toolSentAt : null;
           const resolvedTime = preferredDt
             ? resolveClampedOutgoingTimestamp(target.historyBeforeTarget, preferredDt, now)
             : null;
@@ -1460,7 +1534,8 @@ export default function App({ actions }: AppProps) {
                         ? {
                             ...m,
                             text: parsed.text || undefined,
-                            fileMedia: parsed.fileMedia,
+                            attachments: undefined,
+                            fileMedia: effectiveFileMedia,
                             ...(resolvedTime
                               ? {
                                   timestamp: resolvedTime.timestamp,
@@ -1503,6 +1578,7 @@ export default function App({ actions }: AppProps) {
       aiCharacterConfigs,
       aiGlobalConfig,
       characters,
+      handleRecordAiUsage,
       isAiMode,
       members,
       runAiReplyTurn,
@@ -1663,6 +1739,8 @@ export default function App({ actions }: AppProps) {
     setActiveAiConversationId(AI_TEMPLATE_CONVERSATION_ID);
     setAiCharacterConfigs({});
     setAiGlobalConfig({ ...DEFAULT_AI_GLOBAL_CONFIG });
+    setAiUsageState(createEmptyUsageState());
+    setAiUsageModalOpen(false);
     setAiAutoChatConfig({ ...DEFAULT_AI_AUTO_CHAT_CONFIG });
     setAiAutoChatOpen(false);
     setPendingCopyAiToMain(null);
@@ -1698,9 +1776,7 @@ export default function App({ actions }: AppProps) {
 
   const handleSetMobileSidebar = (open: boolean) => {
     setMobileSidebarOpen(open);
-    if (!open) {
-      setServerMenuOpen(false);
-    }
+    setServerMenuOpen(false);
     invokeAction(actionsRef.current, 'onSidebarToggle', open);
   };
 
@@ -1931,7 +2007,8 @@ export default function App({ actions }: AppProps) {
       if (!userMsg) {
         return;
       }
-      const updatedHistory = [...activeConversation.messages, userMsg];
+      const hydratedHistory = hydrateLegacyMessagesSentAt(activeConversation.messages, now);
+      const updatedHistory = [...hydratedHistory, userMsg];
       setAiConversations((prev) =>
         prev.map((conv) => (conv.id === convId ? { ...conv, messages: updatedHistory } : conv))
       );
@@ -2253,6 +2330,39 @@ export default function App({ actions }: AppProps) {
           onOpenMemberAiSettings={(member) => {
             setAiCharModalTargetId(member.id);
           }}
+          aiGeneratingName={aiGeneratingName}
+          aiAutoChatRunning={aiAutoChatRunning}
+          onOpenAiGlobalSettings={() => {
+            setServerMenuOpen(false);
+            setMobileSidebarOpen(false);
+            setAiGlobalModalOpen(true);
+          }}
+          onOpenAiUsage={() => {
+            setServerMenuOpen(false);
+            setMobileSidebarOpen(false);
+            setAiUsageModalOpen(true);
+          }}
+          aiSessionRequestCount={aiUsageState.session.requestCount}
+          onContinueAi={() => {
+            setServerMenuOpen(false);
+            setMobileSidebarOpen(false);
+            void handleAiContinueTurn();
+          }}
+          onStopAi={() => {
+            setServerMenuOpen(false);
+            setMobileSidebarOpen(false);
+            handleStopAiGeneration();
+          }}
+          onOpenAiAutoChat={() => {
+            setServerMenuOpen(false);
+            setMobileSidebarOpen(false);
+            setAiAutoChatOpen(true);
+          }}
+          onStopAiAutoChat={() => {
+            setServerMenuOpen(false);
+            setMobileSidebarOpen(false);
+            stopAiAutoChat(true);
+          }}
         />
         <ChatArea
           lang={lang}
@@ -2260,8 +2370,6 @@ export default function App({ actions }: AppProps) {
           mode={mode}
           aiMode={isAiMode}
           aiGeneratingName={aiGeneratingName}
-          aiAutoChatRunning={aiAutoChatRunning}
-          aiReadyCount={aiReadyMemberIds.size}
           messages={displayedMessages}
           isPlaying={playbackConfig !== null}
           animatedFromIndex={playbackConfig ? playbackConfig.startIndex : null}
@@ -2277,10 +2385,7 @@ export default function App({ actions }: AppProps) {
           onDeleteMessage={handleDeleteMessage}
           onEditMessage={handleEditMessage}
           onRegenerateMessage={handleRegenerateMessage}
-          onContinueAi={handleAiContinueTurn}
           onStopAi={handleStopAiGeneration}
-          onStopAiAutoChat={() => stopAiAutoChat(true)}
-          onOpenAiGlobalSettings={() => setAiGlobalModalOpen(true)}
           onAvatarClick={handleAvatarClick}
           onFileDownload={handleFileDownload}
           onMentionCharacter={handleMentionCharacter}
@@ -2355,6 +2460,7 @@ export default function App({ actions }: AppProps) {
         }
         globalConfig={aiGlobalConfig}
         onClose={() => setAiCharModalTargetId(null)}
+        onUsageRecord={handleRecordAiUsage}
         onSave={(charId, nextCfg) => {
           setAiCharacterConfigs((prev) => ({
             ...prev,
@@ -2374,6 +2480,8 @@ export default function App({ actions }: AppProps) {
         characterConfigs={aiCharacterConfigs}
         onClose={() => setAiGlobalModalOpen(false)}
         onExportAiTranscript={handleExportAiTranscript}
+        onUsageRecord={handleRecordAiUsage}
+        onOpenUsageModal={() => setAiUsageModalOpen(true)}
         onSave={(nextGlobal, nextCharConfigs) => {
           setAiGlobalConfig(nextGlobal);
           setAiCharacterConfigs(nextCharConfigs);
@@ -2394,6 +2502,14 @@ export default function App({ actions }: AppProps) {
           );
           showToast(t.toastAiGlobalSaved);
         }}
+      />
+
+      <AiUsageModal
+        open={aiUsageModalOpen}
+        lang={lang}
+        usageState={aiUsageState}
+        onClose={() => setAiUsageModalOpen(false)}
+        onResetSession={handleResetAiSessionUsage}
       />
 
       <AiAutoChatModal

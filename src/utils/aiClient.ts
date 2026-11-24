@@ -2,9 +2,15 @@ import type {
   AiAutoChatConfig,
   AiCharacterConfig,
   AiGlobalConfig,
+  AiOutputLanguage,
   AiProtocol,
   AiReplyLength,
+  AiTimeFrequency,
   AiTimeMode,
+  AiUsagePurpose,
+  AiUsageRecord,
+  AiUsageState,
+  AiUsageTotals,
   AvatarType,
   CharacterProfile,
   ChatFileMedia,
@@ -24,6 +30,7 @@ import {
   formatNightcordFileMeta,
   getDaysInMonth,
   getLastMessageDateTime,
+  getMessageDateTime,
   setMemberPresenceStatus,
   toggleMemberMute,
 } from './nightcordState';
@@ -75,7 +82,9 @@ export const DEFAULT_AI_GLOBAL_CONFIG: AiGlobalConfig = {
   userAvatarMediaId: undefined,
   userPersona: '',
   worldviewPrompt: '',
-  timeMode: 'realtime',
+  timeMode: 'ai_inferred',
+  timeFrequency: 'balanced',
+  outputLanguage: 'auto',
   replyLength: 'normal',
   temperature: 0.85,
   webSearchEnabled: false,
@@ -89,6 +98,8 @@ export const DEFAULT_AI_AUTO_CHAT_CONFIG: AiAutoChatConfig = {
 export interface AiCompletionResult {
   rawText: string;
   toolSentAt: MessageDateTime | null;
+  structuredFileMedia?: ChatFileMedia;
+  usageRecords: AiUsageRecord[];
 }
 
 export function clampAiTemperature(value: unknown, fallback: number = 0.85): number {
@@ -105,12 +116,45 @@ export function sanitizeAiProtocol(raw: unknown): AiProtocol {
   return 'openai';
 }
 
+export function sanitizeAiTimeFrequency(raw: unknown): AiTimeFrequency {
+  if (
+    raw === 'high' ||
+    raw === 'somewhat_high' ||
+    raw === 'balanced' ||
+    raw === 'somewhat_low' ||
+    raw === 'low'
+  ) {
+    return raw;
+  }
+  return 'balanced';
+}
+
+export function sanitizeAiOutputLanguage(raw: unknown): AiOutputLanguage {
+  if (
+    raw === 'auto' ||
+    raw === 'zh-CN' ||
+    raw === 'zh-TW' ||
+    raw === 'en' ||
+    raw === 'ja'
+  ) {
+    return raw;
+  }
+  return 'auto';
+}
+
 export function sanitizeAiGlobalConfig(raw?: Partial<AiGlobalConfig> | null): AiGlobalConfig {
   if (!raw || typeof raw !== 'object') {
     return { ...DEFAULT_AI_GLOBAL_CONFIG };
   }
   const protocol = sanitizeAiProtocol(raw.protocol);
-  const timeMode: AiTimeMode = raw.timeMode === 'ai_inferred' ? 'ai_inferred' : 'realtime';
+  const timeMode: AiTimeMode =
+    raw.timeMode === 'realtime'
+      ? 'realtime'
+      : raw.timeMode === 'ai_inferred'
+        ? 'ai_inferred'
+        : DEFAULT_AI_GLOBAL_CONFIG.timeMode;
+  const timeFrequency = sanitizeAiTimeFrequency(raw.timeFrequency);
+  const outputLanguage = sanitizeAiOutputLanguage(raw.outputLanguage);
   const replyLength: AiReplyLength =
     raw.replyLength === 'short' || raw.replyLength === 'detailed' ? raw.replyLength : 'normal';
   const userAvatar: AvatarType =
@@ -149,6 +193,8 @@ export function sanitizeAiGlobalConfig(raw?: Partial<AiGlobalConfig> | null): Ai
     userPersona: typeof raw.userPersona === 'string' ? raw.userPersona : '',
     worldviewPrompt: typeof raw.worldviewPrompt === 'string' ? raw.worldviewPrompt : '',
     timeMode,
+    timeFrequency,
+    outputLanguage,
     replyLength,
     temperature: clampAiTemperature(raw.temperature, DEFAULT_AI_GLOBAL_CONFIG.temperature),
     webSearchEnabled: Boolean(raw.webSearchEnabled),
@@ -716,11 +762,50 @@ export interface BuildAiPayloadOptions {
   userPersona?: string;
   worldviewPrompt?: string;
   timeMode?: AiTimeMode;
+  timeFrequency?: AiTimeFrequency;
+  outputLanguage?: AiOutputLanguage;
   replyLength?: AiReplyLength;
   lastMessageDateTime?: MessageDateTime | null;
   now?: Date;
   members?: VoiceMember[];
   webSearchEnabled?: boolean;
+}
+
+export function buildTimeFrequencyDirective(frequency: AiTimeFrequency): string {
+  switch (frequency) {
+    case 'high':
+      return 'Frequency tendency — HIGH: Favor rapid, continuous back-and-forth exchanges (typically 0–5 minutes apart when conversing actively), with only brief pauses (10–25 minutes) when someone finishes a thought or checks a file.';
+    case 'somewhat_high':
+      return 'Frequency tendency — SOMEWHAT HIGH: Lean toward frequent, responsive exchanges (often 1–8 minutes apart), mixed occasionally with medium breaks (20–90 minutes) when members focus on tasks.';
+    case 'somewhat_low':
+      return 'Frequency tendency — SOMEWHAT LOW: Lean toward spaced-out asynchronous check-ins (mostly 30 minutes to several hours apart reflecting busy personal schedules), with only occasional short bursts (2–10 minutes) when two members happen to be active together.';
+    case 'low':
+      return 'Frequency tendency — LOW: Keep messages sparse across the day or night (often 2–12+ hours apart or jumping to later sessions/next night), reflecting deep focus, sleep, or school/work away from chat, with very rare quick follow-ups.';
+    case 'balanced':
+    default:
+      return 'Frequency tendency — BALANCED: Naturally blend rapid active bursts (1–5 minutes), moderate task pauses (15–60 minutes), and occasional multi-hour jumps (2–6+ hours) according to conversation urgency, character schedules, and topic shifts.';
+  }
+}
+
+export function buildOutputLanguageDirective(outputLanguage: AiOutputLanguage): string {
+  switch (outputLanguage) {
+    case 'zh-CN':
+      return 'Output language requirement: Write ALL of your reply text strictly in Simplified Chinese (简体中文). Keep every aspect of your character personality, tone, warmth/sharpness, catchphrases, and Nightcord role completely intact.';
+    case 'zh-TW':
+      return 'Output language requirement: Write ALL of your reply text strictly in Traditional Chinese (繁體中文). Keep every aspect of your character personality, tone, warmth/sharpness, catchphrases, and Nightcord role completely intact.';
+    case 'en':
+      return 'Output language requirement: Write ALL of your reply text strictly in natural English. Keep every aspect of your character personality, tone, warmth/sharpness, catchphrases, and Nightcord role completely intact.';
+    case 'ja':
+      return 'Output language requirement: Write ALL of your reply text strictly in natural Japanese (日本語). Keep every aspect of your character personality, tone, warmth/sharpness, catchphrases, and Nightcord role completely intact.';
+    case 'auto':
+    default:
+      return 'Output language requirement (Auto): Match the conversation context and your character’s natural linguistic habits, switching naturally if the user or context shifts languages, while staying true to your Nightcord personality and speaking style.';
+  }
+}
+
+function formatStandardDateTime(dt: MessageDateTime): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${dt.year}-${pad(dt.month)}-${pad(dt.day)} ${pad(dt.hour)}:${pad(dt.minute)}`;
 }
 
 export function buildAiChatPayload(
@@ -741,7 +826,9 @@ export function buildAiChatPayload(
   const userDisplayName = opts.userDisplayName?.trim() || 'あなた';
   const userPersona = opts.userPersona?.trim() || '';
   const worldviewPrompt = opts.worldviewPrompt?.trim() || '';
-  const timeMode: AiTimeMode = opts.timeMode === 'ai_inferred' ? 'ai_inferred' : 'realtime';
+  const timeMode: AiTimeMode = opts.timeMode === 'realtime' ? 'realtime' : 'ai_inferred';
+  const timeFrequency: AiTimeFrequency = sanitizeAiTimeFrequency(opts.timeFrequency);
+  const outputLanguage: AiOutputLanguage = sanitizeAiOutputLanguage(opts.outputLanguage);
   const replyLength: AiReplyLength = opts.replyLength ?? 'normal';
   const now = opts.now ?? new Date();
   const lastDt = opts.lastMessageDateTime ?? getLastMessageDateTime(history, now);
@@ -781,6 +868,7 @@ export function buildAiChatPayload(
     userPersona ? `User "${userDisplayName}" profile/persona: ${userPersona}` : '',
     worldviewPrompt ? `Shared worldview / setting:\n${worldviewPrompt}` : '',
     `Reply directly in character as "${targetCharacter.name}" only. Do NOT prefix your reply with "${targetCharacter.name}:" or "[${targetCharacter.name}]:". ${lengthRule}`,
+    buildOutputLanguageDirective(outputLanguage),
     `Addressing peers: you may occasionally mention another active member or user with "@Name" (for example "@${userDisplayName}" or an online peer's name) when replying specifically to someone, calling them in, or reacting to them—keep @mentions occasional and natural, and do NOT put an @mention in every message.`,
     `Contextual file sharing: judge naturally from the conversation context and your Nightcord role whether and what file to share (e.g. audio rough .mp3, rough MV .mp4, illustration/sketch .jpg, or lyrics/notes .txt). You do not have to wait for someone to explicitly ask; when sharing a file fits the moment, append [[FILE:filename.ext|sizeLabel]] (e.g. [[FILE:nightcord_demo_01.mp3|4MB MP3]] or [[FILE:lyrics_draft.txt|2KB テキスト]]) at the very end of your message. Do NOT attach a file on every message—only occasionally when it feels genuinely fitting.`,
   ];
@@ -792,11 +880,35 @@ export function buildAiChatPayload(
   }
 
   if (timeMode === 'ai_inferred') {
-    const prevLabel = lastDt
-      ? formatDateTimeBadge(lastDt)
-      : formatDateTimeBadge(dateToMessageDateTime(now));
+    const simStartDt = dateToMessageDateTime(now);
+    const anchorDt = lastDt ?? simStartDt;
+    const prevBadge = formatDateTimeBadge(anchorDt);
+    const prevStd = formatStandardDateTime(anchorDt);
+    const simStartStd = formatStandardDateTime(simStartDt);
+    const recentTimeline = history
+      .slice(-6)
+      .map((msg) => {
+        const dt = getMessageDateTime(msg, now);
+        return dt ? `- ${msg.username}: ${formatStandardDateTime(dt)}` : '';
+      })
+      .filter(Boolean);
+
     rules.push(
-      `Send timestamp mode (AI-inferred): previous message was sent at ${prevLabel}. Decide an appropriate send date/time not earlier than ${prevLabel}. If the "set_send_time" tool is available, ALWAYS pass send_time ("YYYY-MM-DD HH:mm") via the "set_send_time" tool call and write ONLY your normal spoken chat text in the message body—NEVER write timestamps or "(YYYY/MM/DD HH:mm)" in plain chat text.`
+      [
+        `Autonomous send timestamp system (STRICT STRUCTURED OUTPUT):`,
+        `- Local webpage simulation start time: ${simStartStd}.`,
+        lastDt
+          ? `- Previous message was sent at ${prevStd} (${prevBadge}). Choose a realistic send_time moving forward at or after ${prevStd}, NEVER earlier.`
+          : `- This is the start of the conversation. Choose a realistic initial send_time starting from ${simStartStd} (or shortly after), NEVER earlier.`,
+        recentTimeline.length > 0
+          ? `- Recent send-time pacing reference (INTERNAL CONTEXT ONLY — NEVER echo or mention these timestamps in your reply text):\n${recentTimeline.join('\n')}`
+          : '',
+        `- ${buildTimeFrequencyDirective(timeFrequency)}`,
+        `- NEVER add a fixed constant interval to every message. Let pacing vary organically (quick consecutive replies vs. tens of minutes vs. multi-hour jumps) based on topic urgency, member status (e.g. active voice call vs. stepping away/sleeping), and time of day.`,
+        `- ABSOLUTE PROHIBITION: NEVER write dates, clock times, or timestamps in any form inside your spoken message text or speaker name (e.g. NEVER write "(11/23 8:18)", "[2026-11-24 17:30]", "[[TIME:...]]", or leading timestamps). Deliver "send_time" ("YYYY-MM-DD HH:mm") ONLY via the "set_send_time" tool call or structured JSON "send_time" field.`,
+      ]
+        .filter(Boolean)
+        .join('\n')
     );
   }
 
@@ -892,8 +1004,9 @@ export function parseAiDateTimeTag(
     const minute = Number(fullMatch[5]);
     if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
       const candidate: MessageDateTime = { year, month, day, hour, minute };
-      if (prevDt && dateTimeToEpochMinutes(candidate) < dateTimeToEpochMinutes(prevDt)) {
-        return { ...prevDt };
+      const floorDt = prevDt ?? dateToMessageDateTime(now);
+      if (dateTimeToEpochMinutes(candidate) < dateTimeToEpochMinutes(floorDt)) {
+        return { ...floorDt };
       }
       return candidate;
     }
@@ -912,8 +1025,9 @@ export function parseAiDateTimeTag(
         hour,
         minute,
       };
-      if (prevDt && dateTimeToEpochMinutes(candidate) < dateTimeToEpochMinutes(prevDt)) {
-        return { ...prevDt };
+      const floorDt = prevDt ?? dateToMessageDateTime(now);
+      if (dateTimeToEpochMinutes(candidate) < dateTimeToEpochMinutes(floorDt)) {
+        return { ...floorDt };
       }
       return candidate;
     }
@@ -927,78 +1041,119 @@ export interface ParsedAiResponse {
   fileMedia?: ChatFileMedia;
 }
 
-export function parseAiModelOutput(
+function createStructuredFileMedia(rawFilename: string, customSizeLabel?: string): ChatFileMedia | undefined {
+  const safeName = rawFilename.trim().replace(/[/\\]+/g, '_');
+  if (!safeName) {
+    return undefined;
+  }
+  const kind = detectFileMediaKind(safeName, '');
+  const fallbackMeta = formatNightcordFileMeta(
+    buildDefaultDummySizeBytes(kind),
+    safeName,
+    kind
+  );
+  return {
+    mediaId: '',
+    filename: safeName,
+    kind,
+    sizeLabel: customSizeLabel?.trim() || fallbackMeta.sizeLabel,
+    fileType: extractFileType(safeName) || fallbackMeta.fileType,
+    displayMode: 'card',
+  };
+}
+
+export function parseStructuredJsonReply(
   rawText: string,
   characterName: string,
   prevDt?: MessageDateTime | null,
   now: Date = new Date()
-): ParsedAiResponse {
-  let working = stripSpeakerPrefix(rawText, characterName);
-  let inferredSentAt: MessageDateTime | null = null;
-  let fileMedia: ChatFileMedia | undefined;
-
-  const bracketPatterns = [
-    /\[\[TIME[:：]\s*([^\]]+)\]\]/gi,
-    /\[TIME[:：]\s*([^\]]+)\]/gi,
-    /【TIME[:：]\s*([^】]+)】/gi,
-  ];
-  for (const pat of bracketPatterns) {
-    working = working
-      .replace(pat, (_full, captured: string) => {
-        if (!inferredSentAt) {
-          inferredSentAt = parseAiDateTimeTag(captured, prevDt, now);
-        }
-        return '';
-      })
-      .trim();
+): { text: string; sentAt: MessageDateTime | null; fileMedia?: ChatFileMedia } | null {
+  const trimmed = rawText.trim();
+  if (!trimmed) {
+    return null;
   }
-
-  const leadingLeakPatterns = [
-    /^\(\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)\s*\)\s*/,
-    /^\[\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)\s*\]\s*/,
-    /^【\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)\s*】\s*/,
-    /^TIME[:：]\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)\s*/i,
-    /^(\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)\s*[:：\-—]\s*/,
-  ];
-  for (const pat of leadingLeakPatterns) {
-    const m = pat.exec(working);
-    if (m) {
-      if (!inferredSentAt) {
-        inferredSentAt = parseAiDateTimeTag(m[1], prevDt, now);
-      }
-      working = working.slice(m[0].length).trim();
+  let candidateJson = trimmed;
+  if (candidateJson.startsWith('```')) {
+    const firstBreak = candidateJson.indexOf('\n');
+    const lastFence = candidateJson.lastIndexOf('```');
+    if (firstBreak !== -1 && lastFence > firstBreak) {
+      candidateJson = candidateJson.slice(firstBreak + 1, lastFence).trim();
     }
   }
+  if (!candidateJson.startsWith('{') || !candidateJson.endsWith('}')) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(candidateJson) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+    const msgField =
+      typeof parsed.message === 'string'
+        ? parsed.message
+        : typeof parsed.reply === 'string'
+          ? parsed.reply
+          : typeof parsed.text === 'string'
+            ? parsed.text
+            : typeof parsed.content === 'string'
+              ? parsed.content
+              : null;
+    if (msgField === null) {
+      return null;
+    }
+    const timeField =
+      typeof parsed.send_time === 'string'
+        ? parsed.send_time
+        : typeof parsed.sendTime === 'string'
+          ? parsed.sendTime
+          : typeof parsed.timestamp === 'string'
+            ? parsed.timestamp
+            : '';
+    const sentAt = timeField ? parseAiDateTimeTag(timeField, prevDt, now) : null;
+    let fileMedia: ChatFileMedia | undefined;
+    const rawFile = parsed.attach_file ?? parsed.file;
+    if (rawFile && typeof rawFile === 'object' && !Array.isArray(rawFile)) {
+      const fileObj = rawFile as Record<string, unknown>;
+      if (typeof fileObj.filename === 'string') {
+        fileMedia = createStructuredFileMedia(
+          fileObj.filename,
+          typeof fileObj.size_label === 'string'
+            ? fileObj.size_label
+            : typeof fileObj.sizeLabel === 'string'
+              ? fileObj.sizeLabel
+              : undefined
+        );
+      }
+    } else if (typeof rawFile === 'string' && rawFile.trim()) {
+      fileMedia = createStructuredFileMedia(rawFile);
+    }
+    return {
+      text: stripSpeakerPrefix(msgField, characterName),
+      sentAt,
+      fileMedia,
+    };
+  } catch {
+    return null;
+  }
+}
 
-  working = stripSpeakerPrefix(working, characterName);
+export function parseAiModelOutput(
+  rawText: string,
+  characterName: string
+): ParsedAiResponse {
+  let working = stripSpeakerPrefix(rawText, characterName);
+  let fileMedia: ChatFileMedia | undefined;
 
   const filePattern = /\[\[FILE:([^|\]]+)(?:\|([^\]]*))?\]\]/i;
   const fileMatch = filePattern.exec(working);
   if (fileMatch) {
-    const rawFilename = fileMatch[1].trim().replace(/[/\\]+/g, '_');
-    if (rawFilename) {
-      const kind = detectFileMediaKind(rawFilename, '');
-      const fallbackMeta = formatNightcordFileMeta(
-        buildDefaultDummySizeBytes(kind),
-        rawFilename,
-        kind
-      );
-      const customSizeLabel = fileMatch[2]?.trim();
-      fileMedia = {
-        mediaId: '',
-        filename: rawFilename,
-        kind,
-        sizeLabel: customSizeLabel || fallbackMeta.sizeLabel,
-        fileType: extractFileType(rawFilename) || fallbackMeta.fileType,
-        displayMode: 'card',
-      };
-    }
+    fileMedia = createStructuredFileMedia(fileMatch[1], fileMatch[2]);
     working = working.replace(filePattern, '').trim();
   }
 
   return {
     text: stripSpeakerPrefix(working, characterName),
-    inferredSentAt,
+    inferredSentAt: null,
     fileMedia,
   };
 }
@@ -1156,6 +1311,798 @@ function parseSearchQueryArg(rawArgs: unknown): string {
   return '';
 }
 
+export function createEmptyUsageTotals(): AiUsageTotals {
+  return {
+    requestCount: 0,
+    knownUsageRequestCount: 0,
+    unknownUsageRequestCount: 0,
+    inputTokens: null,
+    outputTokens: null,
+    totalTokens: null,
+    thinkingTokens: null,
+    cachedTokens: null,
+    extraTokens: {},
+  };
+}
+
+export function createEmptyUsageState(): AiUsageState {
+  return {
+    session: createEmptyUsageTotals(),
+    sessionRecords: [],
+    history: createEmptyUsageTotals(),
+    historyRecords: [],
+  };
+}
+
+function toFiniteNonNegInt(val: unknown): number | null {
+  if (typeof val !== 'number' || !Number.isFinite(val) || val < 0) {
+    return null;
+  }
+  return Math.round(val);
+}
+
+function addNullableTokenSum(current: number | null, incoming: number | null): number | null {
+  if (incoming === null) {
+    return current;
+  }
+  return (current ?? 0) + incoming;
+}
+
+export function extractProviderUsage(
+  protocol: AiProtocol,
+  rawData: unknown
+): {
+  usageKnown: boolean;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  thinkingTokens: number | null;
+  cachedTokens: number | null;
+  extraTokens: Record<string, number>;
+} {
+  const empty = {
+    usageKnown: false,
+    inputTokens: null,
+    outputTokens: null,
+    totalTokens: null,
+    thinkingTokens: null,
+    cachedTokens: null,
+    extraTokens: {} as Record<string, number>,
+  };
+  if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) {
+    return empty;
+  }
+  const data = rawData as Record<string, unknown>;
+  const extraTokens: Record<string, number> = {};
+
+  if (protocol === 'gemini') {
+    const meta = data.usageMetadata;
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
+      return empty;
+    }
+    const u = meta as Record<string, unknown>;
+    const inputTokens = toFiniteNonNegInt(u.promptTokenCount);
+    const outputTokens = toFiniteNonNegInt(u.candidatesTokenCount);
+    const totalTokens = toFiniteNonNegInt(u.totalTokenCount);
+    const thinkingTokens = toFiniteNonNegInt(u.thoughtsTokenCount);
+    const cachedTokens = toFiniteNonNegInt(u.cachedContentTokenCount);
+    const toolPromptTokens = toFiniteNonNegInt(u.toolUsePromptTokenCount);
+    if (toolPromptTokens !== null) {
+      extraTokens.tool_use_prompt_tokens = toolPromptTokens;
+    }
+    const knownKeys = [
+      'promptTokenCount',
+      'candidatesTokenCount',
+      'totalTokenCount',
+      'thoughtsTokenCount',
+      'cachedContentTokenCount',
+      'toolUsePromptTokenCount',
+    ];
+    for (const [key, val] of Object.entries(u)) {
+      if (knownKeys.includes(key)) {
+        continue;
+      }
+      const num = toFiniteNonNegInt(val);
+      if (num !== null) {
+        extraTokens[key] = num;
+      }
+    }
+    const usageKnown =
+      inputTokens !== null || outputTokens !== null || totalTokens !== null;
+    if (!usageKnown) {
+      return empty;
+    }
+    return {
+      usageKnown,
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      thinkingTokens,
+      cachedTokens,
+      extraTokens,
+    };
+  }
+
+  if (protocol === 'anthropic') {
+    const usage = data.usage;
+    if (!usage || typeof usage !== 'object' || Array.isArray(usage)) {
+      return empty;
+    }
+    const u = usage as Record<string, unknown>;
+    const inputTokens = toFiniteNonNegInt(u.input_tokens);
+    const outputTokens = toFiniteNonNegInt(u.output_tokens);
+    const cachedTokens = toFiniteNonNegInt(u.cache_read_input_tokens);
+    const thinkingTokens = toFiniteNonNegInt(u.thinking_tokens);
+    const cacheCreationTokens = toFiniteNonNegInt(u.cache_creation_input_tokens);
+    if (cacheCreationTokens !== null) {
+      extraTokens.cache_creation_input_tokens = cacheCreationTokens;
+    }
+    const serverToolUse = u.server_tool_use;
+    if (serverToolUse && typeof serverToolUse === 'object' && !Array.isArray(serverToolUse)) {
+      const searchRequests = toFiniteNonNegInt(
+        (serverToolUse as Record<string, unknown>).web_search_requests
+      );
+      if (searchRequests !== null) {
+        extraTokens.web_search_requests = searchRequests;
+      }
+    }
+    const explicitTotal = toFiniteNonNegInt(u.total_tokens);
+    const totalTokens =
+      explicitTotal !== null
+        ? explicitTotal
+        : inputTokens !== null && outputTokens !== null
+          ? inputTokens + outputTokens
+          : null;
+    const usageKnown =
+      inputTokens !== null || outputTokens !== null || totalTokens !== null;
+    if (!usageKnown) {
+      return empty;
+    }
+    return {
+      usageKnown,
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      thinkingTokens,
+      cachedTokens,
+      extraTokens,
+    };
+  }
+
+  const usage = data.usage;
+  if (!usage || typeof usage !== 'object' || Array.isArray(usage)) {
+    return empty;
+  }
+  const u = usage as Record<string, unknown>;
+  const inputTokens =
+    toFiniteNonNegInt(u.prompt_tokens) ?? toFiniteNonNegInt(u.input_tokens);
+  const outputTokens =
+    toFiniteNonNegInt(u.completion_tokens) ?? toFiniteNonNegInt(u.output_tokens);
+  const explicitTotal = toFiniteNonNegInt(u.total_tokens);
+  const totalTokens =
+    explicitTotal !== null
+      ? explicitTotal
+      : inputTokens !== null && outputTokens !== null
+        ? inputTokens + outputTokens
+        : null;
+
+  const compDetails =
+    u.completion_tokens_details &&
+    typeof u.completion_tokens_details === 'object' &&
+    !Array.isArray(u.completion_tokens_details)
+      ? (u.completion_tokens_details as Record<string, unknown>)
+      : null;
+  const promptDetails =
+    u.prompt_tokens_details &&
+    typeof u.prompt_tokens_details === 'object' &&
+    !Array.isArray(u.prompt_tokens_details)
+      ? (u.prompt_tokens_details as Record<string, unknown>)
+      : null;
+
+  const thinkingTokens =
+    toFiniteNonNegInt(compDetails?.reasoning_tokens) ??
+    toFiniteNonNegInt(u.reasoning_tokens);
+  const cachedTokens =
+    toFiniteNonNegInt(promptDetails?.cached_tokens) ??
+    toFiniteNonNegInt(u.prompt_cache_hit_tokens) ??
+    toFiniteNonNegInt(u.cached_tokens);
+
+  const cacheMissTokens = toFiniteNonNegInt(u.prompt_cache_miss_tokens);
+  if (cacheMissTokens !== null) {
+    extraTokens.prompt_cache_miss_tokens = cacheMissTokens;
+  }
+  if (promptDetails) {
+    for (const [k, v] of Object.entries(promptDetails)) {
+      if (k === 'cached_tokens') {
+        continue;
+      }
+      const num = toFiniteNonNegInt(v);
+      if (num !== null && num > 0) {
+        extraTokens[`prompt_${k}`] = num;
+      }
+    }
+  }
+  if (compDetails) {
+    for (const [k, v] of Object.entries(compDetails)) {
+      if (k === 'reasoning_tokens') {
+        continue;
+      }
+      const num = toFiniteNonNegInt(v);
+      if (num !== null && num > 0) {
+        extraTokens[`completion_${k}`] = num;
+      }
+    }
+  }
+
+  const usageKnown =
+    inputTokens !== null || outputTokens !== null || totalTokens !== null;
+  if (!usageKnown) {
+    return empty;
+  }
+  return {
+    usageKnown,
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    thinkingTokens,
+    cachedTokens,
+    extraTokens,
+  };
+}
+
+export function applyUsageRecordToTotals(
+  totals: AiUsageTotals,
+  record: AiUsageRecord
+): AiUsageTotals {
+  const nextExtra: Record<string, number> = { ...totals.extraTokens };
+  if (record.extraTokens) {
+    for (const [key, val] of Object.entries(record.extraTokens)) {
+      if (typeof val === 'number' && Number.isFinite(val)) {
+        nextExtra[key] = (nextExtra[key] ?? 0) + val;
+      }
+    }
+  }
+  return {
+    requestCount: totals.requestCount + 1,
+    knownUsageRequestCount: totals.knownUsageRequestCount + (record.usageKnown ? 1 : 0),
+    unknownUsageRequestCount: totals.unknownUsageRequestCount + (record.usageKnown ? 0 : 1),
+    inputTokens: addNullableTokenSum(totals.inputTokens, record.inputTokens),
+    outputTokens: addNullableTokenSum(totals.outputTokens, record.outputTokens),
+    totalTokens: addNullableTokenSum(totals.totalTokens, record.totalTokens),
+    thinkingTokens: addNullableTokenSum(totals.thinkingTokens, record.thinkingTokens),
+    cachedTokens: addNullableTokenSum(totals.cachedTokens, record.cachedTokens),
+    extraTokens: nextExtra,
+  };
+}
+
+export function appendUsageRecordToState(
+  state: AiUsageState,
+  record: AiUsageRecord,
+  maxRecords: number = 200
+): AiUsageState {
+  return {
+    session: applyUsageRecordToTotals(state.session, record),
+    sessionRecords: [record, ...state.sessionRecords].slice(0, maxRecords),
+    history: applyUsageRecordToTotals(state.history, record),
+    historyRecords: [record, ...state.historyRecords].slice(0, maxRecords),
+  };
+}
+
+export function resetSessionUsageState(state: AiUsageState): AiUsageState {
+  return {
+    session: createEmptyUsageTotals(),
+    sessionRecords: [],
+    history: state.history,
+    historyRecords: state.historyRecords,
+  };
+}
+
+function sanitizeUsageTotals(raw: unknown): AiUsageTotals {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return createEmptyUsageTotals();
+  }
+  const obj = raw as Record<string, unknown>;
+  const extraTokens: Record<string, number> = {};
+  if (obj.extraTokens && typeof obj.extraTokens === 'object' && !Array.isArray(obj.extraTokens)) {
+    for (const [k, v] of Object.entries(obj.extraTokens as Record<string, unknown>)) {
+      const n = toFiniteNonNegInt(v);
+      if (n !== null) {
+        extraTokens[k] = n;
+      }
+    }
+  }
+  return {
+    requestCount: toFiniteNonNegInt(obj.requestCount) ?? 0,
+    knownUsageRequestCount: toFiniteNonNegInt(obj.knownUsageRequestCount) ?? 0,
+    unknownUsageRequestCount: toFiniteNonNegInt(obj.unknownUsageRequestCount) ?? 0,
+    inputTokens: toFiniteNonNegInt(obj.inputTokens),
+    outputTokens: toFiniteNonNegInt(obj.outputTokens),
+    totalTokens: toFiniteNonNegInt(obj.totalTokens),
+    thinkingTokens: toFiniteNonNegInt(obj.thinkingTokens),
+    cachedTokens: toFiniteNonNegInt(obj.cachedTokens),
+    extraTokens,
+  };
+}
+
+function sanitizeUsageRecords(raw: unknown): AiUsageRecord[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const result: AiUsageRecord[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue;
+    }
+    const r = item as Record<string, unknown>;
+    if (typeof r.id !== 'string' || typeof r.model !== 'string') {
+      continue;
+    }
+    const extraTokens: Record<string, number> = {};
+    if (r.extraTokens && typeof r.extraTokens === 'object' && !Array.isArray(r.extraTokens)) {
+      for (const [k, v] of Object.entries(r.extraTokens as Record<string, unknown>)) {
+        const n = toFiniteNonNegInt(v);
+        if (n !== null) {
+          extraTokens[k] = n;
+        }
+      }
+    }
+    const purpose: AiUsagePurpose =
+      r.purpose === 'follow_up' ||
+      r.purpose === 'auto_chat' ||
+      r.purpose === 'continue' ||
+      r.purpose === 'regenerate' ||
+      r.purpose === 'time_analysis' ||
+      r.purpose === 'test'
+        ? r.purpose
+        : 'chat';
+    result.push({
+      id: r.id,
+      timestampIso:
+        typeof r.timestampIso === 'string' ? r.timestampIso : new Date().toISOString(),
+      protocol: sanitizeAiProtocol(r.protocol),
+      model: r.model,
+      characterId: typeof r.characterId === 'string' ? r.characterId : '',
+      characterName: typeof r.characterName === 'string' ? r.characterName : '',
+      purpose,
+      status: r.status === 'error' ? 'error' : 'ok',
+      usageKnown: Boolean(r.usageKnown),
+      inputTokens: toFiniteNonNegInt(r.inputTokens),
+      outputTokens: toFiniteNonNegInt(r.outputTokens),
+      totalTokens: toFiniteNonNegInt(r.totalTokens),
+      thinkingTokens: toFiniteNonNegInt(r.thinkingTokens),
+      cachedTokens: toFiniteNonNegInt(r.cachedTokens),
+      ...(Object.keys(extraTokens).length > 0 ? { extraTokens } : {}),
+      ...(typeof r.latencyMs === 'number' && Number.isFinite(r.latencyMs)
+        ? { latencyMs: Math.max(0, Math.round(r.latencyMs)) }
+        : {}),
+    });
+  }
+  return result.slice(0, 200);
+}
+
+export function sanitizeAiUsageState(
+  rawHistory?: unknown,
+  rawSession?: unknown
+): AiUsageState {
+  const histObj =
+    rawHistory && typeof rawHistory === 'object' && !Array.isArray(rawHistory)
+      ? (rawHistory as Record<string, unknown>)
+      : {};
+  const sessObj =
+    rawSession && typeof rawSession === 'object' && !Array.isArray(rawSession)
+      ? (rawSession as Record<string, unknown>)
+      : {};
+  return {
+    session: sanitizeUsageTotals(sessObj.session),
+    sessionRecords: sanitizeUsageRecords(sessObj.sessionRecords),
+    history: sanitizeUsageTotals(histObj.history),
+    historyRecords: sanitizeUsageRecords(histObj.historyRecords),
+  };
+}
+
+function buildUsageRecord(params: {
+  protocol: AiProtocol;
+  model: string;
+  characterId: string;
+  characterName: string;
+  purpose: AiUsagePurpose;
+  status: 'ok' | 'error';
+  rawData?: unknown;
+  latencyMs?: number;
+}): AiUsageRecord {
+  const parsed = params.rawData
+    ? extractProviderUsage(params.protocol, params.rawData)
+    : {
+        usageKnown: false,
+        inputTokens: null,
+        outputTokens: null,
+        totalTokens: null,
+        thinkingTokens: null,
+        cachedTokens: null,
+        extraTokens: {},
+      };
+  return {
+    id: `usage-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    timestampIso: new Date().toISOString(),
+    protocol: params.protocol,
+    model: params.model,
+    characterId: params.characterId,
+    characterName: params.characterName,
+    purpose: params.purpose,
+    status: params.status,
+    usageKnown: parsed.usageKnown,
+    inputTokens: parsed.inputTokens,
+    outputTokens: parsed.outputTokens,
+    totalTokens: parsed.totalTokens,
+    thinkingTokens: parsed.thinkingTokens,
+    cachedTokens: parsed.cachedTokens,
+    ...(Object.keys(parsed.extraTokens).length > 0
+      ? { extraTokens: parsed.extraTokens }
+      : {}),
+    ...(typeof params.latencyMs === 'number'
+      ? { latencyMs: Math.max(1, Math.round(params.latencyMs)) }
+      : {}),
+  };
+}
+
+const GEMINI_STRUCTURED_REPLY_SCHEMA = {
+  type: 'object',
+  properties: {
+    send_time: {
+      type: 'string',
+      description: 'Send timestamp in 24-hour YYYY-MM-DD HH:mm format.',
+    },
+    message: {
+      type: 'string',
+      description: 'Spoken chat message body only, with zero dates or timestamps inside.',
+    },
+  },
+  required: ['send_time', 'message'],
+};
+
+const STRUCTURED_JSON_TIME_INSTRUCTION =
+  'Respond strictly as a JSON object with keys "send_time" (string in YYYY-MM-DD HH:mm format) and "message" (string containing ONLY your spoken chat reply with NO timestamps or dates inside).';
+
+const GEMINI_TIME_ONLY_SCHEMA = {
+  type: 'object',
+  properties: {
+    send_time: {
+      type: 'string',
+      description: 'Send timestamp in 24-hour YYYY-MM-DD HH:mm format.',
+    },
+  },
+  required: ['send_time'],
+};
+
+export function parseDedicatedTimeAnalyzerOutput(
+  rawText: string,
+  prevDt?: MessageDateTime | null,
+  now: Date = new Date()
+): MessageDateTime | null {
+  const trimmed = rawText.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  let candidateJson = trimmed;
+  if (candidateJson.startsWith('```')) {
+    const firstBreak = candidateJson.indexOf('\n');
+    const lastFence = candidateJson.lastIndexOf('```');
+    if (firstBreak !== -1 && lastFence > firstBreak) {
+      candidateJson = candidateJson.slice(firstBreak + 1, lastFence).trim();
+    }
+  }
+  const firstBrace = candidateJson.indexOf('{');
+  const lastBrace = candidateJson.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const jsonSlice = candidateJson.slice(firstBrace, lastBrace + 1);
+    const parsedFromJson = parseToolTimeArg(jsonSlice, prevDt, now);
+    if (parsedFromJson) {
+      return parsedFromJson;
+    }
+  }
+
+  const fullMatches = Array.from(
+    trimmed.matchAll(/(\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:[T\s]+)\d{1,2}:\d{2})(?::\d{2})?/g)
+  );
+  if (fullMatches.length > 0) {
+    const lastFull = fullMatches[fullMatches.length - 1][1];
+    const parsedFull = parseAiDateTimeTag(lastFull, prevDt, now);
+    if (parsedFull) {
+      return parsedFull;
+    }
+  }
+
+  const clockMatches = Array.from(trimmed.matchAll(/\b(\d{1,2}:\d{2})(?::\d{2})?\b/g));
+  if (clockMatches.length > 0) {
+    const lastClock = clockMatches[clockMatches.length - 1][1];
+    const parsedClock = parseAiDateTimeTag(lastClock, prevDt, now);
+    if (parsedClock) {
+      return parsedClock;
+    }
+  }
+
+  return null;
+}
+
+export function buildDedicatedTimeAnalyzerPrompt(params: {
+  speakerName: string;
+  cleanedReply: string;
+  fileMedia?: ChatFileMedia;
+  history: ChatMessage[];
+  timeFrequency: AiTimeFrequency;
+  members?: VoiceMember[];
+  allCharacters: CharacterProfile[];
+  prevDt?: MessageDateTime | null;
+  now?: Date;
+}): {
+  systemInstruction: string;
+  userPrompt: string;
+} {
+  const now = params.now ?? new Date();
+  const simStartDt = dateToMessageDateTime(now);
+  const anchorDt = params.prevDt ?? simStartDt;
+  const simStartStd = formatStandardDateTime(simStartDt);
+  const anchorStd = formatStandardDateTime(anchorDt);
+  const anchorBadge = formatDateTimeBadge(anchorDt);
+  const members = params.members ?? [];
+
+  const timelineLines = params.history
+    .slice(-8)
+    .map((msg) => {
+      const dt = getMessageDateTime(msg, now);
+      const stamp = dt ? formatStandardDateTime(dt) : msg.timestamp;
+      const msgText = msg.text?.trim() ?? '';
+      const body = msgText
+        ? msgText.slice(0, 120)
+        : msg.fileMedia
+          ? `[File: ${msg.fileMedia.filename}]`
+          : msg.imageMedia
+            ? `[Image: ${msg.imageMedia.filename}]`
+            : msg.voiceMedia
+              ? `[Voice: ${msg.voiceMedia.filename}]`
+              : '';
+      return `- [${stamp}] ${msg.username}: ${body}`;
+    })
+    .filter(Boolean);
+
+  const presenceLines =
+    members.length > 0
+      ? params.allCharacters
+          .map((c) => {
+            const m = members.find((item) => item.id === c.id);
+            return `- ${c.name}: ${describeMemberPresenceStatus(m)}`;
+          })
+          .join('\n')
+      : '';
+
+  const replyPreview = [
+    params.cleanedReply.trim(),
+    params.fileMedia ? `[File: ${params.fileMedia.filename}]` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const systemInstruction = [
+    'You are a silent timestamp metadata analyzer for a group chat simulation.',
+    'Your ONLY task is to choose a realistic send timestamp for the latest message.',
+    'Do NOT write chat dialogue, explanations, or markdown fences.',
+    'Respond ONLY with a single JSON object matching {"send_time":"YYYY-MM-DD HH:mm"}.',
+  ].join(' ');
+
+  const userPrompt = [
+    `Local webpage simulation start time: ${simStartStd}`,
+    params.prevDt
+      ? `Previous message timestamp (STRICT LOWER BOUND — send_time MUST be >= ${anchorStd}): ${anchorStd} (${anchorBadge})`
+      : `Conversation start lower bound (STRICT LOWER BOUND — send_time MUST be >= ${anchorStd}): ${anchorStd}`,
+    buildTimeFrequencyDirective(params.timeFrequency),
+    'Pacing rule: NEVER add a fixed constant step to every message. Let spacing vary organically (0–5 min bursts, 15–60 min pauses, or multi-hour gaps) based on frequency tendency, topic urgency, member status, and time of day.',
+    presenceLines ? `Room member statuses:\n${presenceLines}` : '',
+    timelineLines.length > 0 ? `Recent timeline:\n${timelineLines.join('\n')}` : '',
+    `Incoming message to timestamp:\n[${params.speakerName}]: ${replyPreview || '(attachment)'}`,
+    `Output ONLY {"send_time":"YYYY-MM-DD HH:mm"} at or after ${anchorStd}.`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  return { systemInstruction, userPrompt };
+}
+
+async function requestDedicatedSendTimeInference(params: {
+  targetCharacter: CharacterProfile;
+  creds: {
+    protocol: AiProtocol;
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+  };
+  url: string;
+  history: ChatMessage[];
+  cleanedReply: string;
+  fileMedia?: ChatFileMedia;
+  globalConfig: AiGlobalConfig;
+  allCharacters: CharacterProfile[];
+  members?: VoiceMember[];
+  prevDt?: MessageDateTime | null;
+  now: Date;
+  signal?: AbortSignal;
+  onUsageRecord?: (record: AiUsageRecord) => void;
+}): Promise<MessageDateTime | null> {
+  const { systemInstruction, userPrompt } = buildDedicatedTimeAnalyzerPrompt({
+    speakerName: params.targetCharacter.name,
+    cleanedReply: params.cleanedReply,
+    fileMedia: params.fileMedia,
+    history: params.history,
+    timeFrequency: params.globalConfig.timeFrequency,
+    members: params.members,
+    allCharacters: params.allCharacters,
+    prevDt: params.prevDt,
+    now: params.now,
+  });
+
+  const emitAnalyzerUsage = (status: 'ok' | 'error', rawData: unknown, latencyMs: number) => {
+    const rec = buildUsageRecord({
+      protocol: params.creds.protocol,
+      model: params.creds.model,
+      characterId: params.targetCharacter.id,
+      characterName: params.targetCharacter.name,
+      purpose: 'time_analysis',
+      status,
+      rawData,
+      latencyMs,
+    });
+    params.onUsageRecord?.(rec);
+  };
+
+  try {
+    if (params.creds.protocol === 'openai' || params.creds.protocol === 'deepseek') {
+      let useJsonMode = true;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const payload: Record<string, unknown> = {
+          model: params.creds.model,
+          temperature: 0.7,
+          max_tokens: 256,
+          messages: [
+            { role: 'system', content: systemInstruction },
+            { role: 'user', content: userPrompt },
+          ],
+        };
+        if (useJsonMode) {
+          payload.response_format = { type: 'json_object' };
+        }
+        const startedAt = Date.now();
+        const response = await safeFetch(params.url, {
+          method: 'POST',
+          signal: params.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${params.creds.apiKey}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        const latencyMs = Math.max(1, Date.now() - startedAt);
+        if (!response.ok) {
+          emitAnalyzerUsage('error', undefined, latencyMs);
+          if (useJsonMode && (response.status === 400 || response.status === 422)) {
+            useJsonMode = false;
+            continue;
+          }
+          return null;
+        }
+        const data = (await response.json()) as {
+          choices?: {
+            message?: {
+              content?: string | { text?: string }[] | null;
+            };
+          }[];
+        };
+        emitAnalyzerUsage('ok', data, latencyMs);
+        const rawContent = data.choices?.[0]?.message?.content;
+        const text =
+          typeof rawContent === 'string'
+            ? rawContent
+            : Array.isArray(rawContent)
+              ? rawContent.map((part) => part.text ?? '').join('')
+              : '';
+        return parseDedicatedTimeAnalyzerOutput(text, params.prevDt, params.now);
+      }
+      return null;
+    }
+
+    if (params.creds.protocol === 'gemini') {
+      let useJsonSchema = true;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const generationConfig: Record<string, unknown> = {
+          temperature: 0.7,
+          maxOutputTokens: 256,
+        };
+        if (useJsonSchema) {
+          generationConfig.responseMimeType = 'application/json';
+          generationConfig.responseSchema = GEMINI_TIME_ONLY_SCHEMA;
+        }
+        const startedAt = Date.now();
+        const response = await safeFetch(params.url, {
+          method: 'POST',
+          signal: params.signal,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            generationConfig,
+            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+          }),
+        });
+        const latencyMs = Math.max(1, Date.now() - startedAt);
+        if (!response.ok) {
+          emitAnalyzerUsage('error', undefined, latencyMs);
+          if (useJsonSchema && (response.status === 400 || response.status === 422)) {
+            useJsonSchema = false;
+            continue;
+          }
+          return null;
+        }
+        const data = (await response.json()) as {
+          candidates?: {
+            content?: {
+              parts?: { text?: string }[];
+            };
+          }[];
+        };
+        emitAnalyzerUsage('ok', data, latencyMs);
+        const parts = data.candidates?.[0]?.content?.parts ?? [];
+        const text = parts
+          .filter((p) => typeof p.text === 'string')
+          .map((p) => p.text ?? '')
+          .join('');
+        return parseDedicatedTimeAnalyzerOutput(text, params.prevDt, params.now);
+      }
+      return null;
+    }
+
+    const startedAt = Date.now();
+    const response = await safeFetch(params.url, {
+      method: 'POST',
+      signal: params.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': params.creds.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: params.creds.model,
+        max_tokens: 256,
+        temperature: 0.7,
+        system: systemInstruction,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+    const latencyMs = Math.max(1, Date.now() - startedAt);
+    if (!response.ok) {
+      emitAnalyzerUsage('error', undefined, latencyMs);
+      return null;
+    }
+    const data = (await response.json()) as {
+      content?: { type?: string; text?: string }[];
+    };
+    emitAnalyzerUsage('ok', data, latencyMs);
+    const text = (data.content ?? [])
+      .filter((block) => block.type === 'text' || typeof block.text === 'string')
+      .map((block) => block.text ?? '')
+      .join('');
+    return parseDedicatedTimeAnalyzerOutput(text, params.prevDt, params.now);
+  } catch (err) {
+    if (
+      (err instanceof DOMException && err.name === 'AbortError') ||
+      (err instanceof Error && err.name === 'AbortError')
+    ) {
+      throw err;
+    }
+    return null;
+  }
+}
+
 export async function requestAiCompletion(params: {
   targetCharacter: CharacterProfile;
   charConfig: AiCharacterConfig;
@@ -1164,6 +2111,8 @@ export async function requestAiCompletion(params: {
   allCharacters: CharacterProfile[];
   members?: VoiceMember[];
   signal?: AbortSignal;
+  purpose?: AiUsagePurpose;
+  onUsageRecord?: (record: AiUsageRecord) => void;
 }): Promise<AiCompletionResult> {
   const creds = resolveEffectiveAiCredentials(params.charConfig, params.globalConfig);
   if (!creds.ready) {
@@ -1174,6 +2123,59 @@ export async function requestAiCompletion(params: {
   const prevDt = getLastMessageDateTime(params.history, now);
   const needTimeTool = params.globalConfig.timeMode === 'ai_inferred';
   const needWebSearch = Boolean(params.globalConfig.webSearchEnabled);
+  const purpose: AiUsagePurpose = params.purpose ?? 'chat';
+  const collectedUsageRecords: AiUsageRecord[] = [];
+
+  const emitUsage = (status: 'ok' | 'error', rawData: unknown, latencyMs: number) => {
+    const rec = buildUsageRecord({
+      protocol: creds.protocol,
+      model: creds.model,
+      characterId: params.targetCharacter.id,
+      characterName: params.targetCharacter.name,
+      purpose,
+      status,
+      rawData,
+      latencyMs,
+    });
+    collectedUsageRecords.push(rec);
+    params.onUsageRecord?.(rec);
+  };
+
+  const { url } = normalizeAiEndpoint(creds.protocol, creds.baseUrl, creds.model, creds.apiKey);
+
+  const finalizeCompletion = async (
+    rawText: string,
+    sentAt: MessageDateTime | null,
+    fileMedia?: ChatFileMedia
+  ): Promise<AiCompletionResult> => {
+    let finalSentAt = sentAt;
+    if (needTimeTool && !finalSentAt && (rawText || fileMedia)) {
+      finalSentAt = await requestDedicatedSendTimeInference({
+        targetCharacter: params.targetCharacter,
+        creds,
+        url,
+        history: params.history,
+        cleanedReply: rawText,
+        fileMedia,
+        globalConfig: params.globalConfig,
+        allCharacters: params.allCharacters,
+        members: params.members,
+        prevDt,
+        now,
+        signal: params.signal,
+        onUsageRecord: (rec) => {
+          collectedUsageRecords.push(rec);
+          params.onUsageRecord?.(rec);
+        },
+      });
+    }
+    return {
+      rawText,
+      toolSentAt: finalSentAt,
+      ...(fileMedia ? { structuredFileMedia: fileMedia } : {}),
+      usageRecords: collectedUsageRecords,
+    };
+  };
 
   const { systemInstruction, turns } = buildAiChatPayload(
     params.targetCharacter,
@@ -1185,6 +2187,8 @@ export async function requestAiCompletion(params: {
       userPersona: params.globalConfig.userPersona,
       worldviewPrompt: params.globalConfig.worldviewPrompt,
       timeMode: params.globalConfig.timeMode,
+      timeFrequency: params.globalConfig.timeFrequency,
+      outputLanguage: params.globalConfig.outputLanguage,
       replyLength: params.globalConfig.replyLength,
       lastMessageDateTime: prevDt,
       now,
@@ -1192,8 +2196,6 @@ export async function requestAiCompletion(params: {
       webSearchEnabled: needWebSearch,
     }
   );
-
-  const { url } = normalizeAiEndpoint(creds.protocol, creds.baseUrl, creds.model, creds.apiKey);
 
   if (creds.protocol === 'openai' || creds.protocol === 'deepseek') {
     const tools: Record<string, unknown>[] = [];
@@ -1223,7 +2225,9 @@ export async function requestAiCompletion(params: {
       ...turns,
     ];
     let toolsActive = tools.length > 0;
+    let jsonModeFallback = false;
     let capturedSentAt: MessageDateTime | null = null;
+    let capturedFileMedia: ChatFileMedia | undefined;
 
     for (let round = 0; round < 3; round += 1) {
       const payload: Record<string, unknown> = {
@@ -1234,8 +2238,11 @@ export async function requestAiCompletion(params: {
       if (toolsActive && tools.length > 0) {
         payload.tools = tools;
         payload.tool_choice = 'auto';
+      } else if (jsonModeFallback && needTimeTool) {
+        payload.response_format = { type: 'json_object' };
       }
 
+      const startedAt = Date.now();
       const response = await safeFetch(url, {
         method: 'POST',
         signal: params.signal,
@@ -1245,13 +2252,30 @@ export async function requestAiCompletion(params: {
         },
         body: JSON.stringify(payload),
       });
+      const latencyMs = Math.max(1, Date.now() - startedAt);
 
       if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        emitUsage('error', undefined, latencyMs);
         if (toolsActive && (response.status === 400 || response.status === 422) && round === 0) {
           toolsActive = false;
+          if (needTimeTool) {
+            jsonModeFallback = true;
+            messages = [
+              {
+                role: 'system',
+                content: `${systemInstruction}\n${STRUCTURED_JSON_TIME_INSTRUCTION}`,
+              },
+              ...turns,
+            ];
+          }
           continue;
         }
-        const errText = await response.text().catch(() => '');
+        if (jsonModeFallback && (response.status === 400 || response.status === 422)) {
+          jsonModeFallback = false;
+          messages = [{ role: 'system', content: systemInstruction }, ...turns];
+          continue;
+        }
         throw new Error(`HTTP ${response.status}${errText ? `: ${errText.slice(0, 140)}` : ''}`);
       }
 
@@ -1266,6 +2290,8 @@ export async function requestAiCompletion(params: {
           };
         }[];
       };
+      emitUsage('ok', data, latencyMs);
+
       const assistantMsg = data.choices?.[0]?.message;
       const rawContent = assistantMsg?.content;
       const text =
@@ -1282,11 +2308,27 @@ export async function requestAiCompletion(params: {
         }
       }
 
-      const cleaned = stripSpeakerPrefix(text, params.targetCharacter.name);
+      const structured = parseStructuredJsonReply(
+        text,
+        params.targetCharacter.name,
+        prevDt,
+        now
+      );
+      if (structured) {
+        if (structured.sentAt && !capturedSentAt) {
+          capturedSentAt = structured.sentAt;
+        }
+        if (structured.fileMedia && !capturedFileMedia) {
+          capturedFileMedia = structured.fileMedia;
+        }
+      }
+      const cleaned = structured
+        ? structured.text
+        : stripSpeakerPrefix(text, params.targetCharacter.name);
       const hasSearchCall = toolCalls.some((tc) => tc.function?.name === 'web_search');
 
-      if (cleaned && !hasSearchCall) {
-        return { rawText: cleaned, toolSentAt: capturedSentAt };
+      if ((cleaned || capturedFileMedia) && !hasSearchCall) {
+        return await finalizeCompletion(cleaned, capturedSentAt, capturedFileMedia);
       }
       if (toolCalls.length > 0 && round < 2) {
         messages = [
@@ -1323,8 +2365,8 @@ export async function requestAiCompletion(params: {
         }
         continue;
       }
-      if (cleaned) {
-        return { rawText: cleaned, toolSentAt: capturedSentAt };
+      if (cleaned || capturedFileMedia) {
+        return await finalizeCompletion(cleaned, capturedSentAt, capturedFileMedia);
       }
       break;
     }
@@ -1339,17 +2381,30 @@ export async function requestAiCompletion(params: {
 
     const useNativeSearch = needWebSearch;
     const useTimeDecl = needTimeTool && !useNativeSearch;
+    let useStructuredSchema = needTimeTool && useNativeSearch;
     let toolsActive = useNativeSearch || useTimeDecl;
     let capturedSentAt: MessageDateTime | null = null;
+    let capturedFileMedia: ChatFileMedia | undefined;
 
     for (let round = 0; round < 3; round += 1) {
+      const generationConfig: Record<string, unknown> = {
+        temperature: creds.temperature,
+      };
+      if (useStructuredSchema) {
+        generationConfig.responseMimeType = 'application/json';
+        generationConfig.responseSchema = GEMINI_STRUCTURED_REPLY_SCHEMA;
+      }
       const payload: Record<string, unknown> = {
         systemInstruction: {
-          parts: [{ text: systemInstruction }],
+          parts: [
+            {
+              text: useStructuredSchema
+                ? `${systemInstruction}\n${STRUCTURED_JSON_TIME_INSTRUCTION}`
+                : systemInstruction,
+            },
+          ],
         },
-        generationConfig: {
-          temperature: creds.temperature,
-        },
+        generationConfig,
         contents,
       };
       if (toolsActive) {
@@ -1371,6 +2426,7 @@ export async function requestAiCompletion(params: {
         }
       }
 
+      const startedAt = Date.now();
       const response = await safeFetch(url, {
         method: 'POST',
         signal: params.signal,
@@ -1379,12 +2435,21 @@ export async function requestAiCompletion(params: {
         },
         body: JSON.stringify(payload),
       });
+      const latencyMs = Math.max(1, Date.now() - startedAt);
       if (!response.ok) {
-        if (toolsActive && (response.status === 400 || response.status === 422) && round === 0) {
-          toolsActive = false;
+        const errText = await response.text().catch(() => '');
+        emitUsage('error', undefined, latencyMs);
+        if (useStructuredSchema && (response.status === 400 || response.status === 422)) {
+          useStructuredSchema = false;
           continue;
         }
-        const errText = await response.text().catch(() => '');
+        if (toolsActive && (response.status === 400 || response.status === 422) && round === 0) {
+          toolsActive = false;
+          if (needTimeTool) {
+            useStructuredSchema = true;
+          }
+          continue;
+        }
         throw new Error(`HTTP ${response.status}${errText ? `: ${errText.slice(0, 140)}` : ''}`);
       }
 
@@ -1398,6 +2463,8 @@ export async function requestAiCompletion(params: {
           };
         }[];
       };
+      emitUsage('ok', data, latencyMs);
+
       const parts = data.candidates?.[0]?.content?.parts ?? [];
       const text = parts
         .filter((p) => typeof p.text === 'string')
@@ -1409,9 +2476,25 @@ export async function requestAiCompletion(params: {
           capturedSentAt = parseToolTimeArg(p.functionCall.args, prevDt, now);
         }
       }
-      const cleaned = stripSpeakerPrefix(text, params.targetCharacter.name);
-      if (cleaned) {
-        return { rawText: cleaned, toolSentAt: capturedSentAt };
+      const structured = parseStructuredJsonReply(
+        text,
+        params.targetCharacter.name,
+        prevDt,
+        now
+      );
+      if (structured) {
+        if (structured.sentAt && !capturedSentAt) {
+          capturedSentAt = structured.sentAt;
+        }
+        if (structured.fileMedia && !capturedFileMedia) {
+          capturedFileMedia = structured.fileMedia;
+        }
+      }
+      const cleaned = structured
+        ? structured.text
+        : stripSpeakerPrefix(text, params.targetCharacter.name);
+      if (cleaned || capturedFileMedia) {
+        return await finalizeCompletion(cleaned, capturedSentAt, capturedFileMedia);
       }
       if (fnCalls.length > 0 && round < 2) {
         contents = [
@@ -1465,7 +2548,9 @@ export async function requestAiCompletion(params: {
   }));
   let antToolsMode: 'all' | 'function_only' | 'none' =
     anthropicTools.length > 0 ? 'all' : 'none';
+  let antJsonFallback = false;
   let capturedSentAt: MessageDateTime | null = null;
+  let capturedFileMedia: ChatFileMedia | undefined;
 
   for (let round = 0; round < 3; round += 1) {
     const activeTools =
@@ -1478,13 +2563,16 @@ export async function requestAiCompletion(params: {
       model: creds.model,
       max_tokens: 1024,
       temperature: Math.min(1, creds.temperature),
-      system: systemInstruction,
+      system: antJsonFallback
+        ? `${systemInstruction}\n${STRUCTURED_JSON_TIME_INSTRUCTION}`
+        : systemInstruction,
       messages: antMessages,
     };
     if (activeTools.length > 0) {
       payload.tools = activeTools;
     }
 
+    const startedAt = Date.now();
     const response = await safeFetch(url, {
       method: 'POST',
       signal: params.signal,
@@ -1496,12 +2584,17 @@ export async function requestAiCompletion(params: {
       },
       body: JSON.stringify(payload),
     });
+    const latencyMs = Math.max(1, Date.now() - startedAt);
     if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      emitUsage('error', undefined, latencyMs);
       if ((response.status === 400 || response.status === 422) && round === 0 && antToolsMode !== 'none') {
         antToolsMode = antToolsMode === 'all' && needTimeTool && needWebSearch ? 'function_only' : 'none';
+        if (antToolsMode === 'none' && needTimeTool) {
+          antJsonFallback = true;
+        }
         continue;
       }
-      const errText = await response.text().catch(() => '');
       throw new Error(`HTTP ${response.status}${errText ? `: ${errText.slice(0, 140)}` : ''}`);
     }
     const data = (await response.json()) as {
@@ -1513,6 +2606,8 @@ export async function requestAiCompletion(params: {
         input?: Record<string, unknown>;
       }[];
     };
+    emitUsage('ok', data, latencyMs);
+
     const blocks = data.content ?? [];
     const text = blocks
       .filter((block) => block.type === 'text' || typeof block.text === 'string')
@@ -1524,9 +2619,25 @@ export async function requestAiCompletion(params: {
         capturedSentAt = parseToolTimeArg(block.input, prevDt, now);
       }
     }
-    const cleaned = stripSpeakerPrefix(text, params.targetCharacter.name);
-    if (cleaned) {
-      return { rawText: cleaned, toolSentAt: capturedSentAt };
+    const structured = parseStructuredJsonReply(
+      text,
+      params.targetCharacter.name,
+      prevDt,
+      now
+    );
+    if (structured) {
+      if (structured.sentAt && !capturedSentAt) {
+        capturedSentAt = structured.sentAt;
+      }
+      if (structured.fileMedia && !capturedFileMedia) {
+        capturedFileMedia = structured.fileMedia;
+      }
+    }
+    const cleaned = structured
+      ? structured.text
+      : stripSpeakerPrefix(text, params.targetCharacter.name);
+    if (cleaned || capturedFileMedia) {
+      return await finalizeCompletion(cleaned, capturedSentAt, capturedFileMedia);
     }
     if (toolUses.length > 0 && round < 2) {
       antMessages = [
@@ -1559,7 +2670,8 @@ export async function testAiConnection(
   protocol: AiProtocol,
   rawBaseUrl: string,
   rawApiKey: string,
-  rawModel: string
+  rawModel: string,
+  onUsageRecord?: (record: AiUsageRecord) => void
 ): Promise<{ ok: boolean; latencyMs: number; detail: string }> {
   const apiKey = rawApiKey.trim();
   if (!apiKey) {
@@ -1611,12 +2723,36 @@ export async function testAiConnection(
     const latencyMs = Math.max(1, Date.now() - started);
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
+      onUsageRecord?.(
+        buildUsageRecord({
+          protocol,
+          model,
+          characterId: '__test__',
+          characterName: 'Connection Test',
+          purpose: 'test',
+          status: 'error',
+          latencyMs,
+        })
+      );
       return {
         ok: false,
         latencyMs,
         detail: `HTTP ${response.status}${errText ? `: ${errText.slice(0, 100)}` : ''}`,
       };
     }
+    const data = await response.json().catch(() => undefined);
+    onUsageRecord?.(
+      buildUsageRecord({
+        protocol,
+        model,
+        characterId: '__test__',
+        characterName: 'Connection Test',
+        purpose: 'test',
+        status: 'ok',
+        rawData: data,
+        latencyMs,
+      })
+    );
     return { ok: true, latencyMs, detail: model };
   } catch (err) {
     return {

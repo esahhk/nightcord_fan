@@ -59,14 +59,9 @@ interface ChatAreaProps {
   animatedFromIndex?: number | null;
   aiMode?: boolean;
   aiGeneratingName?: string | null;
-  aiAutoChatRunning?: boolean;
-  aiReadyCount?: number;
   onEditMessage?: (messageId: string, nextText: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
-  onContinueAi?: () => void;
   onStopAi?: () => void;
-  onStopAiAutoChat?: () => void;
-  onOpenAiGlobalSettings?: () => void;
 }
 
 export function ChatArea({
@@ -103,14 +98,9 @@ export function ChatArea({
   animatedFromIndex = null,
   aiMode = false,
   aiGeneratingName = null,
-  aiAutoChatRunning = false,
-  aiReadyCount = 0,
   onEditMessage,
   onRegenerateMessage,
-  onContinueAi,
   onStopAi,
-  onStopAiAutoChat,
-  onOpenAiGlobalSettings,
 }: ChatAreaProps) {
   const t = getUiText(lang);
   const canCompose = mode === 'studio' || aiMode;
@@ -123,7 +113,9 @@ export function ChatArea({
   const [previewVideo, setPreviewVideo] = useState<{ url: string; filename: string } | null>(null);
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
   const [avatarMenuMsgId, setAvatarMenuMsgId] = useState<string | null>(null);
+  const [avatarMenuFlipUp, setAvatarMenuFlipUp] = useState(false);
   const [deleteMenuMsgId, setDeleteMenuMsgId] = useState<string | null>(null);
+  const [deleteMenuFlipUp, setDeleteMenuFlipUp] = useState(false);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState('');
 
@@ -186,6 +178,22 @@ export function ChatArea({
     }
   };
 
+  const shouldFlipMenuUp = (targetEl: HTMLElement | null, neededHeight: number): boolean => {
+    if (!targetEl) {
+      return false;
+    }
+    const rect = targetEl.getBoundingClientRect();
+    const containerBottom = streamRef.current
+      ? streamRef.current.getBoundingClientRect().bottom
+      : window.innerHeight;
+    const containerTop = streamRef.current
+      ? streamRef.current.getBoundingClientRect().top
+      : 0;
+    const spaceBelow = containerBottom - rect.bottom;
+    const spaceAbove = rect.top - containerTop;
+    return spaceBelow < neededHeight && spaceAbove > spaceBelow;
+  };
+
   const startLongPress = (callback: () => void, x: number, y: number) => {
     if (!canCompose) {
       return;
@@ -244,65 +252,6 @@ export function ChatArea({
             <h1 className="truncate text-[15px] font-bold text-[#EFEBF5]">{channelTitle}</h1>
           </button>
         </div>
-
-        {aiMode && (
-          <div className="flex shrink-0 items-center gap-2">
-            {aiGeneratingName && onStopAi ? (
-              <button
-                type="button"
-                data-action="ai-header-stop"
-                aria-label={t.aiHeaderStopBtn}
-                title={t.aiHeaderStopBtn}
-                onClick={onStopAi}
-                className="flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-[#EB7F97]/65 bg-[#3A2233] px-2.5 text-[12px] font-semibold text-[#FFB6C7] transition-colors hover:border-[#EB7F97] hover:bg-[#4B293E] hover:text-white"
-              >
-                <span className="h-2 w-2 rounded-[2px] bg-[#EB7F97]" />
-                <span>{t.aiHeaderStopBtn}</span>
-              </button>
-            ) : aiAutoChatRunning && onStopAiAutoChat ? (
-              <button
-                type="button"
-                data-action="ai-header-stop-auto"
-                aria-label={t.aiAutoChatHeaderStopBtn}
-                title={t.aiAutoChatHeaderStopBtn}
-                onClick={onStopAiAutoChat}
-                className="flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-[#F6CE71]/60 bg-[#3B3022] px-2.5 text-[12px] font-semibold text-[#F6CE71] transition-colors hover:border-[#F6CE71] hover:bg-[#4D3D2A] hover:text-white"
-              >
-                <span className="h-2 w-2 animate-pulse rounded-full bg-[#F6CE71]" />
-                <span>{t.aiAutoChatHeaderStopBtn}</span>
-              </button>
-            ) : (
-              onContinueAi && (
-                <button
-                  type="button"
-                  data-action="ai-header-continue"
-                  aria-label={t.aiHeaderContinueBtn}
-                  title={t.aiHeaderContinueBtn}
-                  onClick={onContinueAi}
-                  className="flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-[#524468] bg-[#2E243D] px-2.5 text-[12px] font-semibold text-[#64D2E6] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#3A2D50] hover:text-white"
-                >
-                  <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
-                    <path d="M2.5 2L9.5 6L2.5 10V2Z" />
-                  </svg>
-                  <span>{t.aiHeaderContinueBtn}</span>
-                </button>
-              )
-            )}
-            {onOpenAiGlobalSettings && (
-              <button
-                type="button"
-                data-action="ai-header-open-settings"
-                aria-label={t.aiHeaderSettingsBtn}
-                title={t.aiGlobalModalTitle}
-                onClick={onOpenAiGlobalSettings}
-                className="flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-[#524468] bg-[#2E243D] px-2.5 text-[12px] font-semibold text-[#DCD7E5] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#3A2D50] hover:text-white"
-              >
-                <span className="h-2 w-2 shrink-0 rounded-full bg-[#64D2E6]" />
-                <span>{t.aiHeaderSettingsBtn}</span>
-              </button>
-            )}
-          </div>
-        )}
       </header>
 
       <div
@@ -317,35 +266,9 @@ export function ChatArea({
               <div className="text-[13.5px] font-semibold text-[#DCD7E5]">
                 {aiMode ? t.aiEmptyTitle(channelTitle) : t.emptyConvTitle(channelTitle)}
               </div>
-              <div className="max-w-[430px] px-4 text-[12px] leading-[1.55]">
+              <div className="max-w-[380px] px-4 text-[12px] leading-[1.5]">
                 {aiMode ? t.aiEmptySub : t.emptyConvSub}
               </div>
-              {aiMode && (
-                <div className="mt-1.5 flex flex-col items-center gap-2.5 px-4">
-                  <span
-                    className={`rounded-[6px] px-2.5 py-0.5 text-[11px] font-medium ${
-                      aiReadyCount > 0
-                        ? 'bg-[#55D8C1]/15 text-[#55D8C1]'
-                        : 'bg-[#2E243D] text-[#BEB5D0]'
-                    }`}
-                  >
-                    {t.aiEmptyReadySummary(aiReadyCount, characters.length)}
-                  </span>
-                  {onOpenAiGlobalSettings && (
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                      <button
-                        type="button"
-                        data-action="ai-empty-open-global"
-                        onClick={onOpenAiGlobalSettings}
-                        className="flex h-[34px] cursor-pointer items-center gap-2 rounded-[7px] border border-[#64D2E6]/50 bg-[#2E243D] px-3.5 text-[12.5px] font-semibold text-[#EFEBF5] transition-colors hover:border-[#64D2E6] hover:bg-[#3A2D50] hover:text-white"
-                      >
-                        <span className="h-2 w-2 rounded-full bg-[#64D2E6]" />
-                        <span>{t.aiOpenGlobalQuickBtn}</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           )
         ) : (
@@ -372,16 +295,18 @@ export function ChatArea({
 
                 <div
                   data-message-id={msg.id}
-                  onPointerDown={(e) =>
+                  onPointerDown={(e) => {
+                    const rowEl = e.currentTarget;
                     startLongPress(
                       () => {
                         setAvatarMenuMsgId(null);
+                        setDeleteMenuFlipUp(shouldFlipMenuUp(rowEl, 130));
                         setDeleteMenuMsgId(msg.id);
                       },
                       e.clientX,
                       e.clientY
-                    )
-                  }
+                    );
+                  }}
                   onPointerMove={(e) => handleLongPressMove(e.clientX, e.clientY)}
                   onPointerUp={clearLongPress}
                   onPointerLeave={clearLongPress}
@@ -391,6 +316,7 @@ export function ChatArea({
                       e.preventDefault();
                       window.getSelection?.()?.removeAllRanges();
                       setAvatarMenuMsgId(null);
+                      setDeleteMenuFlipUp(shouldFlipMenuUp(e.currentTarget, 130));
                       setDeleteMenuMsgId(msg.id);
                     }
                   }}
@@ -408,9 +334,11 @@ export function ChatArea({
                         if (msg.memberId === '__user__') {
                           return;
                         }
+                        const btnEl = e.currentTarget;
                         startLongPress(
                           () => {
                             setDeleteMenuMsgId(null);
+                            setAvatarMenuFlipUp(shouldFlipMenuUp(btnEl, 64));
                             setAvatarMenuMsgId(msg.id);
                           },
                           e.clientX,
@@ -433,6 +361,7 @@ export function ChatArea({
                           e.stopPropagation();
                           window.getSelection?.()?.removeAllRanges();
                           setDeleteMenuMsgId(null);
+                          setAvatarMenuFlipUp(shouldFlipMenuUp(e.currentTarget, 64));
                           setAvatarMenuMsgId(msg.id);
                         }
                       }}
@@ -463,7 +392,11 @@ export function ChatArea({
                           }}
                           className="fixed inset-0 z-40 cursor-default bg-transparent"
                         />
-                        <div className="nc-modal-enter absolute left-0 top-[40px] z-50 min-w-[120px] rounded-[8px] border border-[#524468] bg-[#211A2C] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.55)]">
+                        <div
+                          className={`nc-modal-enter absolute left-0 z-50 min-w-[120px] max-w-[calc(100vw-32px)] rounded-[8px] border border-[#524468] bg-[#211A2C] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.55)] ${
+                            avatarMenuFlipUp ? 'bottom-[40px]' : 'top-[40px]'
+                          }`}
+                        >
                           <button
                             type="button"
                             data-action={`avatar-mention-${msg.id}`}
@@ -658,7 +591,11 @@ export function ChatArea({
                         }}
                         className="fixed inset-0 z-40 cursor-default bg-transparent"
                       />
-                      <div className="nc-modal-enter absolute right-2 top-1 z-50 min-w-[126px] rounded-[8px] border border-[#524468] bg-[#211A2C] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.55)]">
+                      <div
+                        className={`nc-modal-enter absolute right-2 z-50 min-w-[126px] max-w-[calc(100vw-32px)] rounded-[8px] border border-[#524468] bg-[#211A2C] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.55)] ${
+                          deleteMenuFlipUp ? 'bottom-8' : 'top-1'
+                        }`}
+                      >
                         {aiMode && onRegenerateMessage && (
                           <button
                             type="button"
@@ -713,10 +650,22 @@ export function ChatArea({
         {aiMode && aiGeneratingName && (
           <div
             data-testid="ai-generating-indicator"
-            className="nc-msg-enter flex items-center gap-2 px-1 py-1 text-[12px] text-[#B8AED0]"
+            className="nc-msg-enter flex items-center justify-between gap-2 px-1 py-1 text-[12px] text-[#B8AED0]"
           >
-            <span className="h-2 w-2 animate-pulse rounded-full bg-[#64D2E6]" />
-            <span>{t.aiGeneratingStatus(aiGeneratingName)}</span>
+            <span className="flex items-center gap-2">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[#64D2E6]" />
+              <span>{t.aiGeneratingStatus(aiGeneratingName)}</span>
+            </span>
+            {onStopAi && (
+              <button
+                type="button"
+                data-action="ai-inline-stop"
+                onClick={onStopAi}
+                className="cursor-pointer rounded-[5px] border border-[#EB7F97]/55 bg-[#3A2233] px-2 py-0.5 text-[11px] font-medium text-[#FFB6C7] transition-colors hover:border-[#EB7F97] hover:text-white"
+              >
+                {t.aiHeaderStopBtn}
+              </button>
+            )}
           </div>
         )}
       </div>

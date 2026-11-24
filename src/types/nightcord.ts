@@ -114,6 +114,10 @@ export type AiProtocol = 'openai' | 'deepseek' | 'gemini' | 'anthropic';
 
 export type AiTimeMode = 'realtime' | 'ai_inferred';
 
+export type AiTimeFrequency = 'high' | 'somewhat_high' | 'balanced' | 'somewhat_low' | 'low';
+
+export type AiOutputLanguage = 'auto' | 'zh-CN' | 'zh-TW' | 'en' | 'ja';
+
 export type AiReplyLength = 'short' | 'normal' | 'detailed';
 
 export interface AiCharacterConfig {
@@ -139,6 +143,8 @@ export interface AiGlobalConfig {
   userPersona: string;
   worldviewPrompt: string;
   timeMode: AiTimeMode;
+  timeFrequency: AiTimeFrequency;
+  outputLanguage: AiOutputLanguage;
   replyLength: AiReplyLength;
   temperature: number;
   webSearchEnabled: boolean;
@@ -147,6 +153,53 @@ export interface AiGlobalConfig {
 export interface AiAutoChatConfig {
   randomPresence: boolean;
   intervalSec: number;
+}
+
+export type AiUsagePurpose =
+  | 'chat'
+  | 'follow_up'
+  | 'auto_chat'
+  | 'continue'
+  | 'regenerate'
+  | 'time_analysis'
+  | 'test';
+
+export interface AiUsageRecord {
+  id: string;
+  timestampIso: string;
+  protocol: AiProtocol;
+  model: string;
+  characterId: string;
+  characterName: string;
+  purpose: AiUsagePurpose;
+  status: 'ok' | 'error';
+  usageKnown: boolean;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  thinkingTokens: number | null;
+  cachedTokens: number | null;
+  extraTokens?: Record<string, number>;
+  latencyMs?: number;
+}
+
+export interface AiUsageTotals {
+  requestCount: number;
+  knownUsageRequestCount: number;
+  unknownUsageRequestCount: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  thinkingTokens: number | null;
+  cachedTokens: number | null;
+  extraTokens: Record<string, number>;
+}
+
+export interface AiUsageState {
+  session: AiUsageTotals;
+  sessionRecords: AiUsageRecord[];
+  history: AiUsageTotals;
+  historyRecords: AiUsageRecord[];
 }
 
 export interface NightcordBackupMediaEntry {

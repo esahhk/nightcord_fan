@@ -4,6 +4,7 @@ import type {
   AiCharacterConfig,
   AiGlobalConfig,
   AiProtocol,
+  AiUsageRecord,
   CharacterProfile,
   UiLanguage,
 } from '../types/nightcord';
@@ -26,6 +27,7 @@ interface CharacterAiModalProps {
   initialConfig: AiCharacterConfig;
   globalConfig: AiGlobalConfig;
   onClose: () => void;
+  onUsageRecord?: (record: AiUsageRecord) => void;
   onSave: (characterId: string, config: AiCharacterConfig) => void;
 }
 
@@ -37,6 +39,7 @@ export function CharacterAiModal({
   initialConfig,
   globalConfig,
   onClose,
+  onUsageRecord,
   onSave,
 }: CharacterAiModalProps) {
   const t = getUiText(lang);
@@ -130,7 +133,13 @@ export function CharacterAiModal({
     setTestingConn(true);
     setConnStatus(null);
     try {
-      const res = await testAiConnection(testProtocol, testUrl, effectiveKey, testModel);
+      const res = await testAiConnection(
+        testProtocol,
+        testUrl,
+        effectiveKey,
+        testModel,
+        onUsageRecord
+      );
       if (res.ok) {
         setConnStatus({ ok: true, text: t.aiTestConnOk(res.latencyMs, res.detail) });
       } else {
@@ -184,8 +193,8 @@ export function CharacterAiModal({
         onClick={(e) => e.stopPropagation()}
         className="nc-modal-enter flex max-h-[90dvh] w-full max-w-[460px] flex-col overflow-hidden rounded-[12px] border border-[#524468] bg-[#241C32] shadow-[0_22px_54px_rgba(0,0,0,0.72)]"
       >
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#372B4A] bg-[#211A2C] px-5 py-3.5">
-          <div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#372B4A] bg-[#211A2C] px-4 py-3 sm:flex-nowrap sm:px-5 sm:py-3.5">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
             <CharacterAvatar
               avatarType={character.avatarType}
               customAvatarMediaId={character.customAvatarMediaId}

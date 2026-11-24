@@ -222,7 +222,7 @@ export function LocalImageCard({ media, onPreview }: LocalImageCardProps) {
         data-action={`preview-image-${media.mediaId}`}
         aria-label={`${media.filename}を拡大表示`}
         onClick={() => onPreview(url, media.filename)}
-        className="group block max-w-[280px] cursor-pointer overflow-hidden rounded-[8px] border border-[#61527A] bg-[#2E243D] text-left transition-colors hover:border-[#8473A3]"
+        className="group block w-full max-w-[280px] cursor-pointer overflow-hidden rounded-[8px] border border-[#61527A] bg-[#2E243D] text-left transition-colors hover:border-[#8473A3]"
       >
         <img
           src={url}

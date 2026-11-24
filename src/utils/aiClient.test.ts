@@ -3,11 +3,15 @@ import assert from 'node:assert/strict';
 import {
   AI_PROTOCOL_METAS,
   DEFAULT_AI_GLOBAL_CONFIG,
+  appendUsageRecordToState,
   buildAiChatPayload,
+  buildDedicatedTimeAnalyzerPrompt,
   createDefaultAiCharacterConfig,
+  createEmptyUsageState,
   describeMemberPresenceStatus,
   editMessageText,
   extractMentionedCharacters,
+  extractProviderUsage,
   formatAiConversationTranscript,
   getAiCharacterConfig,
   getEligibleAiCharacters,
@@ -16,29 +20,43 @@ import {
   normalizeAiEndpoint,
   parseAiDateTimeTag,
   parseAiModelOutput,
+  parseDedicatedTimeAnalyzerOutput,
+  parseStructuredJsonReply,
   pickAiAutonomousSpeaker,
   pickAiContinueResponder,
   pickAiFollowUpResponder,
   pickRandomMemberPresenceTransition,
   prepareRegenerateTarget,
   requestAiCompletion,
+  resetSessionUsageState,
   resolveAiResponder,
   resolveAiResponders,
   resolveEffectiveAiCredentials,
   sanitizeAiCharacterConfigs,
   sanitizeAiGlobalConfig,
+  sanitizeAiUsageState,
   stripSpeakerPrefix,
   testAiConnection,
 } from './aiClient';
 import {
   INITIAL_CHARACTERS,
   INITIAL_VOICE_MEMBERS,
+  buildPlaybackTimeline,
+  computeDisplayMessagesForPlayback,
+  computePlaybackStepDelayMs,
   createFileMessage,
   createOutgoingMessage,
+  resolveClampedOutgoingTimestamp,
   setMemberPresenceStatus,
 } from './nightcordState';
 import { isAiSubpageLocation } from './nightcordTemplateCode';
-import type { AiCharacterConfig, AiGlobalConfig } from '../types/nightcord';
+import type {
+  AiCharacterConfig,
+  AiGlobalConfig,
+  AiOutputLanguage,
+  AiTimeFrequency,
+  AiUsageRecord,
+} from '../types/nightcord';
 
 test('isAiSubpageLocation recognizes /ai, ?view=ai, and #ai routes', () => {
   assert.equal(isAiSubpageLocation({ pathname: '/', search: '?view=ai', hash: '' }), true);
@@ -436,18 +454,10 @@ test('buildAiChatPayload injects worldview/userPersona/timeMode and parseAiModel
   assert.deepEqual(clampedTag, prevDt);
 
   const parsedWithFile = parseAiModelOutput(
-    '[[TIME:2026-11-22 01:50]] 仮ミックスまとめたよ。聴いてみて。\n[[FILE:nightcord_demo_01.mp3|4MB MP3]]',
-    'K',
-    prevDt,
-    baseNow
+    '仮ミックスまとめたよ。聴いてみて。\n[[FILE:nightcord_demo_01.mp3|4MB MP3]]',
+    'K'
   );
-  assert.deepEqual(parsedWithFile.inferredSentAt, {
-    year: 2026,
-    month: 11,
-    day: 22,
-    hour: 1,
-    minute: 50,
-  });
+  assert.equal(parsedWithFile.inferredSentAt, null);
   assert.equal(parsedWithFile.text, '仮ミックスまとめたよ。聴いてみて。');
   assert.ok(parsedWithFile.fileMedia);
   assert.equal(parsedWithFile.fileMedia.mediaId, '');
@@ -455,6 +465,27 @@ test('buildAiChatPayload injects worldview/userPersona/timeMode and parseAiModel
   assert.equal(parsedWithFile.fileMedia.filename, 'nightcord_demo_01.mp3');
   assert.equal(parsedWithFile.fileMedia.sizeLabel, '4MB MP3');
   assert.equal(parsedWithFile.fileMedia.fileType, 'MP3');
+
+  const structured = parseStructuredJsonReply(
+    JSON.stringify({
+      send_time: '2026-11-22 01:50',
+      message: 'K: 仮ミックスまとめたよ。聴いてみて。',
+      attach_file: { filename: 'nightcord_demo_01.mp3', size_label: '4MB MP3' },
+    }),
+    'K',
+    prevDt,
+    baseNow
+  );
+  assert.ok(structured);
+  assert.deepEqual(structured.sentAt, {
+    year: 2026,
+    month: 11,
+    day: 22,
+    hour: 1,
+    minute: 50,
+  });
+  assert.equal(structured.text, '仮ミックスまとめたよ。聴いてみて。');
+  assert.equal(structured.fileMedia?.filename, 'nightcord_demo_01.mp3');
 });
 
 test('resolveAiResponders queues multiple @mentions sequentially and reports offline/missing-key skips', () => {
@@ -657,7 +688,7 @@ test('testAiConnection validates empty key, success latency, HTTP error, and net
   }
 });
 
-test('buildAiChatPayload injects voice/muted/text/offline member states, webSearch rule, and strips leaked time prefixes', () => {
+test('buildAiChatPayload injects voice/muted/text/offline member states, webSearch rule, and never regex-parses times from prose', () => {
   const baseNow = new Date(2026, 10, 24, 1, 20);
   let members = setMemberPresenceStatus(INITIAL_VOICE_MEMBERS, 'k', 'voice').members;
   members = members.map((m) => (m.id === 'yuki' ? { ...m, status: 'voice', online: true, muted: true } : m));
@@ -689,45 +720,31 @@ test('buildAiChatPayload injects voice/muted/text/offline member states, webSear
   assert.ok(payload.systemInstruction.includes('Contextual file sharing'));
   assert.equal(payload.turns.some((turn) => turn.content.includes('(2026/11/24')), false);
 
-  const prevDt = { year: 2026, month: 11, day: 24, hour: 1, minute: 20 };
-  const strippedParen = parseAiModelOutput(
-    '(2026/11/24 01:35) 今ちょうどサビのミックス書き出したところ。',
-    'K',
-    prevDt,
-    baseNow
-  );
-  assert.equal(strippedParen.text, '今ちょうどサビのミックス書き出したところ。');
-  assert.deepEqual(strippedParen.inferredSentAt, {
-    year: 2026,
-    month: 11,
-    day: 24,
-    hour: 1,
-    minute: 35,
-  });
+  const proseOnly = parseAiModelOutput('今ちょうどサビのミックス書き出したところ。', 'K');
+  assert.equal(proseOnly.text, '今ちょうどサビのミックス書き出したところ。');
+  assert.equal(proseOnly.inferredSentAt, null);
 
-  const strippedSingleBracket = parseAiModelOutput(
-    '[TIME: 2026-11-24 01:42] えななん、ラフもうちょい待てる？',
+  const proseWithParenthetical = parseAiModelOutput(
+    '(2026/11/24 01:35) 今ちょうどサビのミックス書き出したところ。',
+    'K'
+  );
+  assert.equal(proseWithParenthetical.inferredSentAt, null);
+
+  const jsonMarkdownReply = parseStructuredJsonReply(
+    '```json\n{"send_time":"2026-11-24 01:42","message":"えななん、ラフもうちょい待てる？"}\n```',
     'K',
-    prevDt,
+    { year: 2026, month: 11, day: 24, hour: 1, minute: 20 },
     baseNow
   );
-  assert.equal(strippedSingleBracket.text, 'えななん、ラフもうちょい待てる？');
-  assert.deepEqual(strippedSingleBracket.inferredSentAt, {
+  assert.ok(jsonMarkdownReply);
+  assert.equal(jsonMarkdownReply.text, 'えななん、ラフもうちょい待てる？');
+  assert.deepEqual(jsonMarkdownReply.sentAt, {
     year: 2026,
     month: 11,
     day: 24,
     hour: 1,
     minute: 42,
   });
-
-  const strippedFullwidth = parseAiModelOutput(
-    '【TIME：2026-11-24 01:48】了解。すぐ送る。',
-    'K',
-    prevDt,
-    baseNow
-  );
-  assert.equal(strippedFullwidth.text, '了解。すぐ送る。');
-  assert.equal(strippedFullwidth.inferredSentAt?.minute, 48);
 
   const g = sanitizeAiGlobalConfig({ webSearchEnabled: true });
   assert.equal(g.webSearchEnabled, true);
@@ -890,29 +907,56 @@ test('requestAiCompletion executes set_send_time tool calls, web_search loops, H
         return new Response('tools not supported', { status: 400 });
       }
       assert.equal(bodyObj.tools, undefined);
+      assert.deepEqual(bodyObj.response_format, { type: 'json_object' });
       return new Response(
         JSON.stringify({
-          choices: [{ message: { content: 'ツール無しフォールバック成功' } }],
+          usage: { prompt_tokens: 40, completion_tokens: 18, total_tokens: 58 },
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  send_time: '2026-11-24 01:22',
+                  message: 'ツール無しフォールバック成功',
+                }),
+              },
+            },
+          ],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     }) as typeof fetch;
 
+    const fbUsage: AiUsageRecord[] = [];
     const fbResult = await requestAiCompletion({
       targetCharacter: k,
       charConfig: createDefaultAiCharacterConfig(),
       globalConfig: { ...baseGlobal, webSearchEnabled: false },
       history: [userMsg],
       allCharacters: INITIAL_CHARACTERS,
+      purpose: 'continue',
+      onUsageRecord: (r) => fbUsage.push(r),
     });
     assert.equal(fbResult.rawText, 'ツール無しフォールバック成功');
-    assert.equal(fbResult.toolSentAt, null);
+    assert.deepEqual(fbResult.toolSentAt, { year: 2026, month: 11, day: 24, hour: 1, minute: 22 });
+    assert.equal(fbUsage.length, 2);
+    assert.equal(fbUsage[0].status, 'error');
+    assert.equal(fbUsage[0].usageKnown, false);
+    assert.equal(fbUsage[1].status, 'ok');
+    assert.equal(fbUsage[1].usageKnown, true);
+    assert.equal(fbUsage[1].totalTokens, 58);
 
     let gemBody: Record<string, unknown> = {};
     globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
       gemBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
       return new Response(
         JSON.stringify({
+          usageMetadata: {
+            promptTokenCount: 120,
+            candidatesTokenCount: 35,
+            totalTokenCount: 180,
+            thoughtsTokenCount: 25,
+            cachedContentTokenCount: 60,
+          },
           candidates: [
             {
               content: {
@@ -944,12 +988,73 @@ test('requestAiCompletion executes set_send_time tool calls, web_search loops, H
     assert.ok(Array.isArray(gemBody.tools));
     assert.equal(gemResult.rawText, 'Geminiの返答だよ');
     assert.deepEqual(gemResult.toolSentAt, { year: 2026, month: 11, day: 24, hour: 1, minute: 25 });
+    assert.equal(gemResult.usageRecords[0].thinkingTokens, 25);
+    assert.equal(gemResult.usageRecords[0].cachedTokens, 60);
+
+    let gemSearchBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      gemSearchBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      send_time: '2026-11-24 01:29',
+                      message: '検索付きGemini返答',
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }) as typeof fetch;
+
+    const gemSearchResult = await requestAiCompletion({
+      targetCharacter: k,
+      charConfig: createDefaultAiCharacterConfig(),
+      globalConfig: {
+        ...baseGlobal,
+        protocol: 'gemini',
+        baseUrl: AI_PROTOCOL_METAS.gemini.defaultBaseUrl,
+        model: 'gemini-2.5-flash',
+        webSearchEnabled: true,
+      },
+      history: [userMsg],
+      allCharacters: INITIAL_CHARACTERS,
+    });
+    assert.deepEqual(gemSearchBody.tools, [{ google_search: {} }]);
+    assert.equal(
+      (gemSearchBody.generationConfig as Record<string, unknown>).responseMimeType,
+      'application/json'
+    );
+    assert.equal(gemSearchResult.rawText, '検索付きGemini返答');
+    assert.deepEqual(gemSearchResult.toolSentAt, {
+      year: 2026,
+      month: 11,
+      day: 24,
+      hour: 1,
+      minute: 29,
+    });
+    assert.equal(gemSearchResult.usageRecords[0].usageKnown, false);
+    assert.equal(gemSearchResult.usageRecords[0].totalTokens, null);
 
     let antBody: Record<string, unknown> = {};
     globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
       antBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
       return new Response(
         JSON.stringify({
+          usage: {
+            input_tokens: 90,
+            output_tokens: 24,
+            cache_read_input_tokens: 45,
+            cache_creation_input_tokens: 15,
+          },
           content: [
             { type: 'tool_use', id: 'tu_1', name: 'set_send_time', input: { send_time: '2026-11-24 01:33' } },
             { type: 'text', text: 'Claudeの返答だよ' },
@@ -978,8 +1083,357 @@ test('requestAiCompletion executes set_send_time tool calls, web_search loops, H
     );
     assert.equal(antResult.rawText, 'Claudeの返答だよ');
     assert.deepEqual(antResult.toolSentAt, { year: 2026, month: 11, day: 24, hour: 1, minute: 33 });
+    assert.equal(antResult.usageRecords[0].cachedTokens, 45);
+    assert.equal(antResult.usageRecords[0].extraTokens?.cache_creation_input_tokens, 15);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('5-tier timeFrequency and outputLanguage affect prompts independently and preserve timestamps for playback', () => {
+  const k = INITIAL_CHARACTERS[0];
+  const simNow = new Date(2026, 10, 24, 17, 30);
+
+  const frequencies: AiTimeFrequency[] = [
+    'high',
+    'somewhat_high',
+    'balanced',
+    'somewhat_low',
+    'low',
+  ];
+  const frequencyPrompts = frequencies.map((freq) =>
+    buildAiChatPayload(k, [], 'Quiet composer', INITIAL_CHARACTERS, {
+      timeMode: 'ai_inferred',
+      timeFrequency: freq,
+      now: simNow,
+    }).systemInstruction
+  );
+  assert.equal(new Set(frequencyPrompts).size, 5);
+  assert.ok(frequencyPrompts[0].includes('Local webpage simulation start time: 2026-11-24 17:30'));
+  assert.ok(frequencyPrompts[0].includes('Frequency tendency — HIGH'));
+  assert.ok(frequencyPrompts[4].includes('Frequency tendency — LOW'));
+
+  const outputLangs: AiOutputLanguage[] = ['auto', 'zh-CN', 'zh-TW', 'en', 'ja'];
+  const langInstructions = outputLangs.map((outLang) => {
+    const cfg = sanitizeAiGlobalConfig({ outputLanguage: outLang, timeFrequency: 'somewhat_low' });
+    assert.equal(cfg.outputLanguage, outLang);
+    assert.equal(cfg.timeFrequency, 'somewhat_low');
+    return buildAiChatPayload(k, [], 'Persona stays intact', INITIAL_CHARACTERS, {
+      outputLanguage: cfg.outputLanguage,
+      now: simNow,
+    }).systemInstruction;
+  });
+  assert.ok(langInstructions[1].includes('Simplified Chinese'));
+  assert.ok(langInstructions[2].includes('Traditional Chinese'));
+  assert.ok(langInstructions[3].includes('English'));
+  assert.ok(langInstructions[4].includes('Japanese'));
+  assert.ok(langInstructions.every((inst) => inst.includes('Persona stays intact')));
+
+  const msg1Time = resolveClampedOutgoingTimestamp(
+    [],
+    { year: 2026, month: 11, day: 24, hour: 17, minute: 35 },
+    simNow
+  );
+  const m1 = createOutgoingMessage('そろそろ集まろうか', k, simNow, msg1Time)!;
+  const msg2Time = resolveClampedOutgoingTimestamp(
+    [m1],
+    { year: 2026, month: 11, day: 24, hour: 17, minute: 50 },
+    simNow
+  );
+  const m2 = createOutgoingMessage('うん、今入った', INITIAL_CHARACTERS[1], simNow, msg2Time)!;
+
+  assert.deepEqual(m1.sentAt, { year: 2026, month: 11, day: 24, hour: 17, minute: 35 });
+  assert.deepEqual(m2.sentAt, { year: 2026, month: 11, day: 24, hour: 17, minute: 50 });
+
+  const timeline = buildPlaybackTimeline([m1, m2], [], false, simNow);
+  assert.equal(timeline.length, 2);
+  const delayMs = computePlaybackStepDelayMs(timeline, 1, 'timeline', 2.5, 'proportional', 60);
+  assert.equal(delayMs, 15000);
+  const rendered = computeDisplayMessagesForPlayback([m1, m2], true, simNow);
+  assert.equal(rendered[0].timestamp, m1.timestamp);
+  assert.equal(rendered[1].timestamp, m2.timestamp);
+});
+
+test('multi-provider extractProviderUsage, unknown handling, session reset, and testAiConnection usage callback', async () => {
+  const dsUsage = extractProviderUsage('deepseek', {
+    usage: {
+      prompt_tokens: 100,
+      completion_tokens: 50,
+      total_tokens: 150,
+      prompt_cache_hit_tokens: 64,
+      prompt_cache_miss_tokens: 36,
+      completion_tokens_details: { reasoning_tokens: 20, audio_tokens: 5 },
+    },
+  });
+  assert.equal(dsUsage.usageKnown, true);
+  assert.equal(dsUsage.inputTokens, 100);
+  assert.equal(dsUsage.outputTokens, 50);
+  assert.equal(dsUsage.totalTokens, 150);
+  assert.equal(dsUsage.cachedTokens, 64);
+  assert.equal(dsUsage.thinkingTokens, 20);
+  assert.equal(dsUsage.extraTokens.prompt_cache_miss_tokens, 36);
+  assert.equal(dsUsage.extraTokens.completion_audio_tokens, 5);
+
+  const missingUsage = extractProviderUsage('openai', { choices: [{ message: { content: 'hi' } }] });
+  assert.equal(missingUsage.usageKnown, false);
+  assert.equal(missingUsage.inputTokens, null);
+  assert.equal(missingUsage.outputTokens, null);
+  assert.equal(missingUsage.totalTokens, null);
+
+  let state = createEmptyUsageState();
+  state = appendUsageRecordToState(state, {
+    id: 'r1',
+    timestampIso: '2026-11-24T17:30:00.000Z',
+    protocol: 'openai',
+    model: 'gpt-4o-mini',
+    characterId: 'k',
+    characterName: 'K',
+    purpose: 'chat',
+    status: 'ok',
+    usageKnown: true,
+    inputTokens: 10,
+    outputTokens: 20,
+    totalTokens: 30,
+    thinkingTokens: null,
+    cachedTokens: 4,
+  });
+  state = appendUsageRecordToState(state, {
+    id: 'r2',
+    timestampIso: '2026-11-24T17:31:00.000Z',
+    protocol: 'openai',
+    model: 'custom-proxy',
+    characterId: 'k',
+    characterName: 'K',
+    purpose: 'chat',
+    status: 'ok',
+    usageKnown: false,
+    inputTokens: null,
+    outputTokens: null,
+    totalTokens: null,
+    thinkingTokens: null,
+    cachedTokens: null,
+  });
+  assert.equal(state.session.requestCount, 2);
+  assert.equal(state.session.knownUsageRequestCount, 1);
+  assert.equal(state.session.unknownUsageRequestCount, 1);
+  assert.equal(state.session.totalTokens, 30);
+
+  const reset = resetSessionUsageState(state);
+  assert.equal(reset.session.requestCount, 0);
+  assert.equal(reset.session.totalTokens, null);
+  assert.equal(reset.history.requestCount, 2);
+  assert.equal(reset.history.totalTokens, 30);
+
+  const restored = sanitizeAiUsageState(
+    { history: reset.history, historyRecords: reset.historyRecords },
+    { session: state.session, sessionRecords: state.sessionRecords }
+  );
+  assert.equal(restored.history.requestCount, 2);
+  assert.equal(restored.session.requestCount, 2);
+
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          usage: { prompt_tokens: 7, completion_tokens: 3, total_tokens: 10 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )) as typeof fetch;
+    const testRecords: AiUsageRecord[] = [];
+    const res = await testAiConnection('openai', '', 'sk-live', 'gpt-4o-mini', (rec) =>
+      testRecords.push(rec)
+    );
+    assert.equal(res.ok, true);
+    assert.equal(testRecords.length, 1);
+    assert.equal(testRecords[0].purpose, 'test');
+    assert.equal(testRecords[0].totalTokens, 10);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('dedicated time-analysis metadata fallback triggers across protocols when primary omits send_time', async () => {
+  const k = INITIAL_CHARACTERS[0];
+  const baseNow = new Date(2026, 10, 24, 14, 30);
+  const userMsg = createOutgoingMessage(
+    '曲のバランスどう思う？',
+    { id: '__user__', name: 'あなた', avatarType: 'k' },
+    baseNow,
+    { timestamp: '今日 14:30', sentAt: { year: 2026, month: 11, day: 24, hour: 14, minute: 30 } }
+  )!;
+
+  const analyzerPrompt = buildDedicatedTimeAnalyzerPrompt({
+    speakerName: k.name,
+    cleanedReply: 'サビのピアノを少し抑えてみるね。',
+    history: [userMsg],
+    timeFrequency: 'somewhat_low',
+    members: INITIAL_VOICE_MEMBERS,
+    allCharacters: INITIAL_CHARACTERS,
+    prevDt: userMsg.sentAt,
+    now: baseNow,
+  });
+  assert.ok(analyzerPrompt.systemInstruction.includes('silent timestamp metadata analyzer'));
+  assert.ok(analyzerPrompt.userPrompt.includes('SOMEWHAT LOW'));
+  assert.ok(analyzerPrompt.userPrompt.includes('2026-11-24 14:30'));
+  assert.ok(analyzerPrompt.userPrompt.includes('サビのピアノを少し抑えてみるね。'));
+
+  assert.deepEqual(
+    parseDedicatedTimeAnalyzerOutput('```json\n{"send_time":"2026-11-24 15:12"}\n```', userMsg.sentAt, baseNow),
+    { year: 2026, month: 11, day: 24, hour: 15, minute: 12 }
+  );
+  assert.deepEqual(
+    parseDedicatedTimeAnalyzerOutput('Based on context around 14:30, final: 2026-11-24 16:05', userMsg.sentAt, baseNow),
+    { year: 2026, month: 11, day: 24, hour: 16, minute: 5 }
+  );
+  assert.deepEqual(
+    parseDedicatedTimeAnalyzerOutput('{"send_time":"2026-11-24 12:00"}', userMsg.sentAt, baseNow),
+    userMsg.sentAt
+  );
+
+  const baseGlobal: AiGlobalConfig = {
+    ...DEFAULT_AI_GLOBAL_CONFIG,
+    useGlobalApi: true,
+    protocol: 'deepseek',
+    baseUrl: AI_PROTOCOL_METAS.deepseek.defaultBaseUrl,
+    apiKey: 'sk-ds-test',
+    model: 'deepseek-chat',
+    timeMode: 'ai_inferred',
+    timeFrequency: 'high',
+    webSearchEnabled: false,
+  };
+
+  const originalFetch = globalThis.fetch;
+  try {
+    let dsCall = 0;
+    const dsBodies: Record<string, unknown>[] = [];
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      dsCall += 1;
+      const bodyObj = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      dsBodies.push(bodyObj);
+      if (dsCall === 1) {
+        return new Response(
+          JSON.stringify({
+            usage: { prompt_tokens: 90, completion_tokens: 18, total_tokens: 108 },
+            choices: [{ message: { content: 'うん、今すぐ直して送るよ。' } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (dsCall === 2) {
+        return new Response('json_object unsupported', { status: 400 });
+      }
+      return new Response(
+        JSON.stringify({
+          usage: { prompt_tokens: 55, completion_tokens: 12, total_tokens: 67 },
+          choices: [{ message: { content: '{"send_time":"2026-11-24 14:33"}' } }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }) as typeof fetch;
+
+    const dsRecords: AiUsageRecord[] = [];
+    const dsResult = await requestAiCompletion({
+      targetCharacter: k,
+      charConfig: createDefaultAiCharacterConfig(),
+      globalConfig: baseGlobal,
+      history: [userMsg],
+      allCharacters: INITIAL_CHARACTERS,
+      members: INITIAL_VOICE_MEMBERS,
+      onUsageRecord: (r) => dsRecords.push(r),
+    });
+    assert.equal(dsResult.rawText, 'うん、今すぐ直して送るよ。');
+    assert.deepEqual(dsResult.toolSentAt, { year: 2026, month: 11, day: 24, hour: 14, minute: 33 });
+    assert.equal(dsBodies.length, 3);
+    assert.deepEqual(dsBodies[1].response_format, { type: 'json_object' });
+    assert.equal(dsBodies[2].response_format, undefined);
+    assert.equal(dsRecords.length, 3);
+    assert.equal(dsRecords[0].purpose, 'chat');
+    assert.equal(dsRecords[1].purpose, 'time_analysis');
+    assert.equal(dsRecords[1].status, 'error');
+    assert.equal(dsRecords[2].purpose, 'time_analysis');
+    assert.equal(dsRecords[2].status, 'ok');
+    assert.equal(dsRecords[2].totalTokens, 67);
+
+    let gemCall = 0;
+    globalThis.fetch = (async () => {
+      gemCall += 1;
+      if (gemCall === 1) {
+        return new Response(
+          JSON.stringify({
+            usageMetadata: { promptTokenCount: 70, candidatesTokenCount: 15, totalTokenCount: 85 },
+            candidates: [{ content: { parts: [{ text: 'あとでまた確認するね。' }] } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          usageMetadata: { promptTokenCount: 40, candidatesTokenCount: 10, totalTokenCount: 50 },
+          candidates: [{ content: { parts: [{ text: '{"send_time":"2026-11-24 15:40"}' }] } }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }) as typeof fetch;
+
+    const gemFallbackResult = await requestAiCompletion({
+      targetCharacter: k,
+      charConfig: createDefaultAiCharacterConfig(),
+      globalConfig: {
+        ...baseGlobal,
+        protocol: 'gemini',
+        baseUrl: AI_PROTOCOL_METAS.gemini.defaultBaseUrl,
+        model: 'gemini-2.5-flash',
+      },
+      history: [userMsg],
+      allCharacters: INITIAL_CHARACTERS,
+    });
+    assert.equal(gemFallbackResult.rawText, 'あとでまた確認するね。');
+    assert.deepEqual(gemFallbackResult.toolSentAt, {
+      year: 2026,
+      month: 11,
+      day: 24,
+      hour: 15,
+      minute: 40,
+    });
+    assert.equal(gemFallbackResult.usageRecords.length, 2);
+    assert.equal(gemFallbackResult.usageRecords[1].purpose, 'time_analysis');
+
+    let antCall = 0;
+    globalThis.fetch = (async () => {
+      antCall += 1;
+      if (antCall === 1) {
+        return new Response(
+          JSON.stringify({
+            usage: { input_tokens: 60, output_tokens: 14 },
+            content: [{ type: 'text', text: '了解。少し作業に戻る。' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response('rate limit', { status: 500 });
+    }) as typeof fetch;
+
+    const antFailAnalyzerResult = await requestAiCompletion({
+      targetCharacter: k,
+      charConfig: createDefaultAiCharacterConfig(),
+      globalConfig: {
+        ...baseGlobal,
+        protocol: 'anthropic',
+        baseUrl: AI_PROTOCOL_METAS.anthropic.defaultBaseUrl,
+        model: 'claude-sonnet-4-20250514',
+      },
+      history: [userMsg],
+      allCharacters: INITIAL_CHARACTERS,
+    });
+    assert.equal(antFailAnalyzerResult.rawText, '了解。少し作業に戻る。');
+    assert.equal(antFailAnalyzerResult.toolSentAt, null);
+    assert.equal(antFailAnalyzerResult.usageRecords.length, 2);
+    assert.equal(antFailAnalyzerResult.usageRecords[1].purpose, 'time_analysis');
+    assert.equal(antFailAnalyzerResult.usageRecords[1].status, 'error');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 
