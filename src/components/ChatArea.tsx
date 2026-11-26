@@ -661,7 +661,7 @@ export function ChatArea({
                 type="button"
                 data-action="ai-inline-stop"
                 onClick={onStopAi}
-                className="cursor-pointer rounded-[5px] border border-[#EB7F97]/55 bg-[#3A2233] px-2 py-0.5 text-[11px] font-medium text-[#FFB6C7] transition-colors hover:border-[#EB7F97] hover:text-white"
+                className="cursor-pointer rounded-[5px] border border-[#524468] bg-[#332844] px-2.5 py-0.5 text-[11px] font-medium text-[#DCD7E5] transition-colors hover:border-[#EB7F97]/70 hover:text-white"
               >
                 {t.aiHeaderStopBtn}
               </button>

@@ -39,12 +39,19 @@
      - **双版本开箱即用源码**：提供 **React + Tailwind (`.tsx`)** 组件模板 `NightcordTemplate.tsx` 与零依赖 **单文件 HTML (`.html`)** 模板 `nightcord-ui-template.html`，支持一键复制源码与直接下载文件。
 
 4. **纯静态直连 AI 对话模式（`#ai` / `?view=ai` / `/ai`）**
-   - 在左上角 `25時、ナイトコードで。▾` 下拉菜单中「对话列表」下方、「界面语言」上方可点击 **「AI 对话模式」** 进入独立空白 AI 对话子页面。
-   - **纯前端直连与隐私**：无需任何后端或代理，API Key、Base URL 与提示词仅保存在浏览器本地 `localStorage`（建议直接部署在 Cloudflare Workers 静态资源上，零服务端密钥风险；首次进入提供 4 步专属功能引导）。
-   - **角色独立配置 & 全局共享 Key**：
-     - 长按左侧成员头像 -> 点击 **「AI 对话设置」**，即可为该角色选择协议（OpenAI 兼容 / Google Gemini / Anthropic Claude）、接口地址（未填时自动使用对应协议默认地址）、API Key、拉取或填写模型，以及编写角色预设提示词。
-     - 点击顶部第一个蓝色圆点打开 **「AI 全局设置」**，可开启全局共享 API Key / 协议 / 模型，一键切换不同角色并编辑提示词（与左侧角色菜单双向实时互通），并配置 **AI 概率追问回复**（一条回复后由另一位已配置 Key 的角色接话）。
-   - **对话交互**：沉浸模式下自己可直接发消息；`@角色名` 定向指定回复，未 `@` 时从已填写 Key（或全局 Key）的角色中随机回复；长按任意消息支持 **编辑、重新生成、删除**。
+   - 在左上角 `25時、ナイトコードで。▾` 下拉菜单中点击 **「AI 对话模式」** 即可进入独立 AI 群聊工作区，首次进入提供 5 步专属指引，后续也可随时在同下拉菜单点击 **「AI 新手引导」** 重看。
+   - **纯前端直连与隐私**：无需后端或代理，支持 OpenAI / DeepSeek 兼容、Google Gemini、Anthropic Claude 接口，API Key、Base URL 与角色设定均保存在浏览器本地 `localStorage`。
+   - **右上角三色圆点与成员设置**：
+     - **蓝色圆点（AI 全局设置）**：采用三栏分页（我的档案 / 对话行为 / API 与模型），可配置「我的昵称与人设」、全局共享 API 与模型、输出语言开关（`自动` / `简体中文` / `繁體中文` / `English` / `日本語`）、联网搜索开关、角色随机接话概率、**聊天时间模式**（含「AI 自主决定时间」与可选的独立时间分析补全），以及五档 **聊天频率倾向**（`高频` / `偏高频` / `均衡` / `偏低频` / `低频`）。
+     - **黄色圆点（群聊互动 / 随机发言）**：开启后多名在线角色会自动轮流发言互动，可勾选是否随对话进度随机切换成员在线、语音或离线状态；再次点击黄色圆点即可停止。
+     - **红色圆点（自动播放）**：在 AI 对话中同样支持按时间戳流速或固定间隔逐条重放。
+     - **左侧成员长按 -> AI 设置**：可为每位成员独立配置接口、模型、性格提示词，或查看其当前的「语言通话 / 文字在线 / 静音 / 离线」状态（会实时同步给模型感知）。
+   - **贴近原作的群聊机制**：
+     - 发送消息即可触发响应（`@角色名` 可指定回复对象），长按任意消息支持 **编辑、重新生成、删除**。
+     - AI 会结合语境自主判断何时自然 `@` 其他人或发送文件卡片（图片、音频、视频、文本附件），时间仅作为独立时间戳元数据写入，不会混入正文文本。
+   - **API 用量监测与复制到主页面**：
+     - 在 `25時、ナイトコードで。▾` 下拉菜单或全局设置底部可打开 **「API 用量监测」**，按真实接口返回字段统计请求次数及输入、输出、思考、缓存、总 Token（区分当前会话与历史累计，支持重置当前会话）。
+     - 点击下拉菜单中的 **「会话复制到主页面」**，输入会话名称即可把当前 AI 聊天记录完整拷入主页面新会话中继续排版编辑。
 
 ### 本地开发与 Cloudflare Workers 部署
 
@@ -58,11 +65,11 @@ npm run build
 
 主要核心文件说明：
 
-- `src/components/Sidebar.tsx`：服务器下拉菜单（含 AI 对话模式与 UI 模板入口）、频道与三态成员（在线 / 语音 / 离线）侧边栏。
+- `src/components/Sidebar.tsx`：服务器下拉菜单（含 AI 对话模式、AI 新手引导、复制到主页面、API 用量监测与 UI 模板入口）、频道与成员（在线 / 语音 / 静音 / 离线）侧边栏。
 - `src/components/ChatArea.tsx`：消息流、日期分割线、文件卡片、媒体预览与长按菜单（含编辑 / 重新生成 / 删除）。
 - `src/components/NightcordArt.tsx` & `src/utils/canvasArt.ts`：Nightcord 图标与角色头像绘制。
-- `src/components/CharacterAiModal.tsx` & `src/components/AiGlobalSettingsModal.tsx` & `src/utils/aiClient.ts`：纯前端直连 OpenAI / Gemini / Anthropic 客户端、单角色与全局 AI 设置面板。
-- `src/components/OnboardingModal.tsx` & `src/components/AiOnboardingModal.tsx`：主界面 6 步新手引导与 AI 对话模式 4 步功能引导。
+- `src/components/CharacterAiModal.tsx`、`src/components/AiGlobalSettingsModal.tsx`、`src/components/AiAutoChatModal.tsx`、`src/components/AiUsageModal.tsx`、`src/components/CopyAiToMainModal.tsx` & `src/utils/aiClient.ts`：纯前端直连 OpenAI / DeepSeek / Gemini / Anthropic 客户端、三栏全局配置、角色独立设置、自动群聊控制、真实 Token 用量监测与会话复制导出。
+- `src/components/OnboardingModal.tsx` & `src/components/AiOnboardingModal.tsx`：主界面 6 步新手引导与 AI 对话模式 5 步功能引导。
 - `src/components/UiTemplateSubpage.tsx` & `src/utils/nightcordTemplateCode.ts`：开源 UI 模板子页面与独立 TSX / HTML 模板源码。
 - `src/components/RoleComposerBar.tsx`、`src/components/PlaybackSetupModal.tsx`：角色编辑器、时间选择与自动播放设置（含定时上下线状态事件）。
 - `src/utils/nightcordState.ts`、`src/utils/localStorageStore.ts`：纯状态逻辑（附带 `node:test` 单元测试）与本地备份存储。
@@ -104,9 +111,16 @@ npm run build
      - そのまま貼り付けて使える **React + Tailwind (`NightcordTemplate.tsx`)** および単一 **HTML (`nightcord-ui-template.html`)** のコピー＆ダウンロード機能。
 
 4. **ブラウザ直結 AI 会話モード（`#ai` / `?view=ai` / `/ai`）**
-   - 左上メニューのチャット一覧の下・言語設定の上にある **「AI 会話モード」** から、専用の空白 AI 会話ページ（初回4ステップガイド付き）へ移動できます。
-   - **完全静的・ローカル保存**：サーバーやプロキシを介さず、API キー・プロトコル・プロンプトはブラウザの `localStorage` のみに保存されます。OpenAI 互換 / Google Gemini / Anthropic Claude プロトコルに対応し、左サイドバーのメンバー長押しでキャラ別設定、上部の青いドットでグローバル API キー・プロンプト一括切替・連続追い返信確率を設定可能です。
-   - **返信と操作**：没入モードのまま自分が送信でき、`@キャラ名` で返信キャラを指名（未指定時はキー設定済みキャラからランダム）。メッセージ長押しで **編集・再生成・削除** が行えます。
+   - 左上メニューの **「AI 会話モード」** から専用の AI グループチャット画面へ移動できます（初回は 5 ステップガイドを表示、同メニューの **「AI 初心者ガイド」** からいつでも再確認可能）。
+   - **完全静的・ローカル保存**：OpenAI / DeepSeek 互換、Google Gemini、Anthropic Claude へブラウザから直接接続し、API キーや設定は `localStorage` のみに保存されます。
+   - **右上3色ドットとメンバー連動**：
+     - **青い点（AI 全体設定）**：プロフィール／会話の振る舞い／API・モデルの3タブ構成で、自分の設定、共有 API キー、モデル出力言語（`自動` / `简体中文` / `繁體中文` / `English` / `日本語`）、Web 検索、追い返信確率、送信時刻モード（AI 自律判断＋時刻補完解析）、5段階の**会話頻度**（`高頻度`〜`低頻度`）を設定できます。
+     - **黄色い点（ランダム掛け合い）**：設定パネルからメンバーのランダム入退室・通話変化の有無を選んで開始でき、会話中に再クリックで停止します。
+     - **赤い点（自動再生）**：AI 会話ログも送信時刻や固定間隔で再生可能です。
+     - **メンバー長押し -> AI 設定**：キャラ別の API・プロンプト編集に対応し、「通話中／オンライン／ミュート／オフライン」状態もモデルへ自動共有されます。
+   - **自然なチャット挙動・用量モニター・メインへ複製**：
+     - メッセージ送信や `@キャラ名` での指名返信、長押しによる **編集・再生成・削除** に加え、文脈に応じた自然なファイルカード送信や `@メンション`、送信時刻の構造化メタデータ記録に対応。
+     - **API 使用量モニター** でリクエスト数や入力・出力・思考・キャッシュ・合計トークンを実測集計し、**「メイン画面へ会話をコピー」** から任意の会話名で通常モードへそのまま複製できます。
 
 ### ローカル開発・Cloudflare Workers デプロイ
 
@@ -154,9 +168,16 @@ A non-profit fan-made **"25-ji, Nightcord de."** web application recreating the 
      - Ready-to-use **React + Tailwind (`NightcordTemplate.tsx`)** and zero-dependency **Standalone HTML (`nightcord-ui-template.html`)** source tabs with one-click copy and file download.
 
 4. **Pure-Static Direct AI Chat Mode (`#ai` / `?view=ai` / `/ai`)**
-   - Click **AI Chat Mode** (between Conversations and Interface Language in the `25時、ナイトコードで。▾` menu) to open the blank AI conversation workspace, complete with a dedicated 4-step feature guide on first visit.
-   - **Zero Backend / Local Storage Only**: Requests go directly from your browser to OpenAI-compatible, Google Gemini, or Anthropic Claude endpoints with API keys and character prompts stored strictly in `localStorage`. Long-press any left-sidebar member for per-character AI settings, or click the top-right Cyan Dot for **AI Global Settings** (shared API key toggle, quick per-character prompt switcher, and probabilistic follow-up AI reply).
-   - **Interaction**: Send messages directly in Immersive Mode, target a specific speaker via `@Name` (or get a random reply from characters with an active key), and long-press any message to **Edit, Regenerate, or Delete**.
+   - Click **AI Chat Mode** in the `25時、ナイトコードで。▾` dropdown to enter the AI group chat workspace (with a 5-step guide on first visit, replayable anytime from **AI Beginner Guide** in the same menu).
+   - **Zero Backend / Local Storage Only**: Connects directly from the browser to OpenAI / DeepSeek-compatible, Google Gemini, or Anthropic Claude APIs with keys and character prompts stored strictly in `localStorage`.
+   - **Top-Right Dots & Member Sync**:
+     - **1st Cyan Dot (AI Global Settings)**: Organized into 3 tabs (`My Profile`, `Chat Behavior`, `API & Model`) covering your user persona, shared API key, independent model output language (`Auto` / `简体中文` / `繁體中文` / `English` / `日本語`), web search toggle, follow-up reply chance, autonomous message time inference (with dedicated time-analyzer fallback), and 5-level **Chat Frequency** bias.
+     - **2nd Yellow Dot (Autonomous Group Chat)**: Opens the autonomous chat panel (with optional random online/voice presence transitions); click the Yellow Dot again anytime to stop.
+     - **3rd Red Dot (Auto-Playback)**: Replays AI chat logs at real-time speed or fixed intervals.
+     - **Sidebar Long-Press -> AI Settings**: Configure per-character API overrides and system prompts; each member's live status (`Voice / Online / Muted / Offline`) is automatically passed to the AI context.
+   - **Natural Replies, Usage Monitor & Copy to Main**:
+     - Reply directly or target speakers with `@Name`; long-press any message to **Edit, Regenerate, or Delete**. Models decide message timestamps as structured metadata (never printed in message body) and may naturally `@mention` members or share contextual file cards.
+     - Inspect real API token metrics (requests, input, output, reasoning, cached, and total tokens for session & lifetime) in **API Usage Monitor**, or use **Copy Chat to Main** to transfer an AI session straight into a new conversation in the main editor.
 
 ### Local Development & Cloudflare Workers
 

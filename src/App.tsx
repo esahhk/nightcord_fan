@@ -50,7 +50,6 @@ import {
   isMemberOnlineForAi,
   parseAiModelOutput,
   pickAiAutonomousSpeaker,
-  pickAiContinueResponder,
   pickAiFollowUpResponder,
   pickRandomMemberPresenceTransition,
   prepareRegenerateTarget,
@@ -1387,85 +1386,6 @@ export default function App({ actions }: AppProps) {
     ]
   );
 
-  const handleAiContinueTurn = useCallback(async () => {
-    if (!isAiMode) {
-      return;
-    }
-    if (aiBusyRef.current || aiAutoChatRunningRef.current) {
-      showToast(t.aiToastBusy);
-      return;
-    }
-    const conv = activeConversation;
-    const lastNonUser = [...conv.messages]
-      .reverse()
-      .find((m) => m.memberId !== '__user__')?.memberId;
-    const picked = pickAiContinueResponder(
-      lastNonUser,
-      characters,
-      aiCharacterConfigs,
-      aiGlobalConfig,
-      Math.random,
-      members
-    );
-    if (!picked.character) {
-      showToast(
-        picked.reason === 'none_online' ? t.aiToastAllOffline : t.aiToastNoConfiguredChar
-      );
-      return;
-    }
-    const speaker = picked.character;
-    const controller = new AbortController();
-    aiAbortControllerRef.current = controller;
-    aiBusyRef.current = true;
-    setAiGeneratingName(speaker.name);
-    try {
-      const completion = await requestAiCompletion({
-        targetCharacter: speaker,
-        charConfig: getAiCharacterConfig(aiCharacterConfigs, speaker.id),
-        globalConfig: aiGlobalConfig,
-        history: conv.messages,
-        allCharacters: characters,
-        members,
-        signal: controller.signal,
-        purpose: 'continue',
-        onUsageRecord: handleRecordAiUsage,
-      });
-      if (!controller.signal.aborted) {
-        appendAiCharacterReply(
-          conv.id,
-          speaker,
-          completion.rawText,
-          conv.messages,
-          aiGlobalConfig.timeMode,
-          completion.toolSentAt,
-          completion.structuredFileMedia
-        );
-      }
-    } catch (err) {
-      if (!isAbortErr(err) && !controller.signal.aborted) {
-        const reason = err instanceof Error ? err.message : 'Error';
-        showToast(t.aiToastRequestFailed(speaker.name, reason));
-      }
-    } finally {
-      if (aiAbortControllerRef.current === controller) {
-        aiAbortControllerRef.current = null;
-      }
-      setAiGeneratingName(null);
-      aiBusyRef.current = false;
-    }
-  }, [
-    activeConversation,
-    aiCharacterConfigs,
-    aiGlobalConfig,
-    appendAiCharacterReply,
-    characters,
-    handleRecordAiUsage,
-    isAiMode,
-    members,
-    showToast,
-    t,
-  ]);
-
   const handleRegenerateMessage = useCallback(
     async (messageId: string) => {
       if (!isAiMode) {
@@ -2330,8 +2250,6 @@ export default function App({ actions }: AppProps) {
           onOpenMemberAiSettings={(member) => {
             setAiCharModalTargetId(member.id);
           }}
-          aiGeneratingName={aiGeneratingName}
-          aiAutoChatRunning={aiAutoChatRunning}
           onOpenAiGlobalSettings={() => {
             setServerMenuOpen(false);
             setMobileSidebarOpen(false);
@@ -2343,26 +2261,6 @@ export default function App({ actions }: AppProps) {
             setAiUsageModalOpen(true);
           }}
           aiSessionRequestCount={aiUsageState.session.requestCount}
-          onContinueAi={() => {
-            setServerMenuOpen(false);
-            setMobileSidebarOpen(false);
-            void handleAiContinueTurn();
-          }}
-          onStopAi={() => {
-            setServerMenuOpen(false);
-            setMobileSidebarOpen(false);
-            handleStopAiGeneration();
-          }}
-          onOpenAiAutoChat={() => {
-            setServerMenuOpen(false);
-            setMobileSidebarOpen(false);
-            setAiAutoChatOpen(true);
-          }}
-          onStopAiAutoChat={() => {
-            setServerMenuOpen(false);
-            setMobileSidebarOpen(false);
-            stopAiAutoChat(true);
-          }}
         />
         <ChatArea
           lang={lang}

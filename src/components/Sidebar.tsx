@@ -65,15 +65,9 @@ interface SidebarProps {
   onExitAiMode?: () => void;
   onCopyAiToMain?: () => void;
   onOpenMemberAiSettings?: (member: VoiceMember) => void;
-  aiGeneratingName?: string | null;
-  aiAutoChatRunning?: boolean;
   onOpenAiGlobalSettings?: () => void;
   onOpenAiUsage?: () => void;
   aiSessionRequestCount?: number;
-  onContinueAi?: () => void;
-  onStopAi?: () => void;
-  onOpenAiAutoChat?: () => void;
-  onStopAiAutoChat?: () => void;
 }
 
 export function Sidebar({
@@ -116,15 +110,9 @@ export function Sidebar({
   onExitAiMode,
   onCopyAiToMain,
   onOpenMemberAiSettings,
-  aiGeneratingName = null,
-  aiAutoChatRunning = false,
   onOpenAiGlobalSettings,
   onOpenAiUsage,
   aiSessionRequestCount = 0,
-  onContinueAi,
-  onStopAi,
-  onOpenAiAutoChat,
-  onStopAiAutoChat,
 }: SidebarProps) {
   const t = getUiText(lang);
   const canManageMembers = mode === 'studio' || aiMode;
@@ -305,17 +293,19 @@ export function Sidebar({
                 onOpenMemberAiSettings(member);
                 setMemberMenuId(null);
               }}
-              className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-[6px] bg-[#362B4A] px-2.5 py-1.5 text-left text-[12px] font-semibold text-[#EFEBF5] transition-colors hover:bg-[#493B62] hover:text-white"
+              className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-[6px] bg-[#362B4A] px-2.5 py-1.5 text-left text-[12px] font-semibold text-[#EFEBF5] transition-colors hover:bg-[#46385F] hover:text-white"
             >
               <span className="flex items-center gap-2 truncate">
-                <span className="h-2 w-2 shrink-0 rounded-full bg-[#64D2E6]" />
+                <span
+                  className={`h-2 w-2 shrink-0 rounded-full ${
+                    isAiReady ? 'bg-[#64D2E6]' : 'bg-[#7A708D]'
+                  }`}
+                />
                 <span className="truncate">{t.aiCharSettingsBtn}</span>
               </span>
               <span
-                className={`shrink-0 rounded px-1.5 py-0.5 text-[9.5px] font-medium ${
-                  isAiReady
-                    ? 'bg-[#55D8C1]/20 text-[#55D8C1]'
-                    : 'bg-[#211A2C] text-[#9B90AD]'
+                className={`shrink-0 text-[10.5px] font-normal ${
+                  isAiReady ? 'text-[#64D2E6]' : 'text-[#9A90A8]'
                 }`}
               >
                 {isAiReady ? t.aiReadyBadge : t.aiUnconfiguredBadge}
@@ -704,7 +694,7 @@ export function Sidebar({
                       type="button"
                       data-action="dropdown-ai-global-settings"
                       onClick={onOpenAiGlobalSettings}
-                      className="flex h-[34px] w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-[#4A3C63] bg-[#312645] px-2.5 text-left text-[12px] font-semibold text-[#EFEBF5] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#3E3156] hover:text-white"
+                      className="flex h-[34px] w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-[#382D4C] bg-[#2D233E] px-2.5 text-left text-[12px] font-medium text-[#EFEBF5] transition-colors hover:border-[#64D2E6]/60 hover:bg-[#3A2D50] hover:text-white"
                     >
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="h-2 w-2 shrink-0 rounded-full bg-[#64D2E6]" />
@@ -718,78 +708,32 @@ export function Sidebar({
                       type="button"
                       data-action="dropdown-ai-usage"
                       onClick={onOpenAiUsage}
-                      className="flex h-[34px] w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-[#4D3F66] bg-[#2E2440] px-2.5 text-left text-[12px] font-medium text-[#EFEBF5] transition-colors hover:border-[#55D8C1]/70 hover:bg-[#3C2F54] hover:text-white"
+                      className="flex h-[34px] w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-[#382D4C] bg-[#2D233E] px-2.5 text-left text-[12px] font-medium text-[#DCD7E5] transition-colors hover:border-[#594A75] hover:bg-[#3A2D50] hover:text-white"
                     >
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="h-2 w-2 shrink-0 rounded-full bg-[#55D8C1]" />
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-[#F6CE71]" />
                         <span className="truncate">{t.aiUsageBtn}</span>
                       </span>
-                      <span className="shrink-0 rounded bg-[#211A2C] px-1.5 py-0.5 text-[10px] text-[#55D8C1]">
+                      <span className="shrink-0 font-mono text-[11px] tabular-nums text-[#9E93B3]">
                         {aiSessionRequestCount}
                       </span>
                     </button>
                   )}
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {aiGeneratingName ? (
-                      <button
-                        type="button"
-                        data-action="dropdown-ai-stop"
-                        onClick={onStopAi}
-                        className="flex h-[32px] min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-[7px] border border-[#EB7F97]/55 bg-[#462336] px-2 text-[11.5px] font-semibold text-[#FFD5DF] transition-colors hover:bg-[#5B2B45] hover:text-white"
-                      >
-                        <span className="h-2 w-2 shrink-0 rounded-[2px] bg-[#EB7F97]" />
-                        <span className="truncate">{t.aiHeaderStopBtn}</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        data-action="dropdown-ai-continue"
-                        onClick={onContinueAi}
-                        className="flex h-[32px] min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-[7px] border border-[#4D3F66] bg-[#332846] px-2 text-[11.5px] font-medium text-[#EFEBF5] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#413358] hover:text-white"
-                      >
-                        <span className="shrink-0 text-[10px] leading-none text-[#55D8C1]" aria-hidden="true">
-                          ▶
-                        </span>
-                        <span className="truncate">{t.aiDropdownContinueBtn}</span>
-                      </button>
-                    )}
-                    {aiAutoChatRunning ? (
-                      <button
-                        type="button"
-                        data-action="dropdown-ai-stop-auto"
-                        onClick={onStopAiAutoChat}
-                        className="flex h-[32px] min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-[7px] border border-[#F6CE71]/60 bg-[#463621] px-2 text-[11.5px] font-semibold text-[#FDE5A0] transition-colors hover:bg-[#574226] hover:text-white"
-                      >
-                        <span className="h-2 w-2 shrink-0 rounded-full bg-[#F6CE71]" />
-                        <span className="truncate">{t.aiAutoChatHeaderStopBtn}</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        data-action="dropdown-ai-auto-chat"
-                        onClick={onOpenAiAutoChat}
-                        className="flex h-[32px] min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-[7px] border border-[#4D3F66] bg-[#332846] px-2 text-[11.5px] font-medium text-[#EFEBF5] transition-colors hover:border-[#F6CE71]/70 hover:bg-[#413358] hover:text-white"
-                      >
-                        <span className="h-2 w-2 shrink-0 rounded-full bg-[#F6CE71]" />
-                        <span className="truncate">{t.aiDropdownAutoChatBtn}</span>
-                      </button>
-                    )}
-                  </div>
                   {onCopyAiToMain && (
                     <button
                       type="button"
                       data-action="copy-ai-conv-to-main"
                       onClick={onCopyAiToMain}
-                      className="flex h-[34px] w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-[#4D3F66] bg-[#2E2440] px-2.5 text-left text-[12px] font-medium text-[#EFEBF5] transition-colors hover:border-[#64D2E6]/70 hover:bg-[#3C2F54] hover:text-white"
+                      className="flex h-[34px] w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-[#382D4C] bg-[#2D233E] px-2.5 text-left text-[12px] font-medium text-[#DCD7E5] transition-colors hover:border-[#594A75] hover:bg-[#3A2D50] hover:text-white"
                     >
                       <span className="flex min-w-0 items-center gap-2">
-                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="shrink-0 text-[#64D2E6]" aria-hidden="true">
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="shrink-0 text-[#9E93B3]" aria-hidden="true">
                           <rect x="5" y="2.5" width="8.5" height="9.5" rx="1.6" stroke="currentColor" strokeWidth="1.4" />
                           <path d="M3 5.5V12.5C3 13.3 3.7 14 4.5 14H10.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                         </svg>
                         <span className="truncate">{t.aiCopyToMainBtn}</span>
                       </span>
-                      <span className="shrink-0 text-[11px] text-[#64D2E6]">→</span>
+                      <span className="shrink-0 text-[11px] text-[#9E93B3]">→</span>
                     </button>
                   )}
                   <a
@@ -801,15 +745,13 @@ export function Sidebar({
                         onExitAiMode();
                       }
                     }}
-                    className="flex h-[34px] w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-[#64D2E6]/50 bg-[#352A4A] px-2.5 text-[12px] font-semibold text-white transition-colors hover:border-[#64D2E6] hover:bg-[#42345B]"
+                    className="flex h-[34px] w-full cursor-pointer items-center justify-between gap-2 rounded-[8px] border border-[#4A3C63] bg-[#332844] px-2.5 text-[12px] font-medium text-[#EFEBF5] transition-colors hover:border-[#64D2E6]/60 hover:bg-[#3F3352] hover:text-white"
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      <span className="h-2 w-2 shrink-0 rounded-full bg-[#64D2E6]" />
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-[#EB7F97]" />
                       <span className="truncate">{t.aiModeBackBtn}</span>
                     </span>
-                    <span className="shrink-0 rounded bg-[#64D2E6]/20 px-1.5 py-0.5 text-[9.5px] font-medium text-[#64D2E6]">
-                      {t.aiModeActiveBadge}
-                    </span>
+                    <span className="shrink-0 text-[11px] text-[#BEB5D0]">←</span>
                   </a>
                 </div>
               ) : (
